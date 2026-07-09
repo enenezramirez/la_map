@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GeoRiesgos Saltillo - Visualizador de Riesgos e Inversión Inmobiliaria</title>
-
+    
     <!-- Google Fonts (Inter) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
+    
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
           crossorigin=""/>
 
     <!-- Custom CSS -->
@@ -32,7 +32,7 @@
 
         <section class="panel-section">
             <h2>Capas de Riesgo y Servicios</h2>
-
+            
             <div class="layer-control">
                 <label class="switch-container">
                     <input type="checkbox" id="layer-services" checked>
@@ -44,20 +44,20 @@
 
             <div class="layer-control">
                 <label class="switch-container">
-                    <input type="checkbox" id="layer-floods">
+                    <input type="checkbox" id="layer-floods" disabled title="Datos de inundación aún no disponibles">
                     <span class="slider"></span>
                     <span class="layer-name">Riesgo de Inundación</span>
                 </label>
-                <p class="layer-desc">Zonas de peligro por lluvia acumulada e inundación (CENAPRED).</p>
+                <p class="layer-desc">Zonas de peligro por lluvia acumulada e inundación (CENAPRED). Próximamente.</p>
             </div>
 
             <div class="layer-control">
                 <label class="switch-container">
-                    <input type="checkbox" id="layer-investment">
+                    <input type="checkbox" id="layer-investment" disabled title="Se calculará en la Fase 5">
                     <span class="slider"></span>
                     <span class="layer-name">Índice de Inversión Inmobiliaria</span>
                 </label>
-                <p class="layer-desc">Zonas sugeridas de inversión en base a servicios y libre de riesgos.</p>
+                <p class="layer-desc">Zonas sugeridas de inversión en base a servicios y libre de riesgos. Próximamente.</p>
             </div>
         </section>
 
@@ -86,8 +86,8 @@
     </div>
 
     <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
             crossorigin=""></script>
 
     <!-- App Logic JS -->
@@ -136,8 +136,101 @@
             detailsSidebar.classList.add('sidebar-collapsed');
         });
 
-        // TODO (Fase 4): cargar los GeoJSON de `data/` con fetch() y pintarlos
-        // según el estado de los checkboxes de capas (#layer-services, etc.)
+        // --- Capa de Cobertura de Servicios Básicos (Fase 4) ---
+
+        const ESCALONES_SERVICIOS = [
+            { minimo: 80, color: '#22c55e', etiqueta: '80% - 100%' },
+            { minimo: 60, color: '#84cc16', etiqueta: '60% - 80%' },
+            { minimo: 40, color: '#eab308', etiqueta: '40% - 60%' },
+            { minimo: 20, color: '#f97316', etiqueta: '20% - 40%' },
+            { minimo: 0, color: '#ef4444', etiqueta: '0% - 20%' }
+        ];
+
+        function colorPorServicios(valor) {
+            const escalon = ESCALONES_SERVICIOS.find(e => valor >= e.minimo);
+            return escalon ? escalon.color : ESCALONES_SERVICIOS[ESCALONES_SERVICIOS.length - 1].color;
+        }
+
+        function estiloCapaServicios(feature) {
+            return {
+                fillColor: colorPorServicios(feature.properties.SERVICIOS_INDEX),
+                weight: 1,
+                color: 'rgba(255, 255, 255, 0.25)',
+                fillOpacity: 0.65
+            };
+        }
+
+        function mostrarLeyendaServicios() {
+            const filas = ESCALONES_SERVICIOS.map(e => `
+                <div class="legend-row">
+                    <span class="legend-swatch" style="background:${e.color}"></span>
+                    <span>${e.etiqueta}</span>
+                </div>
+            `).join('');
+            document.getElementById('legend-container').innerHTML = `
+                <p class="legend-title">Índice de Servicios Básicos</p>
+                ${filas}
+            `;
+        }
+
+        function ocultarLeyenda() {
+            document.getElementById('legend-container').innerHTML =
+                '<p class="empty-legend">Activa o haz clic en una zona para ver los detalles.</p>';
+        }
+
+        function mostrarDetalleSector(props) {
+            const formatoEntero = valor => Number(valor).toLocaleString('es-MX');
+            const formatoPct = valor => `${Number(valor).toFixed(1)}%`;
+
+            document.getElementById('sector-info').innerHTML = `
+                <p class="detail-row"><span>Municipio</span><strong>${props.NOM_MUN}</strong></p>
+                <p class="detail-row"><span>Población total</span><strong>${formatoEntero(props.POBTOT)}</strong></p>
+                <p class="detail-row"><span>Viviendas habitadas</span><strong>${formatoEntero(props.TVIVHAB)}</strong></p>
+                <h3>Cobertura de Servicios Básicos</h3>
+                <p class="detail-row"><span>Electricidad</span><strong>${formatoPct(props.PCT_ELECTRICIDAD)}</strong></p>
+                <p class="detail-row"><span>Agua entubada</span><strong>${formatoPct(props.PCT_AGUA)}</strong></p>
+                <p class="detail-row"><span>Drenaje</span><strong>${formatoPct(props.PCT_DRENAJE)}</strong></p>
+                <p class="detail-row"><span>Internet</span><strong>${formatoPct(props.PCT_INTERNET)}</strong></p>
+                <p class="detail-row detail-index"><span>Índice de Servicios</span><strong>${props.SERVICIOS_INDEX.toFixed(1)}</strong></p>
+            `;
+            detailsSidebar.classList.remove('sidebar-collapsed');
+        }
+
+        let capaServicios = null;
+        const checkboxServicios = document.getElementById('layer-services');
+
+        fetch('data/servicios_basicos.geojson')
+            .then(respuesta => respuesta.json())
+            .then(geojson => {
+                capaServicios = L.geoJSON(geojson, {
+                    style: estiloCapaServicios,
+                    onEachFeature: (feature, layer) => {
+                        layer.on({
+                            mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
+                            mouseout: e => capaServicios.resetStyle(e.target),
+                            click: e => mostrarDetalleSector(e.target.feature.properties)
+                        });
+                    }
+                });
+
+                if (checkboxServicios.checked) {
+                    capaServicios.addTo(map);
+                    mostrarLeyendaServicios();
+                }
+            })
+            .catch(error => console.error('Error cargando la capa de Servicios Básicos:', error));
+
+        checkboxServicios.addEventListener('change', () => {
+            if (!capaServicios) return;
+            if (checkboxServicios.checked) {
+                capaServicios.addTo(map);
+                mostrarLeyendaServicios();
+            } else {
+                map.removeLayer(capaServicios);
+                ocultarLeyenda();
+            }
+        });
+
         console.log("Leaflet inicializado con éxito.");
     </script>
 </body>
