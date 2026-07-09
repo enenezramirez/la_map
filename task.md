@@ -25,10 +25,10 @@ Esta es la lista de tareas activas para el desarrollo del proyecto. Usa `[ ]` pa
 - [x] Implementar el control de capas base y el panel lateral interactivo. Agregado `L.control.layers` (Oscuro/Claro) abajo a la izquierda, y wiring del botón de cierre del sidebar de detalles (`#close-sidebar`). Ambos verificados funcionando en el preview del navegador. Nota: los checkboxes de capas de datos (`#layer-services`, etc.) son solo UI por ahora — su lógica real de mostrar/ocultar capas GeoJSON es Fase 4.
 
 ## Fase 4: Integración de Capas en el Mapa
-- [ ] Cargar los archivos GeoJSON locales usando Fetch API en JavaScript.
-- [ ] Estilizar la capa de Servicios Básicos según el porcentaje de cobertura (de menor a mayor cobertura).
-- [ ] Estilizar la capa de Riesgos Naturales (zonas rojas semitransparentes para inundación).
-- [ ] Crear leyendas interactivas y tooltips informativos para el usuario al hacer clic en una zona.
+- [x] Cargar los archivos GeoJSON locales usando Fetch API en JavaScript. `fetch('data/servicios_basicos.geojson')` en `index.html`. Verificado en navegador: 340 features cargadas.
+- [x] Estilizar la capa de Servicios Básicos según el porcentaje de cobertura (de menor a mayor cobertura). Choropleth de 5 escalones (rojo→verde) por `SERVICIOS_INDEX`, con resaltado al pasar el mouse.
+- [BLOQUEADO] Estilizar la capa de Riesgos Naturales (zonas rojas semitransparentes para inundación). Depende de la capa granular de inundación (ver Fase 1/2), aún no disponible.
+- [x] Crear leyendas interactivas y tooltips informativos para el usuario al hacer clic en una zona. Leyenda dinámica por capa activa + sidebar con ficha de detalle al hacer clic (población, viviendas, % de cada servicio, índice compuesto). Checkboxes de capas sin datos (`layer-floods`, `layer-investment`) deshabilitados visualmente hasta que existan. Todo verificado interactivamente en el preview del navegador (toggle on/off, click en polígono, leyenda).
 
 ## Fase 5: Algoritmo de Índice y Despliegue
 - [ ] Programar la lógica del Scoring de inversión en Python y generar la capa consolidada.
