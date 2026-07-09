@@ -78,7 +78,7 @@
     <div id="details-sidebar" class="sidebar-collapsed">
         <button id="close-sidebar" class="close-btn">&times;</button>
         <div class="sidebar-content">
-            <h2>Detalles del Sector</h2>
+            <h2 id="sector-title">Detalles del Sector</h2>
             <div id="sector-info">
                 <p class="placeholder-text">Haz clic en cualquier sector del mapa para analizar sus detalles socio-económicos y de riesgos.</p>
             </div>
@@ -182,6 +182,7 @@
             const formatoEntero = valor => Number(valor).toLocaleString('es-MX');
             const formatoPct = valor => `${Number(valor).toFixed(1)}%`;
 
+            document.getElementById('sector-title').textContent = props.COLONIA;
             document.getElementById('sector-info').innerHTML = `
                 <p class="detail-row"><span>Municipio</span><strong>${props.NOM_MUN}</strong></p>
                 <p class="detail-row"><span>Población total</span><strong>${formatoEntero(props.POBTOT)}</strong></p>

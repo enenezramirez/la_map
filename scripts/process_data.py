@@ -18,6 +18,12 @@ Fase 2, Tarea 4: Exportar la capa de Servicios Básicos a GeoJSON limpio y
 liviano en la carpeta data/, lista para que Leaflet la cargue directamente.
 (La Tarea 3, cruce espacial con zonas de inundación de CENAPRED, queda
 bloqueada por falta de una capa granular de inundación — ver task.md).
+
+Extra: los AGEB no tienen nombre de colonia en el Marco Geoestadístico (son
+unidades estadísticas, no coinciden 1 a 1 con una colonia). El nombre se
+deriva de la capa "Frente de manzana" (fm), que sí trae el campo NOMASEN
+(nombre de asentamiento) por cada frente de cuadra: se usa el NOMASEN más
+frecuente entre los frentes de cada AGEB como aproximación de su colonia.
 """
 
 from pathlib import Path
@@ -117,6 +123,39 @@ def filtrar_marco_geoestadistico() -> gpd.GeoDataFrame:
     return gdf_final
 
 
+def cargar_nombres_colonias() -> pd.DataFrame:
+    """
+    Deriva el nombre de colonia/asentamiento dominante de cada AGEB a partir
+    de la capa "Frente de manzana" (fm): agrupa sus registros por AGEB (los
+    primeros 13 caracteres del CVEGEO de frente coinciden con el CVEGEO de
+    AGEB) y toma el NOMASEN más frecuente. Excluye "ND" (sin dato) salvo que
+    sea el único valor disponible para ese AGEB.
+    """
+    registros = []
+    for carpetas in MUNICIPIOS_AGEB.values():
+        for carpeta in carpetas:
+            clave_localidad = carpeta.name
+            shp_path = carpeta / "conjunto_de_datos" / f"{clave_localidad}fm.shp"
+            if not shp_path.exists():
+                continue
+            df_fm = gpd.read_file(shp_path, columns=["CVEGEO", "NOMASEN"], ignore_geometry=True)
+            df_fm["CVEGEO"] = df_fm["CVEGEO"].str[:13]
+            registros.append(df_fm)
+
+    if not registros:
+        return pd.DataFrame(columns=["CVEGEO", "COLONIA"])
+
+    df_fm = pd.concat(registros, ignore_index=True)
+
+    def _colonia_dominante(grupo: pd.DataFrame) -> str:
+        con_dato = grupo.loc[grupo["NOMASEN"] != "ND", "NOMASEN"]
+        serie = con_dato if not con_dato.empty else grupo["NOMASEN"]
+        return serie.value_counts().idxmax()
+
+    colonias = df_fm.groupby("CVEGEO").apply(_colonia_dominante, include_groups=False)
+    return colonias.rename("COLONIA").reset_index()
+
+
 def cargar_censo_servicios() -> pd.DataFrame:
     """
     Carga el CSV del Censo 2020 por AGEB urbana (todo Coahuila) y filtra
@@ -164,8 +203,10 @@ def calcular_cobertura_servicios(df_censo: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def integrar_censo_a_ageb(gdf_agebs: gpd.GeoDataFrame, df_servicios: pd.DataFrame) -> gpd.GeoDataFrame:
-    """Une los polígonos de AGEB con las variables de servicios del Censo por CVEGEO."""
+def integrar_censo_a_ageb(
+    gdf_agebs: gpd.GeoDataFrame, df_servicios: pd.DataFrame, df_colonias: pd.DataFrame
+) -> gpd.GeoDataFrame:
+    """Une los polígonos de AGEB con las variables de servicios del Censo y el nombre de colonia, por CVEGEO."""
     columnas_censo = [
         "CVEGEO",
         "POBTOT",
@@ -177,6 +218,8 @@ def integrar_censo_a_ageb(gdf_agebs: gpd.GeoDataFrame, df_servicios: pd.DataFram
         "SERVICIOS_INDEX",
     ]
     gdf_unido = gdf_agebs.merge(df_servicios[columnas_censo], on="CVEGEO", how="left")
+    gdf_unido = gdf_unido.merge(df_colonias, on="CVEGEO", how="left")
+    gdf_unido["COLONIA"] = gdf_unido["COLONIA"].fillna("Sin nombre de colonia")
 
     sin_censo = gdf_unido["SERVICIOS_INDEX"].isna().sum()
     if sin_censo:
@@ -194,6 +237,7 @@ def exportar_capa_servicios_basicos(gdf_ageb_servicios: gpd.GeoDataFrame) -> gpd
     columnas_finales = [
         "CVEGEO",
         "NOM_MUN",
+        "COLONIA",
         "POBTOT",
         "TVIVHAB",
         "PCT_ELECTRICIDAD",
@@ -230,7 +274,11 @@ if __name__ == "__main__":
     print("\nProcesando datos de servicios del Censo 2020...")
     df_censo = cargar_censo_servicios()
     df_servicios = calcular_cobertura_servicios(df_censo)
-    gdf_ageb_servicios = integrar_censo_a_ageb(gdf_agebs, df_servicios)
+
+    print("Derivando nombre de colonia por AGEB (capa Frente de manzana)...")
+    df_colonias = cargar_nombres_colonias()
+
+    gdf_ageb_servicios = integrar_censo_a_ageb(gdf_agebs, df_servicios, df_colonias)
 
     salida_servicios = PROCESSED_DIR / "ageb_con_servicios.geojson"
     gdf_ageb_servicios.to_file(salida_servicios, driver="GeoJSON")
