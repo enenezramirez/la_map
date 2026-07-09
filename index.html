@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GeoRiesgos Saltillo - Visualizador de Riesgos e Inversión Inmobiliaria</title>
-    
+
     <!-- Google Fonts (Inter) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin=""/>
 
     <!-- Custom CSS -->
@@ -32,7 +32,7 @@
 
         <section class="panel-section">
             <h2>Capas de Riesgo y Servicios</h2>
-            
+
             <div class="layer-control">
                 <label class="switch-container">
                     <input type="checkbox" id="layer-services" checked>
@@ -86,16 +86,14 @@
     </div>
 
     <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
 
     <!-- App Logic JS -->
     <script>
-        // Inicializar Mapa centrado en Saltillo, Coahuila
+        // Inicializar Mapa (el centro/zoom real lo define fitBounds más abajo)
         const map = L.map('map', {
-            center: [25.42321, -100.99182],
-            zoom: 12,
             zoomControl: false // Ocultamos los botones por defecto para posicionarlos mejor
         });
 
@@ -103,6 +101,13 @@
         L.control.zoom({
             position: 'bottomright'
         }).addTo(map);
+
+        // Encuadre inicial: cubre Saltillo, Ramos Arizpe y Arteaga
+        const REGION_BOUNDS = L.latLngBounds([
+            [25.28, -101.08], // suroeste (bajo Saltillo)
+            [25.62, -100.80]  // noreste (sobre Ramos Arizpe / Arteaga)
+        ]);
+        map.fitBounds(REGION_BOUNDS, { padding: [20, 20] });
 
         // Añadir Capa Base - CartoDB Dark Matter (Estilo Oscuro Premium)
         const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -118,7 +123,21 @@
             maxZoom: 20
         });
 
-        // TODO: Agregar lógica para cargar archivos GeoJSON de la carpeta `data/` usando fetch()
+        // Control de capas base (oscuro / claro), abajo a la izquierda
+        L.control.layers(
+            { 'Oscuro': darkBaseLayer, 'Claro': lightBaseLayer },
+            null,
+            { position: 'bottomleft', collapsed: true }
+        ).addTo(map);
+
+        // Panel lateral de detalles: botón de cierre
+        const detailsSidebar = document.getElementById('details-sidebar');
+        document.getElementById('close-sidebar').addEventListener('click', () => {
+            detailsSidebar.classList.add('sidebar-collapsed');
+        });
+
+        // TODO (Fase 4): cargar los GeoJSON de `data/` con fetch() y pintarlos
+        // según el estado de los checkboxes de capas (#layer-services, etc.)
         console.log("Leaflet inicializado con éxito.");
     </script>
 </body>
