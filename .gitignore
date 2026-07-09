@@ -26,3 +26,6 @@ raw_data/
 *.dbf
 *.prj
 *.cpg
+
+# Bitácora personal de sesiones de trabajo (no es parte del proyecto)
+reportes/
