@@ -24,6 +24,15 @@ unidades estadísticas, no coinciden 1 a 1 con una colonia). El nombre se
 deriva de la capa "Frente de manzana" (fm), que sí trae el campo NOMASEN
 (nombre de asentamiento) por cada frente de cuadra: se usa el NOMASEN más
 frecuente entre los frentes de cada AGEB como aproximación de su colonia.
+
+Fase 5, Tarea 1: Índice de Inversión Inmobiliaria (ver fórmula en SPEC.md).
+El componente de "Comercios" se calcula con el DENUE (escuelas, salud y
+supermercados) como cercanía del centroide de cada AGEB al establecimiento
+más próximo de cada categoría. El componente de "Riesgo" queda excluido por
+ahora (sin datos granulares de inundación — ver task.md); el índice se
+calcula solo con Servicios (peso 0.4) y Comercios (peso 0.3), renormalizado
+a escala 0-100. Cuando exista la capa de riesgo, se reincorpora sin cambiar
+la estructura del cálculo.
 """
 
 from pathlib import Path
@@ -48,6 +57,32 @@ CENSO_CSV = (
     / "conjunto_de_datos"
     / "conjunto_de_datos_ageb_urbana_05_cpv2020.csv"
 )
+
+DENUE_CSV = RAW_DATA / "denue_05_csv" / "conjunto_de_datos" / "denue_inegi_05_.csv"
+
+# Categorías de equipamiento urbano para el componente "Comercios" del Índice
+# de Inversión (ver SPEC.md). "escuela" y "salud" se identifican por su
+# sector SCIAN (los dos primeros dígitos de codigo_act); "supermercado" no
+# tiene un sector propio en SCIAN, así que se identifica por nombre de giro.
+CATEGORIAS_DENUE = {
+    "escuela": lambda df: df["codigo_act"].str.startswith("61"),
+    "salud": lambda df: df["codigo_act"].str.startswith("62"),
+    "supermercado": lambda df: df["nombre_act"].str.contains("supermercado", case=False, na=False),
+}
+
+# Pesos del Índice de Inversión (SPEC.md). W_riesg se excluye del cálculo
+# mientras no haya una capa granular de inundación (ver docstring del módulo).
+PESO_SERVICIOS = 0.4
+PESO_COMERCIOS = 0.3
+
+# Distancia (km) más allá de la cual un establecimiento ya no suma puntos de
+# cercanía. 3 km es un radio razonable de acceso en auto dentro de una ciudad
+# del tamaño de Saltillo; decae linealmente hasta 0 en ese punto.
+RADIO_MAX_KM = 3.0
+
+# CRS métrico (el mismo del Marco Geoestadístico de INEGI) usado solo para
+# calcular distancias en metros; la salida final se reproyecta a EPSG:4326.
+CRS_METRICO = "EPSG:6372"
 
 # Variables del Censo 2020 usadas para el índice de cobertura de servicios
 # básicos (ver SPEC.md). Se usan las variantes "positivas" (viviendas que SÍ
@@ -228,6 +263,111 @@ def integrar_censo_a_ageb(
     return gdf_unido
 
 
+def cargar_denue() -> gpd.GeoDataFrame:
+    """
+    Carga el DENUE (todo Coahuila), lo filtra a los municipios configurados
+    y clasifica cada establecimiento en una categoría de equipamiento urbano
+    (escuela, salud, supermercado) según CATEGORIAS_DENUE.
+    """
+    df = pd.read_csv(DENUE_CSV, dtype=str, low_memory=False, encoding="latin-1")
+    df = df[df["municipio"].isin(MUNICIPIOS_AGEB.keys())].copy()
+
+    categorias = pd.Series(pd.NA, index=df.index, dtype="object")
+    for nombre_categoria, condicion in CATEGORIAS_DENUE.items():
+        categorias = categorias.where(~condicion(df), nombre_categoria)
+    df["CATEGORIA"] = categorias
+    df = df.dropna(subset=["CATEGORIA", "latitud", "longitud"])
+
+    gdf = gpd.GeoDataFrame(
+        df[["CATEGORIA"]],
+        geometry=gpd.points_from_xy(df["longitud"].astype(float), df["latitud"].astype(float)),
+        crs="EPSG:4326",
+    )
+    print(f"  DENUE: {len(gdf)} establecimientos relevantes ({gdf['CATEGORIA'].value_counts().to_dict()}).")
+    return gdf
+
+
+def calcular_indice_comercios(gdf_agebs: gpd.GeoDataFrame, gdf_denue: gpd.GeoDataFrame) -> pd.DataFrame:
+    """
+    Para cada AGEB, calcula un puntaje 0-100 de cercanía a cada categoría de
+    equipamiento urbano (distancia del centroide del AGEB al establecimiento
+    más próximo, con decaimiento lineal hasta RADIO_MAX_KM) y los promedia en
+    COMERCIOS_INDEX.
+    """
+    centroides = gdf_agebs[["CVEGEO", "geometry"]].to_crs(CRS_METRICO).copy()
+    centroides["geometry"] = centroides.geometry.centroid
+
+    gdf_denue_m = gdf_denue.to_crs(CRS_METRICO)
+
+    resultado = centroides[["CVEGEO"]].copy()
+    columnas_score = []
+    for categoria in CATEGORIAS_DENUE:
+        columna_score = f"SCORE_{categoria.upper()}"
+        columnas_score.append(columna_score)
+
+        puntos_categoria = gdf_denue_m[gdf_denue_m["CATEGORIA"] == categoria]
+        if puntos_categoria.empty:
+            resultado[columna_score] = 0.0
+            continue
+
+        cercano = gpd.sjoin_nearest(
+            centroides, puntos_categoria[["geometry"]], distance_col="DIST_M"
+        )
+        # sjoin_nearest puede producir más de un match por empate de distancia;
+        # nos quedamos con la distancia mínima por AGEB.
+        distancia_km = cercano.groupby("CVEGEO")["DIST_M"].min() / 1000
+        score = (100 * (1 - distancia_km / RADIO_MAX_KM)).clip(lower=0)
+        resultado[columna_score] = resultado["CVEGEO"].map(score).fillna(0)
+
+    resultado["COMERCIOS_INDEX"] = resultado[columnas_score].mean(axis=1)
+    return resultado
+
+
+def calcular_indice_inversion(gdf_ageb_servicios: gpd.GeoDataFrame, df_comercios: pd.DataFrame) -> gpd.GeoDataFrame:
+    """
+    Calcula el Índice de Inversión Inmobiliaria (SPEC.md) a partir de
+    Servicios y Comercios, renormalizado a 0-100 porque el componente de
+    Riesgo todavía no está disponible (ver docstring del módulo).
+    """
+    gdf = gdf_ageb_servicios.merge(df_comercios, on="CVEGEO", how="left")
+
+    peso_disponible = PESO_SERVICIOS + PESO_COMERCIOS
+    gdf["INVERSION_INDEX"] = (
+        gdf["SERVICIOS_INDEX"] * PESO_SERVICIOS + gdf["COMERCIOS_INDEX"] * PESO_COMERCIOS
+    ) / peso_disponible
+
+    return gdf
+
+
+def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Exporta la capa del Índice de Inversión a data/, lista para Leaflet."""
+    columnas_finales = [
+        "CVEGEO",
+        "NOM_MUN",
+        "COLONIA",
+        "SERVICIOS_INDEX",
+        "SCORE_ESCUELA",
+        "SCORE_SALUD",
+        "SCORE_SUPERMERCADO",
+        "COMERCIOS_INDEX",
+        "INVERSION_INDEX",
+        "geometry",
+    ]
+    gdf_final = gdf_inversion[columnas_finales].copy()
+    gdf_final = gdf_final.dropna(subset=["INVERSION_INDEX"])
+    gdf_final["geometry"] = gdf_final["geometry"].simplify(
+        TOLERANCIA_SIMPLIFICACION, preserve_topology=True
+    )
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    salida = DATA_DIR / "indice_inversion.geojson"
+    gdf_final.to_file(salida, driver="GeoJSON")
+
+    tamano_kb = salida.stat().st_size / 1024
+    print(f"\nCapa final exportada: {salida} ({len(gdf_final)} AGEBs, {tamano_kb:.1f} KB)")
+    return gdf_final
+
+
 def exportar_capa_servicios_basicos(gdf_ageb_servicios: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Prepara y exporta la capa final de Servicios Básicos a data/, lista para
@@ -285,3 +425,9 @@ if __name__ == "__main__":
     print(f"Guardado (intermedio, no es la capa final): {salida_servicios}")
 
     exportar_capa_servicios_basicos(gdf_ageb_servicios)
+
+    print("\nCalculando Índice de Inversión Inmobiliaria...")
+    gdf_denue = cargar_denue()
+    df_comercios = calcular_indice_comercios(gdf_agebs, gdf_denue)
+    gdf_inversion = calcular_indice_inversion(gdf_ageb_servicios, df_comercios)
+    exportar_capa_indice_inversion(gdf_inversion)

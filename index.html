@@ -53,11 +53,11 @@
 
             <div class="layer-control">
                 <label class="switch-container">
-                    <input type="checkbox" id="layer-investment" disabled title="Se calculará en la Fase 5">
+                    <input type="checkbox" id="layer-investment">
                     <span class="slider"></span>
                     <span class="layer-name">Índice de Inversión Inmobiliaria</span>
                 </label>
-                <p class="layer-desc">Zonas sugeridas de inversión en base a servicios y libre de riesgos. Próximamente.</p>
+                <p class="layer-desc">Zonas sugeridas de inversión en base a servicios y cercanía a equipamiento urbano.</p>
             </div>
         </section>
 
@@ -136,7 +136,7 @@
             detailsSidebar.classList.add('sidebar-collapsed');
         });
 
-        // --- Capa de Cobertura de Servicios Básicos (Fase 4) ---
+        // --- Utilidades compartidas de choropleth y leyenda (Fase 4/5) ---
 
         const ESCALONES_SERVICIOS = [
             { minimo: 80, color: '#22c55e', etiqueta: '80% - 100%' },
@@ -146,42 +146,70 @@
             { minimo: 0, color: '#ef4444', etiqueta: '0% - 20%' }
         ];
 
-        function colorPorServicios(valor) {
-            const escalon = ESCALONES_SERVICIOS.find(e => valor >= e.minimo);
-            return escalon ? escalon.color : ESCALONES_SERVICIOS[ESCALONES_SERVICIOS.length - 1].color;
-        }
+        // Mismos cortes que Servicios; el Índice de Inversión también vive en
+        // escala 0-100 (ver SPEC.md: "escala de color verde a rojo").
+        const ESCALONES_INVERSION = ESCALONES_SERVICIOS;
 
-        function estiloCapaServicios(feature) {
-            return {
-                fillColor: colorPorServicios(feature.properties.SERVICIOS_INDEX),
-                weight: 1,
-                color: 'rgba(255, 255, 255, 0.25)',
-                fillOpacity: 0.65
+        function crearFuncionColor(escalones) {
+            return valor => {
+                const escalon = escalones.find(e => valor >= e.minimo);
+                return escalon ? escalon.color : escalones[escalones.length - 1].color;
             };
         }
 
-        function mostrarLeyendaServicios() {
-            const filas = ESCALONES_SERVICIOS.map(e => `
+        function crearEstiloCapa(campoValor, funcionColor) {
+            return feature => ({
+                fillColor: funcionColor(feature.properties[campoValor]),
+                weight: 1,
+                color: 'rgba(255, 255, 255, 0.25)',
+                fillOpacity: 0.65
+            });
+        }
+
+        function htmlLeyenda(titulo, escalones) {
+            const filas = escalones.map(e => `
                 <div class="legend-row">
                     <span class="legend-swatch" style="background:${e.color}"></span>
                     <span>${e.etiqueta}</span>
                 </div>
             `).join('');
-            document.getElementById('legend-container').innerHTML = `
-                <p class="legend-title">Índice de Servicios Básicos</p>
-                ${filas}
-            `;
+            return `<p class="legend-title">${titulo}</p>${filas}`;
         }
 
-        function ocultarLeyenda() {
-            document.getElementById('legend-container').innerHTML =
-                '<p class="empty-legend">Activa o haz clic en una zona para ver los detalles.</p>';
+        // Registro de leyendas por capa: cuando hay varias capas activas a la
+        // vez, se muestra la de la que se activó más recientemente.
+        const LEYENDAS = {
+            servicios: () => htmlLeyenda('Índice de Servicios Básicos', ESCALONES_SERVICIOS),
+            inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION)
+        };
+        let ordenCapasActivas = [];
+
+        function actualizarLeyenda() {
+            const contenedor = document.getElementById('legend-container');
+            if (ordenCapasActivas.length === 0) {
+                contenedor.innerHTML = '<p class="empty-legend">Activa o haz clic en una zona para ver los detalles.</p>';
+                return;
+            }
+            const claveActiva = ordenCapasActivas[ordenCapasActivas.length - 1];
+            contenedor.innerHTML = LEYENDAS[claveActiva]();
         }
+
+        function marcarCapaActiva(clave) {
+            ordenCapasActivas = ordenCapasActivas.filter(k => k !== clave);
+            ordenCapasActivas.push(clave);
+            actualizarLeyenda();
+        }
+
+        function marcarCapaInactiva(clave) {
+            ordenCapasActivas = ordenCapasActivas.filter(k => k !== clave);
+            actualizarLeyenda();
+        }
+
+        const formatoEntero = valor => Number(valor).toLocaleString('es-MX');
+        const formatoPct = valor => `${Number(valor).toFixed(1)}%`;
+        const formatoIndice = valor => Number(valor).toFixed(1);
 
         function mostrarDetalleSector(props) {
-            const formatoEntero = valor => Number(valor).toLocaleString('es-MX');
-            const formatoPct = valor => `${Number(valor).toFixed(1)}%`;
-
             document.getElementById('sector-title').textContent = props.COLONIA;
             document.getElementById('sector-info').innerHTML = `
                 <p class="detail-row"><span>Municipio</span><strong>${props.NOM_MUN}</strong></p>
@@ -192,44 +220,77 @@
                 <p class="detail-row"><span>Agua entubada</span><strong>${formatoPct(props.PCT_AGUA)}</strong></p>
                 <p class="detail-row"><span>Drenaje</span><strong>${formatoPct(props.PCT_DRENAJE)}</strong></p>
                 <p class="detail-row"><span>Internet</span><strong>${formatoPct(props.PCT_INTERNET)}</strong></p>
-                <p class="detail-row detail-index"><span>Índice de Servicios</span><strong>${props.SERVICIOS_INDEX.toFixed(1)}</strong></p>
+                <p class="detail-row detail-index"><span>Índice de Servicios</span><strong>${formatoIndice(props.SERVICIOS_INDEX)}</strong></p>
             `;
             detailsSidebar.classList.remove('sidebar-collapsed');
         }
 
-        let capaServicios = null;
-        const checkboxServicios = document.getElementById('layer-services');
+        function mostrarDetalleInversion(props) {
+            document.getElementById('sector-title').textContent = props.COLONIA;
+            document.getElementById('sector-info').innerHTML = `
+                <p class="detail-row"><span>Municipio</span><strong>${props.NOM_MUN}</strong></p>
+                <p class="detail-row"><span>Índice de Servicios</span><strong>${formatoIndice(props.SERVICIOS_INDEX)}</strong></p>
+                <h3>Cercanía a Equipamiento Urbano</h3>
+                <p class="detail-row"><span>Escuelas</span><strong>${formatoIndice(props.SCORE_ESCUELA)}</strong></p>
+                <p class="detail-row"><span>Salud</span><strong>${formatoIndice(props.SCORE_SALUD)}</strong></p>
+                <p class="detail-row"><span>Supermercados</span><strong>${formatoIndice(props.SCORE_SUPERMERCADO)}</strong></p>
+                <p class="detail-row"><span>Índice de Comercios</span><strong>${formatoIndice(props.COMERCIOS_INDEX)}</strong></p>
+                <p class="detail-row detail-index"><span>Índice de Inversión</span><strong>${formatoIndice(props.INVERSION_INDEX)}</strong></p>
+            `;
+            detailsSidebar.classList.remove('sidebar-collapsed');
+        }
 
-        fetch('data/servicios_basicos.geojson')
-            .then(respuesta => respuesta.json())
-            .then(geojson => {
-                capaServicios = L.geoJSON(geojson, {
-                    style: estiloCapaServicios,
-                    onEachFeature: (feature, layer) => {
-                        layer.on({
-                            mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
-                            mouseout: e => capaServicios.resetStyle(e.target),
-                            click: e => mostrarDetalleSector(e.target.feature.properties)
-                        });
+        function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, funcionEstilo, funcionDetalle }) {
+            let capa = null;
+
+            fetch(archivo)
+                .then(respuesta => respuesta.json())
+                .then(geojson => {
+                    capa = L.geoJSON(geojson, {
+                        style: funcionEstilo,
+                        onEachFeature: (feature, layer) => {
+                            layer.on({
+                                mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
+                                mouseout: e => capa.resetStyle(e.target),
+                                click: e => funcionDetalle(e.target.feature.properties)
+                            });
+                        }
+                    });
+
+                    if (checkbox.checked) {
+                        capa.addTo(map);
+                        marcarCapaActiva(clave);
                     }
-                });
+                })
+                .catch(error => console.error(`Error cargando la capa "${archivo}":`, error));
 
-                if (checkboxServicios.checked) {
-                    capaServicios.addTo(map);
-                    mostrarLeyendaServicios();
+            checkbox.addEventListener('change', () => {
+                if (!capa) return;
+                if (checkbox.checked) {
+                    capa.addTo(map);
+                    capa.bringToFront();
+                    marcarCapaActiva(clave);
+                } else {
+                    map.removeLayer(capa);
+                    marcarCapaInactiva(clave);
                 }
-            })
-            .catch(error => console.error('Error cargando la capa de Servicios Básicos:', error));
+            });
+        }
 
-        checkboxServicios.addEventListener('change', () => {
-            if (!capaServicios) return;
-            if (checkboxServicios.checked) {
-                capaServicios.addTo(map);
-                mostrarLeyendaServicios();
-            } else {
-                map.removeLayer(capaServicios);
-                ocultarLeyenda();
-            }
+        cargarCapaChoropleth({
+            archivo: 'data/servicios_basicos.geojson',
+            checkbox: document.getElementById('layer-services'),
+            clave: 'servicios',
+            funcionEstilo: crearEstiloCapa('SERVICIOS_INDEX', crearFuncionColor(ESCALONES_SERVICIOS)),
+            funcionDetalle: mostrarDetalleSector
+        });
+
+        cargarCapaChoropleth({
+            archivo: 'data/indice_inversion.geojson',
+            checkbox: document.getElementById('layer-investment'),
+            clave: 'inversion',
+            funcionEstilo: crearEstiloCapa('INVERSION_INDEX', crearFuncionColor(ESCALONES_INVERSION)),
+            funcionDetalle: mostrarDetalleInversion
         });
 
         console.log("Leaflet inicializado con éxito.");
