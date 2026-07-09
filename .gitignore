@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Datos crudos de gran tamaño (descargas de INEGI/CENAPRED en zip/shapefile)
+# Nota: Sí permitiremos subir los .geojson procesados finales a data/ para que funcionen en GitHub Pages.
+*.zip
+*.tar.gz
+raw_data/
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoRiesgos Saltillo - Visualizador de Riesgos e Inversión Inmobiliaria</title>
+    
+    <!-- Google Fonts (Inter) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin=""/>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Contenedor del Mapa -->
+    <div id="map"></div>
+
+    <!-- Panel de Control Flotante (Glassmorphism) -->
+    <div class="control-panel">
+        <header class="panel-header">
+            <h1>GeoRiesgos Saltillo</h1>
+            <p class="subtitle">Análisis de Riesgos e Inversión Inmobiliaria</p>
+        </header>
+
+        <section class="panel-section">
+            <h2>Capas de Riesgo y Servicios</h2>
+            
+            <div class="layer-control">
+                <label class="switch-container">
+                    <input type="checkbox" id="layer-services" checked>
+                    <span class="slider"></span>
+                    <span class="layer-name">Cobertura de Servicios Básicos</span>
+                </label>
+                <p class="layer-desc">Porcentaje de agua, luz, drenaje e internet por sector (Censo 2020).</p>
+            </div>
+
+            <div class="layer-control">
+                <label class="switch-container">
+                    <input type="checkbox" id="layer-floods">
+                    <span class="slider"></span>
+                    <span class="layer-name">Riesgo de Inundación</span>
+                </label>
+                <p class="layer-desc">Zonas de peligro por lluvia acumulada e inundación (CENAPRED).</p>
+            </div>
+
+            <div class="layer-control">
+                <label class="switch-container">
+                    <input type="checkbox" id="layer-investment">
+                    <span class="slider"></span>
+                    <span class="layer-name">Índice de Inversión Inmobiliaria</span>
+                </label>
+                <p class="layer-desc">Zonas sugeridas de inversión en base a servicios y libre de riesgos.</p>
+            </div>
+        </section>
+
+        <!-- Sección de Leyendas Dinámicas -->
+        <section class="panel-section" id="legend-section">
+            <h2>Leyenda</h2>
+            <div id="legend-container">
+                <p class="empty-legend">Activa o haz clic en una zona para ver los detalles.</p>
+            </div>
+        </section>
+
+        <footer class="panel-footer">
+            <p>Datos públicos oficiales: INEGI y CENAPRED.</p>
+        </footer>
+    </div>
+
+    <!-- Panel de Información de Detalles (Sidebar derecho) -->
+    <div id="details-sidebar" class="sidebar-collapsed">
+        <button id="close-sidebar" class="close-btn">&times;</button>
+        <div class="sidebar-content">
+            <h2>Detalles del Sector</h2>
+            <div id="sector-info">
+                <p class="placeholder-text">Haz clic en cualquier sector del mapa para analizar sus detalles socio-económicos y de riesgos.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin=""></script>
+
+    <!-- App Logic JS -->
+    <script>
+        // Inicializar Mapa centrado en Saltillo, Coahuila
+        const map = L.map('map', {
+            center: [25.42321, -100.99182],
+            zoom: 12,
+            zoomControl: false // Ocultamos los botones por defecto para posicionarlos mejor
+        });
+
+        // Reposicionar el control de Zoom abajo a la derecha para no chocar con el menú
+        L.control.zoom({
+            position: 'bottomright'
+        }).addTo(map);
+
+        // Añadir Capa Base - CartoDB Dark Matter (Estilo Oscuro Premium)
+        const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        // Capa Base Alternativa - CartoDB Positron (Estilo Claro Premium por si el usuario prefiere luz)
+        const lightBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        });
+
+        // TODO: Agregar lógica para cargar archivos GeoJSON de la carpeta `data/` usando fetch()
+        console.log("Leaflet inicializado con éxito.");
+    </script>
+</body>
+</html>
