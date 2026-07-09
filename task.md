@@ -13,10 +13,10 @@ Esta es la lista de tareas activas para el desarrollo del proyecto. Usa `[ ]` pa
   - [BLOQUEADO] Capas de riesgos de inundación en Saltillo (CENAPRED). Solo se encontró el dataset "Indicadores Municipales de Peligro, Exposición y Vulnerabilidad" (`raw_data/cenapred_indicadores_municipales/`), que da un único valor agregado (`GP_INUNDAC = Alto`) para todo el municipio, sin granularidad por colonia/AGEB. Se retoma más adelante si aparece una fuente más detallada (Visor de Capas del Atlas Nacional o IMPLAN Saltillo).
 
 ## Fase 2: Procesamiento de Datos (Python & GeoPandas)
-- [ ] Filtrar el mapa geoestadístico para obtener únicamente Saltillo, Ramos Arizpe y Arteaga.
-- [ ] Procesar los datos de servicios del Censo e integrarlos por colonia/AGEB.
-- [ ] Cruzar espacialmente los polígonos de colonias con las zonas de inundación del CENAPRED.
-- [ ] Exportar las capas resultantes a formato GeoJSON limpio en la carpeta `data/`.
+- [x] Filtrar el mapa geoestadístico para obtener únicamente Saltillo, Ramos Arizpe y Arteaga. Implementado en `scripts/process_data.py` (`filtrar_marco_geoestadistico`). Por ahora solo Saltillo tiene datos (342 AGEBs); la config `MUNICIPIOS_AGEB` ya tiene entradas listas para Ramos Arizpe y Arteaga — solo falta agregar las rutas de sus carpetas de localidad cuando se descarguen. Salida intermedia en `raw_data/processed/ageb_filtrado.geojson` (EPSG:4326).
+- [x] Procesar los datos de servicios del Censo e integrarlos por colonia/AGEB. Implementado en `scripts/process_data.py` (`cargar_censo_servicios`, `calcular_cobertura_servicios`, `integrar_censo_a_ageb`). Calcula % de electricidad, agua, drenaje e internet por AGEB (variables `VPH_C_ELEC`, `VPH_AGUADV`, `VPH_DRENAJ`, `VPH_INTER` sobre `TVIVHAB`) y un índice compuesto `SERVICIOS_INDEX` (promedio de los 4). Nota: el Censo agregado por AGEB no permite calcular "% viviendas con TODOS los servicios simultáneamente" (eso requeriría microdatos) — `SERVICIOS_INDEX` es la aproximación por promedio. 340/342 AGEBs de Saltillo con datos (2 sin match, probablemente no residenciales). Salida intermedia en `raw_data/processed/ageb_con_servicios.geojson`.
+- [BLOQUEADO] Cruzar espacialmente los polígonos de colonias con las zonas de inundación del CENAPRED. Depende de la capa granular de inundación (ver Fase 1), aún no disponible. Se omite por ahora.
+- [x] Exportar las capas resultantes a formato GeoJSON limpio en la carpeta `data/`. Implementado en `scripts/process_data.py` (`exportar_capa_servicios_basicos`): geometría simplificada (tolerancia 0.00005°) y solo columnas relevantes para el frontend. Resultado: `data/servicios_basicos.geojson`, 340 AGEBs, 477.8 KB (muy por debajo del límite de 5MB de `SPEC.md`), sin geometrías inválidas ni vacías. Falta aún la capa de inundación (bloqueada) y el Índice de Inversión (Fase 5).
 
 ## Fase 3: Mapa Base Interactivo (Leaflet.js)
 - [ ] Crear la estructura de la página en `index.html` importando Leaflet.js.
