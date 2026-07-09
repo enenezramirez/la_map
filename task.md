@@ -5,12 +5,12 @@ Esta es la lista de tareas activas para el desarrollo del proyecto. Usa `[ ]` pa
 ---
 
 ## Fase 1: Entorno de Desarrollo y Configuración Inicial
-- [ ] Configurar repositorio Git e inicializar commits (`git init`, `.gitignore`).
-- [ ] Crear el entorno virtual de Python (`venv`) e instalar dependencias (`pandas`, `geopandas`, `jupyter`).
-- [ ] Descargar los primeros conjuntos de datos brutos:
-  - [ ] Marco Geoestadístico de Coahuila (INEGI).
-  - [ ] Censo de Población 2020 a nivel de AGEB/Manzana para Saltillo (INEGI).
-  - [ ] Capas de riesgos de inundación en Saltillo (CENAPRED).
+- [x] Configurar repositorio Git e inicializar commits (`git init`, `.gitignore`).
+- [x] Crear el entorno virtual de Python (`venv`) e instalar dependencias (`pandas`, `geopandas`, `jupyter`, `shapely`, `pyproj`). Nota: se omitió `fiona` (sin wheel para Python 3.14 en Windows, requiere GDAL); GeoPandas 1.x usa `pyogrio` como motor de I/O por defecto, cubriendo la misma función.
+- [/] Descargar los primeros conjuntos de datos brutos:
+  - [/] Marco Geoestadístico de Coahuila (INEGI). Ya en `raw_data/marco_geoestadistico/saltillo_map_ageb/` — cubre únicamente municipio de Saltillo (localidad Saltillo ciudad con 342 AGEBs + 3 localidades rurales sin AGEB). Falta Ramos Arizpe y Arteaga.
+  - [/] Censo de Población 2020 a nivel de AGEB/Manzana para Saltillo (INEGI). Descargado por el usuario, pendiente indicar la ruta local para integrarlo.
+  - [BLOQUEADO] Capas de riesgos de inundación en Saltillo (CENAPRED). Solo se encontró el dataset "Indicadores Municipales de Peligro, Exposición y Vulnerabilidad" (`raw_data/cenapred_indicadores_municipales/`), que da un único valor agregado (`GP_INUNDAC = Alto`) para todo el municipio, sin granularidad por colonia/AGEB. Se retoma más adelante si aparece una fuente más detallada (Visor de Capas del Atlas Nacional o IMPLAN Saltillo).
 
 ## Fase 2: Procesamiento de Datos (Python & GeoPandas)
 - [ ] Filtrar el mapa geoestadístico para obtener únicamente Saltillo, Ramos Arizpe y Arteaga.

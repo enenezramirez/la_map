@@ -31,7 +31,7 @@ El procesamiento de datos se ejecutará localmente y fuera de línea con Python.
 ### Herramientas de Datos:
 - `pandas` y `geopandas` para el manejo de dataframes espaciales.
 - `shapely` para operaciones geométricas (ej. validar si una colonia intersecta una zona de inundación).
-- `fiona` y `pyproj` para conversión de sistemas de coordenadas (EPSG:4326 a nivel global).
+- `pyogrio` (motor I/O rápido y por defecto en GeoPandas 1.x) y `pyproj` para conversión de sistemas de coordenadas (EPSG:4326 a nivel global).
 
 ### Formato de Salida:
 - Los datos procesados se exportarán a archivos en la carpeta `data/` en formato GeoJSON (`.geojson`).
