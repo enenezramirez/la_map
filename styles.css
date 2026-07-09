@@ -199,7 +199,7 @@ body {
 
 /* Sidebar de Detalles Derecho */
 #details-sidebar {
-    position: absolute;
+    position: fixed;
     top: 24px;
     right: 24px;
     width: 340px;
@@ -328,7 +328,6 @@ body {
         bottom: 16px;
         top: auto;
         max-height: 40vh;
-        transform: translateY(450px);
     }
 
     .sidebar-collapsed {
