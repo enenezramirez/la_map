@@ -19,10 +19,10 @@ Esta es la lista de tareas activas para el desarrollo del proyecto. Usa `[ ]` pa
 - [x] Exportar las capas resultantes a formato GeoJSON limpio en la carpeta `data/`. Implementado en `scripts/process_data.py` (`exportar_capa_servicios_basicos`): geometría simplificada (tolerancia 0.00005°) y solo columnas relevantes para el frontend. Resultado: `data/servicios_basicos.geojson`, 340 AGEBs, 477.8 KB (muy por debajo del límite de 5MB de `SPEC.md`), sin geometrías inválidas ni vacías. Falta aún la capa de inundación (bloqueada) y el Índice de Inversión (Fase 5).
 
 ## Fase 3: Mapa Base Interactivo (Leaflet.js)
-- [ ] Crear la estructura de la página en `index.html` importando Leaflet.js.
-- [ ] Aplicar estilos premium en `styles.css` (tema oscuro, tipografía Inter, paneles flotantes glassmorphic).
-- [ ] Programar en JavaScript la inicialización del mapa centrado en Saltillo y Ramos Arizpe.
-- [ ] Implementar el control de capas base y el panel lateral interactivo.
+- [x] Crear la estructura de la página en `index.html` importando Leaflet.js. Ya existía del scaffold inicial.
+- [x] Aplicar estilos premium en `styles.css` (tema oscuro, tipografía Inter, paneles flotantes glassmorphic). Ya existía del scaffold inicial.
+- [x] Programar en JavaScript la inicialización del mapa centrado en Saltillo y Ramos Arizpe. Cambiado de centro/zoom fijo a `map.fitBounds()` con una región que cubre Saltillo, Ramos Arizpe y Arteaga. Verificado en navegador (zoom 11, bounds correctos tras reload).
+- [x] Implementar el control de capas base y el panel lateral interactivo. Agregado `L.control.layers` (Oscuro/Claro) abajo a la izquierda, y wiring del botón de cierre del sidebar de detalles (`#close-sidebar`). Ambos verificados funcionando en el preview del navegador. Nota: los checkboxes de capas de datos (`#layer-services`, etc.) son solo UI por ahora — su lógica real de mostrar/ocultar capas GeoJSON es Fase 4.
 
 ## Fase 4: Integración de Capas en el Mapa
 - [ ] Cargar los archivos GeoJSON locales usando Fetch API en JavaScript.
