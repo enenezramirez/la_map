@@ -17,7 +17,13 @@ GeoRiesgos Saltillo es una aplicación web interactiva (mapa) que cruza datos so
 
 ## Comandos del Proyecto
 - **Iniciar Servidor de Desarrollo:** `python -m http.server 8000` (Abre `http://localhost:8000` en tu navegador)
-- **Ejecutar Procesamiento de Datos:** `python scripts/process_data.py`
+- **Ejecutar Procesamiento de Datos:** `python scripts/process_data.py`. **Importante:** `geopandas` vive en el entorno virtual, no en el Python del sistema. En Windows usa el intérprete del `venv`: `venv\Scripts\python.exe scripts\process_data.py` (o activa el `venv` primero).
+
+## Fuentes de Datos
+- **INEGI:** Marco Geoestadístico (polígonos AGEB), Censo de Población 2020 (servicios básicos) y DENUE (equipamiento urbano).
+- **IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024** (fuente primaria de riesgo, SHP vectoriales): inundación pluvial urbana y deslizamientos traslacionales.
+- **CONAGUA — ANRI** (respaldo): raster de severidad de inundación (Tr=100), conservado en `data/riesgo_inundacion.png` + `_meta.json`.
+- **Capas generadas en `data/`:** `servicios_basicos.geojson`, `indice_inversion.geojson`, `riesgo_inundacion.geojson`, `riesgo_deslizamientos.geojson`.
 
 ## Lineamientos de Codificación
 1. **Frontend (HTML/JS):**

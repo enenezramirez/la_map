@@ -39,3 +39,9 @@ Esta es la lista de tareas activas para el desarrollo del proyecto. Usa `[ ]` pa
 - [x] Configurar GitHub Pages para desplegar el mapa en la web de manera gratuita. **(Completado por el usuario)**
 - [x] Investigar desastres naturales potenciales específicos de la región (deslaves de laderas, fallas geológicas locales) mediante noticias o el Atlas de Riesgos de Coahuila, evaluando si representan un impacto real que justifique incluirlos. **Encontrados en CARTO SALTILLO (IMPLAN).**
 - [ ] Asegurar una arquitectura modular de datos para facilitar la expansión a Monterrey, Torreón o Monclova.
+
+## Backlog / Próxima sesión
+- [ ] **Nombre de colonia en las capas de riesgo.** Al hacer clic en una zona de inundación o deslizamiento, mostrar la colonia/AGEB que contiene el punto ("Colonia X — Riesgo: Muy alto"). Motivo: los SHP de riesgo del IMPLAN no traen nombre de zona (son un modelo de intensidad y, además, se disuelven por nivel → una sola figura por nivel en toda la ciudad), así que hoy la ficha solo muestra intensidad + fuente/fecha. Solución: point-in-polygon del punto clicado contra la capa de AGEB (que sí tiene `COLONIA`).
+- [ ] **Bitácora de datos.** Documentar la fuente oficial, el sitio y la fecha de descarga/corte de cada dataset (ver también Fase 1 y SPEC §1.2). Procedencia parcial ya disponible en `data/riesgo_inundacion_meta.json` y en los campos `FUENTE`/`FECHA` de los GeoJSON de riesgo.
+- [ ] **Índice de incendio / riesgo forestal (SPEC Capa 2).** Investigar fuentes (CONABIO/CONAFOR, IMPLAN). **Primero verificar si es realmente útil y si existen datos granulares para la zona (Arteaga / Sierra) antes de implementar**; si no aporta valor real, descartarlo explícitamente con justificación.
+- [ ] **Identidad del proyecto.** Explorar un nombre (candidato inicial: "La_Map") y una identidad visual/tema coherente (logo, paleta, tipografía) que haga match con la aplicación.
