@@ -1,0 +1,18 @@
+{
+  "fuente": "CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI), Región Noreste. Capa: Severidad, periodo de retorno 100 años (Saltillo, Coahuila).",
+  "fecha_descarga": "2026-07-15",
+  "url_servicio": "https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer/142",
+  "periodo_retorno_anios": 100,
+  "variable": "Severidad (índice compuesto de tirante y velocidad)",
+  "nota": "Raster oficial de CONAGUA (ANRI). Clases: severidad alta (rojo), media (amarillo) y baja (verde). Aproximación por modelación hidráulica; no sustituye un estudio de sitio.",
+  "bounds": [
+    [
+      25.307860080000047,
+      -101.09700227999994
+    ],
+    [
+      25.55291786100007,
+      -100.86335275599995
+    ]
+  ]
+}

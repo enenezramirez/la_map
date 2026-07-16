@@ -1,6 +1,11 @@
 # GeoRiesgos Saltillo - Guía de Desarrollo para Claude Code
 
-Este archivo proporciona contexto y comandos útiles para que tú (Claude) trabajes de forma eficiente en este proyecto.
+Este archivo proporciona contexto y comandos útiles para que la Inteligencia Artificial trabaje de forma eficiente en este proyecto.
+
+## Resumen del Proyecto
+GeoRiesgos Saltillo es una aplicación web interactiva (mapa) que cruza datos sociodemográficos y económicos para visualizar zonas de riesgo, vulnerabilidad y oportunidades de inversión en Saltillo, Coahuila.
+- **Frontend:** HTML/JS Vanilla con Leaflet.js para el mapa y capas interactivas (estilo glassmorphism oscuro).
+- **Backend/Datos:** Scripts en Python (`geopandas`, `pandas`) que procesan datos brutos del INEGI (Censo, Marco Geoestadístico), DENUE e IMPLAN para generar archivos `.geojson` simplificados.
 
 ## Estructura del Workspace
 - `index.html` - Punto de entrada de la aplicación frontend (Leaflet.js).

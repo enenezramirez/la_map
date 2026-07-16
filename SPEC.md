@@ -7,20 +7,27 @@ Este documento sirve como la especificación del sistema (Single Source of Truth
 ## 1. Requerimientos Funcionales
 
 1. **Mapa Base Interactivo:**
-   - Mapa centrado en Saltillo, Ramos Arizpe y Arteaga, Coahuila.
+   - Mapa centrado en la Zona Metropolitana de Saltillo (Saltillo, Ramos Arizpe y Arteaga, Coahuila).
    - Base de mapa estética en tonos oscuros o claros limpios (por ejemplo, CartoDB Positron o Stadia Maps).
 2. **Visualización de Capas (Layers):**
    - **Capa 1: Riesgos de Inundación (CENAPRED):** Polígonos de zonas inundables coloreados semafóricamente (rojo/amarillo).
-   - **Capa 2: Riesgo Forestal (CONABIO):** Áreas boscosas de la periferia (como la Sierra de Arteaga) con vulnerabilidad a incendios.
-   - **Capa 3: Cobertura de Servicios Básicos (INEGI Censo):** Colonias coloreadas por su porcentaje de viviendas con servicios completos (agua, luz, drenaje e internet).
+   - **Capa 2: Riesgo Forestal (CONABIO/CONAFOR):** Áreas con peligro de incendios, especialmente en las zonas boscosas de Arteaga.
+   - **Capa 3: Cobertura de Servicios Básicos (INEGI Censo):** Porcentaje de viviendas con servicios completos (agua, luz, drenaje e internet) por sector.
+   - **Capa 4: Riesgos Geológicos y Deslizamientos (CENAPRED - Evaluado):** Zonas propensas a deslaves en laderas (remoción de masa) y fallas geológicas locales identificadas.
 3. **Índice de Inversión Inmobiliaria:**
-   - Una capa calculada en Python que combine los servicios básicos, la cercanía a equipamiento urbano y penalice las áreas de alto riesgo natural.
-   - Escala de color de verde (inversión recomendada) a rojo (riesgo o carencia de servicios).
+   - Una capa combinada (Weighted Overlay) calculada en Python que sume los servicios básicos, penalice las zonas de riesgo (inundación, incendios y deslizamientos) y valore la cercanía a infraestructura.
 4. **Panel de Control (UI/UX):**
-   - Menú lateral o flotante responsivo con diseño moderno (efecto cristal/glassmorphism).
-   - Interruptores (toggles) para activar/desactivar cada capa individualmente.
-   - Leyendas claras que expliquen los colores de las capas.
-   - Caja de información emergente (tooltip o sidebar) que muestre detalles específicos de la colonia o sector seleccionado al hacer clic.
+   - Menú lateral responsivo con efecto glassmorphism.
+   - Interruptores para capas e información emergente (tooltip/sidebar) al hacer clic en un sector.
+
+### 1.1 Alcance Geográfico y Expansión Futura
+* **Fase Inicial:** Saltillo, Ramos Arizpe y Arteaga (Zona Metropolitana de Saltillo).
+* **Fase de Expansión:** Monterrey (Nuevo León), Torreón (Coahuila) y Monclova (Coahuila). La arquitectura debe ser modular para permitir añadir nuevas ciudades de forma sencilla reemplazando o sumando archivos GeoJSON independientes.
+
+### 1.2 Legitimidad y Trazabilidad de los Datos
+Dado que la precisión es crítica para la toma de decisiones inmobiliarias, la aplicación debe garantizar la procedencia de la información:
+* **Metadatos Obligatorios:** Cada capa debe documentar estrictamente en su código/GeoJSON la **Fuente Oficial** y la **Fecha de Descarga/Actualización** (ej. *CENAPRED, corte a Diciembre 2025*).
+* **UI Informativa:** Cuando el usuario haga clic en cualquier sector del mapa para ver los detalles, el panel de información debe mostrar visiblemente el origen y la fecha de corte de los datos de riesgo y servicios que está visualizando.
 
 ---
 
