@@ -44,11 +44,20 @@
 
             <div class="layer-control">
                 <label class="switch-container">
-                    <input type="checkbox" id="layer-floods" disabled title="Datos de inundación aún no disponibles">
+                    <input type="checkbox" id="layer-floods">
                     <span class="slider"></span>
                     <span class="layer-name">Riesgo de Inundación</span>
                 </label>
-                <p class="layer-desc">Zonas de peligro por lluvia acumulada e inundación (CENAPRED). Próximamente.</p>
+                <p class="layer-desc">Zonas de riesgo por inundación pluvial urbana (IMPLAN · Atlas de Riesgos 2024).</p>
+            </div>
+
+            <div class="layer-control">
+                <label class="switch-container">
+                    <input type="checkbox" id="layer-landslides">
+                    <span class="slider"></span>
+                    <span class="layer-name">Riesgo de Deslizamientos</span>
+                </label>
+                <p class="layer-desc">Remoción de masa en laderas, riesgo geológico traslacional (IMPLAN · 2024).</p>
             </div>
 
             <div class="layer-control">
@@ -57,7 +66,7 @@
                     <span class="slider"></span>
                     <span class="layer-name">Índice de Inversión Inmobiliaria</span>
                 </label>
-                <p class="layer-desc">Zonas sugeridas de inversión en base a servicios y cercanía a equipamiento urbano.</p>
+                <p class="layer-desc">Zonas sugeridas de inversión: servicios y equipamiento, penalizado por riesgo de inundación.</p>
             </div>
         </section>
 
@@ -70,7 +79,7 @@
         </section>
 
         <footer class="panel-footer">
-            <p>Datos públicos oficiales: INEGI y CENAPRED.</p>
+            <p>Datos públicos oficiales: INEGI (Censo y DENUE) y CONAGUA (ANRI).</p>
         </footer>
     </div>
 
@@ -94,7 +103,10 @@
     <script>
         // Inicializar Mapa (el centro/zoom real lo define fitBounds más abajo)
         const map = L.map('map', {
-            zoomControl: false // Ocultamos los botones por defecto para posicionarlos mejor
+            zoomControl: false, // Ocultamos los botones por defecto para posicionarlos mejor
+            // Las capas de riesgo son multipolígonos muy densos (disueltos de
+            // ~12,700 polígonos): rasterizarlos en Canvas evita el jank de SVG.
+            preferCanvas: true
         });
 
         // Reposicionar el control de Zoom abajo a la derecha para no chocar con el menú
@@ -150,6 +162,57 @@
         // escala 0-100 (ver SPEC.md: "escala de color verde a rojo").
         const ESCALONES_INVERSION = ESCALONES_SERVICIOS;
 
+        // --- Capas de riesgo IMPLAN (CARTO SALTILLO, Atlas de Riesgos 2024) ---
+        // Escala semafórica categórica por nivel de intensidad (campo
+        // INTENSIDAD). Sirve para inundación y deslizamientos.
+        const COLORES_RIESGO = {
+            'Muy alto': '#b91c1c',
+            'Alto': '#ef4444',
+            'Medio': '#f97316',
+            'Bajo': '#eab308',
+            'Muy bajo': '#84cc16'
+        };
+        const ORDEN_RIESGO = ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo'];
+
+        function crearEstiloRiesgo() {
+            return feature => ({
+                fillColor: COLORES_RIESGO[feature.properties.INTENSIDAD] || '#9ca3af',
+                weight: 1,
+                color: 'rgba(255, 255, 255, 0.25)',
+                fillOpacity: 0.6
+            });
+        }
+
+        // Leyenda de una capa de riesgo: solo los niveles presentes + la
+        // fuente/fecha de corte (SPEC.md §1.2), tomadas del GeoJSON cargado.
+        function htmlLeyendaRiesgo(titulo, nivelesPresentes, fuente, fecha) {
+            const filas = ORDEN_RIESGO.filter(n => nivelesPresentes.has(n)).map(n => `
+                <div class="legend-row">
+                    <span class="legend-swatch" style="background:${COLORES_RIESGO[n]}"></span>
+                    <span>${n}</span>
+                </div>
+            `).join('');
+            const src = fuente
+                ? `<p class="legend-source">Fuente: ${fuente}${fecha ? ' · ' + fecha : ''}.</p>`
+                : '';
+            return `<p class="legend-title">${titulo}</p>${filas}${src}`;
+        }
+
+        // HTML de leyenda ya construido por capa de riesgo (se llena al cargar).
+        const leyendasRiesgo = { inundacion: null, deslizamientos: null };
+
+        // Ficha de detalle al hacer clic en una zona de riesgo: intensidad +
+        // fuente y fecha de corte (SPEC.md §1.2).
+        function mostrarDetalleRiesgo(props) {
+            document.getElementById('sector-title').textContent = props.TITULO;
+            document.getElementById('sector-info').innerHTML = `
+                <p class="detail-row"><span>Fenómeno</span><strong>${props.FENOMENO}</strong></p>
+                <p class="detail-row detail-index"><span>Nivel de riesgo</span><strong>${props.INTENSIDAD}</strong></p>
+                <p class="detail-source">Fuente: ${props.FUENTE}. Corte: ${props.FECHA}.</p>
+            `;
+            detailsSidebar.classList.remove('sidebar-collapsed');
+        }
+
         function crearFuncionColor(escalones) {
             return valor => {
                 const escalon = escalones.find(e => valor >= e.minimo);
@@ -180,7 +243,9 @@
         // vez, se muestra la de la que se activó más recientemente.
         const LEYENDAS = {
             servicios: () => htmlLeyenda('Índice de Servicios Básicos', ESCALONES_SERVICIOS),
-            inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION)
+            inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION),
+            inundacion: () => leyendasRiesgo.inundacion || '<p class="empty-legend">Cargando…</p>',
+            deslizamientos: () => leyendasRiesgo.deslizamientos || '<p class="empty-legend">Cargando…</p>'
         };
         let ordenCapasActivas = [];
 
@@ -235,6 +300,7 @@
                 <p class="detail-row"><span>Salud</span><strong>${formatoIndice(props.SCORE_SALUD)}</strong></p>
                 <p class="detail-row"><span>Supermercados</span><strong>${formatoIndice(props.SCORE_SUPERMERCADO)}</strong></p>
                 <p class="detail-row"><span>Índice de Comercios</span><strong>${formatoIndice(props.COMERCIOS_INDEX)}</strong></p>
+                <p class="detail-row"><span>Riesgo de inundación (−)</span><strong>${formatoIndice(props.RIESGO_INDEX)}</strong></p>
                 <p class="detail-row detail-index"><span>Índice de Inversión</span><strong>${formatoIndice(props.INVERSION_INDEX)}</strong></p>
             `;
             detailsSidebar.classList.remove('sidebar-collapsed');
@@ -243,7 +309,9 @@
         function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, funcionEstilo, funcionDetalle }) {
             let capa = null;
 
-            fetch(archivo)
+            // `no-cache` revalida el GeoJSON con el servidor (evita servir una
+            // versión vieja tras regenerar los datos con process_data.py).
+            fetch(archivo, { cache: 'no-cache' })
                 .then(respuesta => respuesta.json())
                 .then(geojson => {
                     capa = L.geoJSON(geojson, {
@@ -277,6 +345,51 @@
             });
         }
 
+        // Cargador para capas de riesgo IMPLAN (choropleth categórico por
+        // INTENSIDAD). Construye su leyenda con los niveles presentes y la
+        // fuente/fecha del propio GeoJSON.
+        function cargarCapaRiesgo({ archivo, checkbox, clave, titulo }) {
+            let capa = null;
+
+            fetch(archivo, { cache: 'no-cache' })
+                .then(respuesta => respuesta.json())
+                .then(geojson => {
+                    const niveles = new Set(geojson.features.map(f => f.properties.INTENSIDAD));
+                    const props0 = geojson.features.length ? geojson.features[0].properties : {};
+                    leyendasRiesgo[clave] = htmlLeyendaRiesgo(titulo, niveles, props0.FUENTE, props0.FECHA);
+
+                    capa = L.geoJSON(geojson, {
+                        style: crearEstiloRiesgo(),
+                        onEachFeature: (feature, layer) => {
+                            layer.on({
+                                mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.75 }),
+                                mouseout: e => capa.resetStyle(e.target),
+                                click: e => mostrarDetalleRiesgo(e.target.feature.properties)
+                            });
+                        }
+                    });
+
+                    if (checkbox.checked) {
+                        capa.addTo(map);
+                        capa.bringToFront();
+                        marcarCapaActiva(clave);
+                    }
+                })
+                .catch(error => console.error(`Error cargando la capa "${archivo}":`, error));
+
+            checkbox.addEventListener('change', () => {
+                if (!capa) return;
+                if (checkbox.checked) {
+                    capa.addTo(map);
+                    capa.bringToFront();
+                    marcarCapaActiva(clave);
+                } else {
+                    map.removeLayer(capa);
+                    marcarCapaInactiva(clave);
+                }
+            });
+        }
+
         cargarCapaChoropleth({
             archivo: 'data/servicios_basicos.geojson',
             checkbox: document.getElementById('layer-services'),
@@ -292,6 +405,27 @@
             funcionEstilo: crearEstiloCapa('INVERSION_INDEX', crearFuncionColor(ESCALONES_INVERSION)),
             funcionDetalle: mostrarDetalleInversion
         });
+
+        // Capa 1 — Riesgo de Inundación (IMPLAN CARTO, Atlas 2024): vector.
+        cargarCapaRiesgo({
+            archivo: 'data/riesgo_inundacion.geojson',
+            checkbox: document.getElementById('layer-floods'),
+            clave: 'inundacion',
+            titulo: 'Riesgo de Inundación Pluvial'
+        });
+
+        // Capa 4 — Riesgo de Deslizamientos (IMPLAN CARTO, Atlas 2024): vector.
+        cargarCapaRiesgo({
+            archivo: 'data/riesgo_deslizamientos.geojson',
+            checkbox: document.getElementById('layer-landslides'),
+            clave: 'deslizamientos',
+            titulo: 'Riesgo de Deslizamientos'
+        });
+
+        // Respaldo (ANRI - CONAGUA): la capa de inundación por severidad Tr=100
+        // se conserva como raster en data/riesgo_inundacion.png (+_meta.json).
+        // Para reactivarla como imageOverlay, cargar meta.bounds y usar
+        // L.imageOverlay(...). IMPLAN es la fuente primaria (local, vectorial).
 
         console.log("Leaflet inicializado con éxito.");
     </script>
