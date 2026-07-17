@@ -352,7 +352,20 @@ casos; separar solo repite las propiedades en cada feature.
 ## 5. Pendientes
 
 * **Ramos Arizpe y Arteaga:** falta descargar sus AGEBs (§2.1) para cubrir la Zona
-  Metropolitana completa que pide `SPEC.md §1.1`.
+  Metropolitana completa que pide `SPEC.md §1.1`. **Es la única pieza faltante**: el Censo
+  2020 (§2.2) y el DENUE (§2.3) ya cubren todo Coahuila, así que en cuanto lleguen los
+  polígonos de AGEB, los índices de servicios e inversión se calculan solos para esos
+  municipios (el filtro del Censo usa los nombres de municipio de `MUNICIPIOS_AGEB`).
+  Localidades urbanas amanzanadas a descargar (claves verificadas contra el Censo 2020;
+  mismo producto y portal que Saltillo, INEGI Biblioteca digital de Mapas):
+  * `050270001` — Ramos Arizpe ciudad → `raw_data/marco_geoestadistico/ramos_arizpe_map_ageb/050270001/`
+  * `050040001` — Arteaga cabecera → `raw_data/marco_geoestadistico/arteaga_map_ageb/050040001/`
+  * `050040107` — San Antonio de las Alazanas (sierra) → `raw_data/marco_geoestadistico/arteaga_map_ageb/050040107/`
+
+  Las rutas ya están pre-cableadas en `MUNICIPIOS_AGEB` (`scripts/process_data.py`); el
+  pipeline las omite con gracia hasta que existan. Ojo: **Ramos Arizpe es el municipio 027,
+  no 025**. Al integrarlos, revisar valores de relleno de `NOMASEN` como en Saltillo, y que
+  la capa `fm` (nombre de colonia) exista en cada localidad.
 * **Cobertura de las capas de riesgo:** las capas del IMPLAN son municipales (Saltillo).
   Al sumar Ramos Arizpe y Arteaga habrá que verificar si el IMPLAN publica sus atlas o si
   hace falta otra fuente para esos municipios.
