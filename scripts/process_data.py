@@ -106,6 +106,19 @@ PESO_RIESGO = 0.3
 # del tamaño de Saltillo; decae linealmente hasta 0 en ese punto.
 RADIO_MAX_KM = 3.0
 
+# Valores de relleno del campo NOMASEN (nombre de asentamiento) en la capa de
+# Frente de manzana de INEGI. No son nombres de colonia: "ND" es "no
+# disponible" (su TIPOASEN también dice "ND") y "NINGUNO" marca los frentes sin
+# asentamiento asignado. Hay que descartarlos antes de calcular el nombre más
+# frecuente por AGEB: si no, un AGEB con 5 frentes "NINGUNO" y 4 con nombre
+# real termina llamándose "NINGUNO" en el mapa. Ojo: no todo valor corto es
+# relleno — "GIS" es real (Sector GIS, por Grupo Industrial Saltillo).
+VALORES_SIN_ASENTAMIENTO = frozenset({"ND", "NINGUNO"})
+
+# Rótulo para un AGEB sin ningún nombre de asentamiento real. Preferible a
+# mostrar el valor de relleno crudo en la ficha del mapa.
+SIN_COLONIA = "SIN NOMBRE REGISTRADO"
+
 # CRS métrico (el mismo de la cartografía vectorial de INEGI) usado solo para
 # calcular distancias en metros; la salida final se reproyecta a EPSG:4326.
 CRS_METRICO = "EPSG:6372"
@@ -236,8 +249,9 @@ def cargar_nombres_colonias() -> pd.DataFrame:
     Deriva el nombre de colonia/asentamiento dominante de cada AGEB a partir
     de la capa "Frente de manzana" (fm): agrupa sus registros por AGEB (los
     primeros 13 caracteres del CVEGEO de frente coinciden con el CVEGEO de
-    AGEB) y toma el NOMASEN más frecuente. Excluye "ND" (sin dato) salvo que
-    sea el único valor disponible para ese AGEB.
+    AGEB) y toma el NOMASEN más frecuente, ignorando los valores de relleno de
+    INEGI (VALORES_SIN_ASENTAMIENTO). Si un AGEB no tiene ningún nombre real,
+    se rotula con SIN_COLONIA en vez de propagar el relleno al mapa.
     """
     registros = []
     for carpetas in MUNICIPIOS_AGEB.values():
@@ -256,9 +270,11 @@ def cargar_nombres_colonias() -> pd.DataFrame:
     df_fm = pd.concat(registros, ignore_index=True)
 
     def _colonia_dominante(grupo: pd.DataFrame) -> str:
-        con_dato = grupo.loc[grupo["NOMASEN"] != "ND", "NOMASEN"]
-        serie = con_dato if not con_dato.empty else grupo["NOMASEN"]
-        return serie.value_counts().idxmax()
+        nombres = grupo["NOMASEN"].astype(str).str.strip()
+        con_dato = nombres[~nombres.str.upper().isin(VALORES_SIN_ASENTAMIENTO)]
+        if con_dato.empty:
+            return SIN_COLONIA
+        return con_dato.value_counts().idxmax()
 
     colonias = df_fm.groupby("CVEGEO").apply(_colonia_dominante, include_groups=False)
     return colonias.rename("COLONIA").reset_index()
