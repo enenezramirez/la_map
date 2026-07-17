@@ -205,6 +205,14 @@ cada feature, y la app la muestra en la ficha de detalle al hacer clic (SPEC §1
 capas de riesgo se disuelven por nivel de intensidad y **descartan el nivel "Muy bajo"**,
 que cubre el ~90-98% del área y solo agrandaría el archivo sin aportar señal.
 
+**Ojo con la ficha de riesgo: combina dos fuentes.** El fenómeno y el nivel de intensidad
+vienen del IMPLAN (§2.4 y §2.5), pero el nombre de colonia y el municipio vienen de los
+AGEB de INEGI (§2.1), ubicando el punto clicado por point-in-polygon. Las capas del
+IMPLAN no traen nombre de zona: son un modelo de intensidad y se disuelven por nivel. La
+colonia es, por tanto, una referencia de ubicación aproximada —el AGEB que contiene el
+punto—, no una unidad de análisis del IMPLAN: el riesgo se modela por zona, no por
+colonia, y una colonia puede contener varios niveles de intensidad.
+
 ---
 
 ## 5. Pendientes
