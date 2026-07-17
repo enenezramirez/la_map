@@ -66,8 +66,14 @@ de colonia de cada uno.
   llamándose "NINGUNO". Ver `VALORES_SIN_ASENTAMIENTO` en `scripts/process_data.py`.
   **Cuidado al ampliar la lista:** no todo valor corto o extraño es relleno — `GIS` es un
   nombre real (Sector GIS, por Grupo Industrial Saltillo).
-* **Cobertura actual:** solo municipio de Saltillo (342 AGEBs). Faltan Ramos Arizpe y
-  Arteaga, contemplados en `SPEC.md §1.1`.
+* **Cobertura actual (2026-07-17):** 3 municipios, **431 AGEBs** — Saltillo (342), Ramos
+  Arizpe (61) y Arteaga (28), la Zona Metropolitana que pide `SPEC.md §1.1`. Descargados
+  por municipio (paquetes `05004`/`05027`, producto `vla_ne_mg_2022`) y reorganizados a
+  `arteaga_map_ageb/` y `ramos_arizpe_map_ageb/` (mismo patrón que `saltillo_map_ageb/`).
+  Localidades con capa de AGEB: `050040001` Arteaga cabecera, `050040107` San Antonio de
+  las Alazanas (sierra) y `050270001` Ramos Arizpe ciudad; el resto de localidades de cada
+  paquete son rurales sin AGEB (se omiten con gracia). 428/431 AGEBs con datos de censo (3
+  sin match, probablemente no residenciales); 0 con `SIN_COLONIA`.
 
 > **Corrección de atribución.** Este producto se venía citando como *"Marco
 > Geoestadístico"*. **No lo es**, aunque la confusión es entendible: INEGI lo clasifica
@@ -320,8 +326,8 @@ De cada archivo servido al navegador, su origen:
 
 | Capa en `data/` | Tamaño | Derivada de |
 |---|---|---|
-| `servicios_basicos.geojson` | ~488 KB | AGEB (§2.1) + Censo 2020 (§2.2) |
-| `indice_inversion.geojson` | ~506 KB | §2.1 + §2.2 + DENUE (§2.3) + riesgo de inundación (§2.4) |
+| `servicios_basicos.geojson` | ~627 KB | AGEB (§2.1) + Censo 2020 (§2.2) |
+| `indice_inversion.geojson` | ~649 KB | §2.1 + §2.2 + DENUE (§2.3) + riesgo de inundación (§2.4) |
 | `riesgo_inundacion.geojson` | ~1.0 MB | IMPLAN inundación (§2.4) |
 | `riesgo_deslizamientos.geojson` | ~164 KB | IMPLAN deslizamientos (§2.5) |
 | `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN químico-tecnológico (§2.6) |
@@ -351,24 +357,17 @@ casos; separar solo repite las propiedades en cada feature.
 
 ## 5. Pendientes
 
-* **Ramos Arizpe y Arteaga:** falta descargar sus AGEBs (§2.1) para cubrir la Zona
-  Metropolitana completa que pide `SPEC.md §1.1`. **Es la única pieza faltante**: el Censo
-  2020 (§2.2) y el DENUE (§2.3) ya cubren todo Coahuila, así que en cuanto lleguen los
-  polígonos de AGEB, los índices de servicios e inversión se calculan solos para esos
-  municipios (el filtro del Censo usa los nombres de municipio de `MUNICIPIOS_AGEB`).
-  Localidades urbanas amanzanadas a descargar (claves verificadas contra el Censo 2020;
-  mismo producto y portal que Saltillo, INEGI Biblioteca digital de Mapas):
-  * `050270001` — Ramos Arizpe ciudad → `raw_data/marco_geoestadistico/ramos_arizpe_map_ageb/050270001/`
-  * `050040001` — Arteaga cabecera → `raw_data/marco_geoestadistico/arteaga_map_ageb/050040001/`
-  * `050040107` — San Antonio de las Alazanas (sierra) → `raw_data/marco_geoestadistico/arteaga_map_ageb/050040107/`
-
-  Las rutas ya están pre-cableadas en `MUNICIPIOS_AGEB` (`scripts/process_data.py`); el
-  pipeline las omite con gracia hasta que existan. Ojo: **Ramos Arizpe es el municipio 027,
-  no 025**. Al integrarlos, revisar valores de relleno de `NOMASEN` como en Saltillo, y que
-  la capa `fm` (nombre de colonia) exista en cada localidad.
-* **Cobertura de las capas de riesgo:** las capas del IMPLAN son municipales (Saltillo).
-  Al sumar Ramos Arizpe y Arteaga habrá que verificar si el IMPLAN publica sus atlas o si
-  hace falta otra fuente para esos municipios.
+* **~~Ramos Arizpe y Arteaga~~ — HECHO (2026-07-17).** Integrados: 431 AGEBs en 3
+  municipios (ver §2.1). El Censo y el DENUE ya cubrían todo Coahuila, así que los índices
+  de servicios e inversión se calcularon solos para los nuevos municipios (Ramos Arizpe
+  INVERSION_INDEX media 76.6, Arteaga 71.9; su RIESGO_INDEX es 0 porque no hay capa de
+  riesgo IMPLAN fuera de Saltillo). Verificado en navegador.
+* **Cobertura de las capas de riesgo:** las capas del IMPLAN son municipales (**solo
+  Saltillo**). Ramos Arizpe y Arteaga tienen AGEBs pero **no** datos de riesgo, y eso ya lo
+  comunica el **panel sensible a la zona visible** (deshabilita+explica esas capas al
+  navegar allá; ver `task.md`). Pendiente aún: verificar si el IMPLAN publica atlas de esos
+  municipios o si hace falta otra fuente. **San Antonio de las Alazanas** (sierra, ya con
+  AGEBs) es el disparador para retomar el **riesgo forestal** (§3.3).
 * **Riesgo forestal (SPEC Capa 2):** sin fuente evaluada todavía. Antes de implementarla
   hay que verificar que existan datos granulares para Arteaga / la Sierra.
 * **Confirmar con el IMPLAN** la fecha exacta de edición de las capas de riesgo si llega a
