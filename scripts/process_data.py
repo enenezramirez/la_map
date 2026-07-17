@@ -414,8 +414,9 @@ def preparar_capa_riesgo(gdf_riesgo: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     Filtra a los niveles de riesgo relevantes (descarta "Muy bajo") y disuelve
     por nivel de intensidad, produciendo un GeoDataFrame liviano (un multi-
     polígono por nivel), ordenado de menor a mayor intensidad, con el puntaje
-    0-100 de cada nivel. La misma geometría alimenta la capa visible y la
-    penalización del índice, garantizando consistencia.
+    0-100 de cada nivel. Esta geometría alimenta tanto la penalización del
+    Índice de Inversión como la capa visible (que además la separa en zonas al
+    exportarla, ver `exportar_capa_riesgo`), garantizando consistencia.
     """
     sub = gdf_riesgo[gdf_riesgo["INTENSIDAD"].isin(NIVELES_ELEVADOS)]
     disuelto = sub.dissolve(by="INTENSIDAD", as_index=False)[["INTENSIDAD", "geometry"]]
@@ -431,14 +432,28 @@ def exportar_capa_riesgo(
     gdf_disuelto: gpd.GeoDataFrame, salida: Path, titulo: str, fenomeno: str
 ) -> gpd.GeoDataFrame:
     """
-    Simplifica la geometría, adjunta metadatos de trazabilidad (SPEC.md §1.2:
-    título, fenómeno, fuente y fecha de corte) y exporta la capa de riesgo a
-    data/ lista para Leaflet.
+    Simplifica la geometría, separa el multipolígono de cada nivel en sus zonas
+    individuales, adjunta metadatos de trazabilidad (SPEC.md §1.2: título,
+    fenómeno, fuente y fecha de corte) y exporta la capa de riesgo a data/
+    lista para Leaflet.
+
+    El `explode` es lo que permite que, al señalar una zona en el mapa, se
+    resalte solo esa y no todas las manchas del mismo nivel en la ciudad: con
+    el multipolígono disuelto, Leaflet ve un único elemento por nivel. No altera
+    la geometría (es la misma figura, declarada como varias features); solo
+    repite las propiedades en cada una, a un costo de unos ~450 KB en total
+    entre las dos capas, muy por debajo del límite de 5 MB de SPEC.md §2.
+
+    Se explota aquí y no en `preparar_capa_riesgo` a propósito: la versión
+    disuelta sigue alimentando la penalización del Índice de Inversión, donde
+    tener una sola geometría por nivel es lo natural para el overlay.
     """
     gdf = gdf_disuelto.copy()
     gdf["geometry"] = gdf["geometry"].simplify(
         TOLERANCIA_SIMPLIFICACION, preserve_topology=True
     )
+    niveles = len(gdf)
+    gdf = gdf.explode(index_parts=False).reset_index(drop=True)
     gdf["TITULO"] = titulo
     gdf["FENOMENO"] = fenomeno
     gdf["FUENTE"] = IMPLAN_FUENTE
@@ -447,7 +462,10 @@ def exportar_capa_riesgo(
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     gdf.to_file(salida, driver="GeoJSON")
     tamano_kb = salida.stat().st_size / 1024
-    print(f"  Capa de riesgo exportada: {salida} ({len(gdf)} niveles, {tamano_kb:.1f} KB)")
+    print(
+        f"  Capa de riesgo exportada: {salida} "
+        f"({niveles} niveles, {len(gdf)} zonas, {tamano_kb:.1f} KB)"
+    )
     return gdf
 
 
