@@ -669,7 +669,9 @@ def descargar_raster_inundacion(bounds_4326: tuple[float, float, float, float]) 
     print("Descargando capa de inundación (ANRI - CONAGUA)...")
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "geo-riesgos-saltillo"})
-        with urllib.request.urlopen(req, timeout=90) as resp:
+        # `url` es una constante HTTPS de CONAGUA (ANRI_MAPSERVER), no entrada del
+        # usuario: no hay esquema file:/ ni URL dinámica. Por eso se silencia B310.
+        with urllib.request.urlopen(req, timeout=90) as resp:  # nosec B310
             contenido = resp.read()
     except Exception as exc:  # noqa: BLE001 - la descarga es opcional/offline-safe
         print(f"  Aviso: no se pudo descargar el raster de inundación ({exc}).")
