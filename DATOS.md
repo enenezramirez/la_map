@@ -51,9 +51,19 @@ de colonia de cada uno.
   (<https://www.inegi.org.mx/app/mapas/>), una ficha descargable por localidad.
 * **Licencia:** Términos de Libre Uso de la Información del INEGI
   (<https://www.inegi.org.mx/inegi/terminos.html>).
-* **Uso en el proyecto:** capa AGEB (`filtrar_marco_geoestadistico`) y nombre de colonia
+* **Uso en el proyecto:** capa AGEB (`filtrar_agebs_por_municipio`) y nombre de colonia
   por AGEB, derivado de la capa de Frente de manzana (`fm`, campo `NOMASEN`) tomando el
   asentamiento más frecuente en cada AGEB (`cargar_nombres_colonias`).
+* **Limitación conocida:** el AGEB es una unidad estadística y no coincide 1 a 1 con una
+  colonia. El nombre es el asentamiento *dominante* entre los frentes del AGEB, no una
+  frontera oficial de colonia: un AGEB puede abarcar varias.
+* **Valores de relleno en `NOMASEN`:** el campo usa **`ND`** (no disponible; su `TIPOASEN`
+  también dice `ND`, 363 frentes) y **`NINGUNO`** (frente sin asentamiento asignado, 141
+  frentes) como marcadores, no como nombres. Hay que descartarlos antes de calcular el
+  asentamiento dominante: un AGEB con 5 frentes `NINGUNO` y 4 con nombre real acabaría
+  llamándose "NINGUNO". Ver `VALORES_SIN_ASENTAMIENTO` en `scripts/process_data.py`.
+  **Cuidado al ampliar la lista:** no todo valor corto o extraño es relleno — `GIS` es un
+  nombre real (Sector GIS, por Grupo Industrial Saltillo).
 * **Cobertura actual:** solo municipio de Saltillo (342 AGEBs). Faltan Ramos Arizpe y
   Arteaga, contemplados en `SPEC.md §1.1`.
 
