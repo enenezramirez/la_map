@@ -201,11 +201,112 @@
         // HTML de leyenda ya construido por capa de riesgo (se llena al cargar).
         const leyendasRiesgo = { inundacion: null, deslizamientos: null };
 
-        // Ficha de detalle al hacer clic en una zona de riesgo: intensidad +
-        // fuente y fecha de corte (SPEC.md §1.2).
-        function mostrarDetalleRiesgo(props) {
-            document.getElementById('sector-title').textContent = props.TITULO;
+        // --- Ubicación de la colonia de un punto (point-in-polygon) ----------
+        // Las capas de riesgo del IMPLAN no traen nombre de zona: son un modelo
+        // de intensidad y, además, se disuelven por nivel, así que una sola
+        // figura cubre media ciudad. Para responder "¿qué colonia es esta?" al
+        // hacer clic, se ubica el punto dentro de los AGEB (que sí tienen
+        // COLONIA) con un ray-casting propio: son ~340 polígonos y un clic
+        // aislado, así que no amerita sumar una dependencia como Turf.js.
+
+        // Índice de AGEBs para consulta, con su bounding box precalculada para
+        // descartar rápido la mayoría sin recorrer sus vértices.
+        let agebsParaConsulta = null;
+
+        function calcularBbox(geometria) {
+            let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+            const poligonos = geometria.type === 'MultiPolygon'
+                ? geometria.coordinates
+                : [geometria.coordinates];
+            for (const poligono of poligonos) {
+                for (const [lng, lat] of poligono[0]) {
+                    if (lng < minLng) minLng = lng;
+                    if (lng > maxLng) maxLng = lng;
+                    if (lat < minLat) minLat = lat;
+                    if (lat > maxLat) maxLat = lat;
+                }
+            }
+            return [minLng, minLat, maxLng, maxLat];
+        }
+
+        function indexarAgebs(geojson) {
+            agebsParaConsulta = geojson.features
+                .filter(f => f.geometry && f.properties.COLONIA)
+                .map(f => ({
+                    colonia: f.properties.COLONIA,
+                    municipio: f.properties.NOM_MUN,
+                    geometria: f.geometry,
+                    bbox: calcularBbox(f.geometry)
+                }));
+        }
+
+        // Ray casting sobre un anillo: cuenta cruces de una semirrecta
+        // horizontal hacia el este; impar = dentro. Coordenadas GeoJSON [lng, lat].
+        function puntoEnAnillo([x, y], anillo) {
+            let dentro = false;
+            for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+                const [xi, yi] = anillo[i];
+                const [xj, yj] = anillo[j];
+                const cruzaLatitud = (yi > y) !== (yj > y);
+                if (cruzaLatitud && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+                    dentro = !dentro;
+                }
+            }
+            return dentro;
+        }
+
+        // Un polígono GeoJSON es [anillo exterior, ...huecos]: el punto cuenta
+        // si cae dentro del exterior y fuera de todos los huecos.
+        function puntoEnPoligono(punto, anillos) {
+            if (!puntoEnAnillo(punto, anillos[0])) return false;
+            return !anillos.slice(1).some(hueco => puntoEnAnillo(punto, hueco));
+        }
+
+        function puntoEnGeometria(punto, geometria) {
+            if (geometria.type === 'Polygon') {
+                return puntoEnPoligono(punto, geometria.coordinates);
+            }
+            if (geometria.type === 'MultiPolygon') {
+                return geometria.coordinates.some(p => puntoEnPoligono(punto, p));
+            }
+            return false;
+        }
+
+        // Devuelve el AGEB que contiene el punto, o null si cae fuera de todos
+        // (las zonas de riesgo se extienden más allá de la mancha urbana con
+        // AGEBs, así que esto es esperable, no un error).
+        function buscarAgebEnPunto(latlng) {
+            if (!agebsParaConsulta) return null;
+            const punto = [latlng.lng, latlng.lat];
+            for (const ageb of agebsParaConsulta) {
+                const [minLng, minLat, maxLng, maxLat] = ageb.bbox;
+                if (punto[0] < minLng || punto[0] > maxLng || punto[1] < minLat || punto[1] > maxLat) {
+                    continue;
+                }
+                if (puntoEnGeometria(punto, ageb.geometria)) return ageb;
+            }
+            return null;
+        }
+
+        // Ficha de detalle al hacer clic en una zona de riesgo: colonia (si el
+        // punto cae en un AGEB), intensidad + fuente y fecha de corte (SPEC §1.2).
+        function mostrarDetalleRiesgo(props, latlng) {
+            const ageb = buscarAgebEnPunto(latlng);
+            document.getElementById('sector-title').textContent = ageb ? ageb.colonia : props.TITULO;
+
+            // Sin AGEB hay dos causas distintas y no deben confundirse: que los
+            // AGEB todavía no carguen (el clic llegó primero) o que el punto
+            // caiga de verdad fuera de la mancha urbana.
+            let filaUbicacion;
+            if (ageb) {
+                filaUbicacion = `<p class="detail-row"><span>Municipio</span><strong>${ageb.municipio}</strong></p>`;
+            } else if (!agebsParaConsulta) {
+                filaUbicacion = '<p class="detail-row"><span>Colonia</span><strong>Cargando…</strong></p>';
+            } else {
+                filaUbicacion = '<p class="detail-row"><span>Ubicación</span><strong>Fuera de zona urbana</strong></p>';
+            }
             document.getElementById('sector-info').innerHTML = `
+                ${filaUbicacion}
                 <p class="detail-row"><span>Fenómeno</span><strong>${props.FENOMENO}</strong></p>
                 <p class="detail-row detail-index"><span>Nivel de riesgo</span><strong>${props.INTENSIDAD}</strong></p>
                 <p class="detail-source">Fuente: ${props.FUENTE}. Corte: ${props.FECHA}.</p>
@@ -306,7 +407,7 @@
             detailsSidebar.classList.remove('sidebar-collapsed');
         }
 
-        function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, funcionEstilo, funcionDetalle }) {
+        function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, funcionEstilo, funcionDetalle, alCargarGeojson }) {
             let capa = null;
 
             // `no-cache` revalida el GeoJSON con el servidor (evita servir una
@@ -314,6 +415,8 @@
             fetch(archivo, { cache: 'no-cache' })
                 .then(respuesta => respuesta.json())
                 .then(geojson => {
+                    if (alCargarGeojson) alCargarGeojson(geojson);
+
                     capa = L.geoJSON(geojson, {
                         style: funcionEstilo,
                         onEachFeature: (feature, layer) => {
@@ -364,7 +467,7 @@
                             layer.on({
                                 mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.75 }),
                                 mouseout: e => capa.resetStyle(e.target),
-                                click: e => mostrarDetalleRiesgo(e.target.feature.properties)
+                                click: e => mostrarDetalleRiesgo(e.target.feature.properties, e.latlng)
                             });
                         }
                     });
@@ -395,7 +498,11 @@
             checkbox: document.getElementById('layer-services'),
             clave: 'servicios',
             funcionEstilo: crearEstiloCapa('SERVICIOS_INDEX', crearFuncionColor(ESCALONES_SERVICIOS)),
-            funcionDetalle: mostrarDetalleSector
+            funcionDetalle: mostrarDetalleSector,
+            // Los AGEB de esta capa son también la referencia para ubicar la
+            // colonia de un clic en las capas de riesgo. Se indexan al cargar,
+            // independientemente de si la capa está visible o no.
+            alCargarGeojson: indexarAgebs
         });
 
         cargarCapaChoropleth({
