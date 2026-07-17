@@ -157,6 +157,10 @@ IMPLAN_DESLIZAMIENTOS_SHP = (
     RAW_DATA / "Riesgo_por_Deslizamientos_traslacionales2"
     / "Riesgo_por_Deslizamientos_traslacionales2.shp"
 )
+IMPLAN_QUIMICO_SHP = (
+    RAW_DATA / "Riesgo_Quimico_tecnologico"
+    / "Riesgo_Quimico_tecnologico.shp"
+)
 IMPLAN_FUENTE = "IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024"
 IMPLAN_FECHA_CORTE = "2024"
 
@@ -166,9 +170,15 @@ PUNTAJE_INTENSIDAD = {"Muy bajo": 0, "Bajo": 25, "Medio": 50, "Alto": 75, "Muy a
 # Niveles que se conservan en las capas visibles y en la penalización. Se
 # descarta "Muy bajo" (fondo del ~90-98% del área, sin valor de riesgo).
 NIVELES_ELEVADOS = ["Bajo", "Medio", "Alto", "Muy alto"]
+# Umbral más alto para el riesgo químico-tecnológico: ahí "Bajo" cubre el 93%
+# de la malla (el fondo del modelo, sin valor discriminante) y, conservándolo,
+# la capa rebasaría sola el límite de 5 MB de SPEC.md §2 (6.9 MB medidos). Con
+# Medio+Alto queda en ~1.2 MB mostrando solo las zonas genuinamente expuestas.
+NIVELES_ELEVADOS_QUIMICO = ["Medio", "Alto", "Muy alto"]
 
 RIESGO_INUNDACION_GEOJSON = DATA_DIR / "riesgo_inundacion.geojson"
 RIESGO_DESLIZAMIENTOS_GEOJSON = DATA_DIR / "riesgo_deslizamientos.geojson"
+RIESGO_QUIMICO_GEOJSON = DATA_DIR / "riesgo_quimico.geojson"
 
 # Variables del Censo 2020 usadas para el índice de cobertura de servicios
 # básicos (ver SPEC.md). Se usan las variantes "positivas" (viviendas que SÍ
@@ -425,16 +435,25 @@ def cargar_riesgo_implan(shp_path: Path, campo_intensidad: str) -> gpd.GeoDataFr
     return gdf
 
 
-def preparar_capa_riesgo(gdf_riesgo: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def preparar_capa_riesgo(
+    gdf_riesgo: gpd.GeoDataFrame, niveles: list[str] = NIVELES_ELEVADOS
+) -> gpd.GeoDataFrame:
     """
-    Filtra a los niveles de riesgo relevantes (descarta "Muy bajo") y disuelve
-    por nivel de intensidad, produciendo un GeoDataFrame liviano (un multi-
-    polígono por nivel), ordenado de menor a mayor intensidad, con el puntaje
-    0-100 de cada nivel. Esta geometría alimenta tanto la penalización del
-    Índice de Inversión como la capa visible (que además la separa en zonas al
-    exportarla, ver `exportar_capa_riesgo`), garantizando consistencia.
+    Filtra a los niveles de riesgo relevantes y disuelve por nivel de
+    intensidad, produciendo un GeoDataFrame liviano (un multipolígono por
+    nivel), ordenado de menor a mayor intensidad, con el puntaje 0-100 de cada
+    nivel. Esta geometría alimenta tanto la penalización del Índice de Inversión
+    como la capa visible (que además la separa en zonas al exportarla, ver
+    `exportar_capa_riesgo`), garantizando consistencia.
+
+    `niveles` es el umbral de qué niveles se conservan; por defecto
+    `NIVELES_ELEVADOS` (descarta solo "Muy bajo", el fondo del ~90-98% del
+    área). Una capa puede pasar un umbral más alto: p. ej. el riesgo
+    químico-tecnológico descarta también "Bajo" porque ahí ese nivel cubre el
+    93% de la malla (el fondo del modelo, sin valor discriminante) y, sin
+    recortarlo, la capa rebasaría por sí sola el límite de 5 MB de SPEC.md §2.
     """
-    sub = gdf_riesgo[gdf_riesgo["INTENSIDAD"].isin(NIVELES_ELEVADOS)]
+    sub = gdf_riesgo[gdf_riesgo["INTENSIDAD"].isin(niveles)]
     disuelto = sub.dissolve(by="INTENSIDAD", as_index=False)[["INTENSIDAD", "geometry"]]
     disuelto["PUNTAJE"] = disuelto["INTENSIDAD"].map(PUNTAJE_INTENSIDAD)
     orden = {nivel: i for i, nivel in enumerate(NIVELES_INTENSIDAD)}
@@ -720,6 +739,18 @@ if __name__ == "__main__":
     exportar_capa_riesgo(
         gdf_deslizamientos, RIESGO_DESLIZAMIENTOS_GEOJSON,
         "Riesgo por Deslizamientos Traslacionales", "Geológico",
+    )
+    # Riesgo químico-tecnológico: muy relevante en el corredor industrial
+    # Saltillo–Ramos Arizpe. Umbral propio (Medio+Alto): ver
+    # NIVELES_ELEVADOS_QUIMICO. Capa solo informativa (no penaliza el índice,
+    # igual que deslizamientos; solo la inundación penaliza).
+    gdf_quimico = preparar_capa_riesgo(
+        cargar_riesgo_implan(IMPLAN_QUIMICO_SHP, "Intensid_1"),
+        niveles=NIVELES_ELEVADOS_QUIMICO,
+    )
+    exportar_capa_riesgo(
+        gdf_quimico, RIESGO_QUIMICO_GEOJSON,
+        "Riesgo Químico-Tecnológico", "Químico-Tecnológico",
     )
 
     print("\nCalculando exposición a inundación por AGEB (penalización)...")

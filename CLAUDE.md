@@ -24,9 +24,9 @@ GeoRiesgos Saltillo es una aplicación web interactiva (mapa) que cruza datos so
 > Procedencia completa y verificada de cada dataset en **`DATOS.md`**. Lo de abajo es solo el resumen.
 
 - **INEGI:** *Información vectorial de localidades amanzanadas y números exteriores 2023* (polígonos AGEB y nombre de colonia), Censo de Población 2020 (servicios básicos) y DENUE 05_2026 (equipamiento urbano).
-- **IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024** (fuente primaria de riesgo, SHP vectoriales): inundación pluvial urbana y deslizamientos traslacionales.
+- **IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024** (fuente primaria de riesgo, SHP vectoriales): inundación pluvial urbana, deslizamientos traslacionales y riesgo químico-tecnológico (almacenamiento de sustancias peligrosas).
 - **CONAGUA — ANRI** (respaldo): raster de severidad de inundación (Tr=100), conservado en `data/riesgo_inundacion.png` + `_meta.json`.
-- **Capas generadas en `data/`:** `servicios_basicos.geojson`, `indice_inversion.geojson`, `riesgo_inundacion.geojson`, `riesgo_deslizamientos.geojson`.
+- **Capas generadas en `data/`:** `servicios_basicos.geojson`, `indice_inversion.geojson`, `riesgo_inundacion.geojson`, `riesgo_deslizamientos.geojson`, `riesgo_quimico.geojson`.
 
 ## Lineamientos de Codificación
 1. **Frontend (HTML/JS):**
