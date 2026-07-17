@@ -275,6 +275,43 @@ tiene criterio de reactivación.
   ese momento hay que volver a buscar fuente (CONAFOR/CONABIO, o el atlas de riesgos de
   Arteaga si existe), ya que el del IMPLAN de Saltillo no cubre ese municipio.
 
+### 3.4 Inseguridad / incidencia delictiva — investigada y aplazada
+
+Idea del usuario: muy relevante para una decisión inmobiliaria (pesa más que un 2º tipo de
+deslizamiento). Se investigó a fondo el **2026-07-17** y se aplazó por **falta de dato con
+granularidad útil**. No es descarte definitivo: tiene criterio de reactivación.
+
+* **No se descargó ningún dataset.** El problema es de disponibilidad, no de esfuerzo.
+* **Fuentes revisadas y su granularidad:**
+  * **SESNSP** (nacional, oficial) — solo **estatal y municipal**; nada por debajo de
+    municipio fuera de CDMX. Un valor único para todo Saltillo.
+  * **Fiscalía General de Coahuila / Comisaría de Seguridad de Saltillo** — no publican
+    dataset de incidencia por colonia. La Comisaría solo ofrece apps de **reporte
+    ciudadano** (Saltillo Seguro, bot de WhatsApp) y encuestas de **percepción**.
+  * **Observatorios** (ONC `delitosmexico`, Semáforo Delictivo Coahuila, RID del Consejo
+    Cívico) — todos municipales.
+  * **`mapa.ocl.org.mx`** — es el Observatorio Ciudadano de **León, Guanajuato** (dato por
+    colonia con descarga .xlsx), **no** Coahuila. Prueba que el modelo por colonia existe
+    en otras ciudades, pero no cubre Saltillo.
+  * **HoyoDeCrimen** — georreferenciado por colonia pero **exclusivo de CDMX**.
+  * **El Crimen (`elcri.men`), `lapanquecita/incidencia-delictiva` (GitHub)** — la mejor
+    herramienta comunitaria; se alimenta del SESNSP, o sea **municipal**.
+* **Motivo del aplazamiento:** misma **trampa de granularidad** que descartó a CENAPRED
+  (§3.1). Un valor municipal único no discrimina entre colonias → peso muerto en el índice.
+  La razón es estructural: el SESNSP no publica sub-municipal fuera de CDMX, por eso ningún
+  proyecto comunitario lo ha resuelto para Saltillo.
+* **Consideración ética (para cuando se reactive):** los datos de delito están sesgados por
+  tasa de denuncia y un choropleth de "colonias peligrosas" en una app de scoring
+  inmobiliario afecta el valor de propiedades de gente real y puede volverse profecía
+  autocumplida. Si se implementa, debe ser con fuente oficial verificada, el sesgo
+  declarado en la ficha, y decidiendo explícitamente si entra al índice o queda informativa.
+* **Criterio de reactivación:** la única vía viable es la **macrozona del IMPLAN** — 12
+  polígonos que agrupan AGEBs (definidos desde ~2017); la Comisaría analiza la inseguridad
+  por macrozona ("Oriente" es la más insegura). Integraría limpio (misma fuente IMPLAN,
+  base AGEB), pero **hoy no es dato abierto**: requeriría una gestión institucional ante el
+  IMPLAN o la Comisaría (solicitud de transparencia / informe municipal con cifras por
+  macrozona), no búsqueda web.
+
 ---
 
 ## 4. Trazabilidad de las capas publicadas
