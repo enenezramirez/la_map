@@ -20,6 +20,12 @@ GeoRiesgos Saltillo es una aplicación web interactiva (mapa) que cruza datos so
 - **Iniciar Servidor de Desarrollo:** `python -m http.server 8000` (Abre `http://localhost:8000` en tu navegador)
 - **Ejecutar Procesamiento de Datos:** `python scripts/process_data.py`. **Importante:** `geopandas` vive en el entorno virtual, no en el Python del sistema. En Windows usa el intérprete del `venv`: `venv\Scripts\python.exe scripts\process_data.py` (o activa el `venv` primero).
 
+## Seguridad (revisión de commits)
+Dos capas complementarias revisan cada commit en busca de fallas de seguridad:
+1. **Git pre-commit hook** (`scripts/git-hooks/pre-commit`, determinista, cubre *todo* commit del clon): `gitleaks` escanea secretos en lo *staged* y **bloquea** si encuentra; `bandit` corre SAST sobre los `.py` staged y **avisa** (no bloquea). **Activar una vez por clon:** `git config core.hooksPath scripts/git-hooks`. Requiere `gitleaks` en el PATH y `bandit` en el `venv` (`venv/Scripts/pip install bandit`).
+2. **Hook de IA en sesión** (`.claude/settings.local.json`, no versionado): tras un `git commit` hecho con Claude Code, se lanza un subagente en segundo plano que revisa el diff (`git show HEAD`) con criterio contextual (XSS, TLS, flujo de datos). Solo cubre commits hechos en sesión.
+- Falsos positivos de `bandit` revisados y seguros se silencian con `# nosec BXXX` + comentario (ver `descargar_raster_inundacion` en `process_data.py`).
+
 ## Fuentes de Datos
 > Procedencia completa y verificada de cada dataset en **`DATOS.md`**. Lo de abajo es solo el resumen.
 
