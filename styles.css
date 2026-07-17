@@ -208,6 +208,22 @@ body {
     cursor: not-allowed;
 }
 
+/* Nota "sin datos en la zona visible": el panel deshabilita y explica en vez
+   de ocultar el toggle cuando el usuario navega fuera de la cobertura de la
+   capa (p. ej. a Arteaga, donde aún no hay AGEBs). Oculta por defecto; se
+   revela solo cuando la capa queda fuera de la vista. */
+.layer-status {
+    display: none;
+    font-size: 0.72rem;
+    color: #f59e0b;
+    padding-left: 48px;
+    line-height: 1.35;
+}
+
+.layer-control.sin-datos-vista .layer-status {
+    display: block;
+}
+
 /* Footer */
 .panel-footer {
     border-top: 1px solid rgba(255, 255, 255, 0.06);
