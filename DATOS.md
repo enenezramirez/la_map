@@ -174,7 +174,7 @@ más reciente. Este dataset es raster y de menor granularidad.
 
 ---
 
-## 3. Datasets descargados y descartados
+## 3. Datasets descartados y fuentes evaluadas
 
 Se documentan para no volver a evaluarlos desde cero.
 
@@ -195,6 +195,40 @@ Se documentan para no volver a evaluarlos desde cero.
 * **Motivo del descarte:** mide **susceptibilidad** (predisposición del terreno), no
   **riesgo** (que ya incorpora exposición y vulnerabilidad). La capa de riesgo del mismo
   Atlas es la adecuada para el propósito de la app y las haría redundantes.
+
+---
+
+### 3.3 Riesgo por incendios forestales (SPEC Capa 2) — evaluado y aplazado
+
+**No se descargó ningún dataset.** La capa se evaluó el 2026-07-16 y se decidió no
+implementarla mientras el alcance sea Saltillo urbano. No es un descarte definitivo:
+tiene criterio de reactivación.
+
+* **Fuentes contempladas:** CONABIO/CONAFOR, IMPLAN, CENAPRED.
+* **Motivos del aplazamiento:**
+  1. **El IMPLAN no publica una capa de incendio.** Su Atlas de Riesgos 2024 (CARTO
+     SALTILLO) mapea 7 capas —deslizamientos rotacionales y traslacionales, inundación
+     pluvial urbana, susceptibilidad a inundación, almacenamiento de sustancias químicas,
+     vulnerabilidad socio-organizativa y sanitario-ecológica— y ninguna es de incendio.
+     El instituto de planeación del municipio, al cartografiar los riesgos de su propio
+     territorio, no lo consideró relevante. Es la evidencia más fuerte en contra.
+  2. **No hay unidad de análisis donde está el peligro.** El AGEB (§2.1) es urbano y hoy
+     solo cubre Saltillo. El peligro de incendio está en la sierra y en Arteaga, donde no
+     hay AGEBs: la capa pintaría territorio sobre el que la app no analiza nada. Compárese
+     con las capas de riesgo actuales, que caen 100% dentro de la cobertura de AGEBs
+     (1095/1095 y 195/195 puntos representativos verificados).
+  3. **No discriminaría en el Índice de Inversión.** La penalización se calcula por
+     intersección de área con cada AGEB; si el peligro apenas roza la mancha urbana, el
+     resultado sería ≈0 para casi todos los sectores. Una variable que no distingue entre
+     zonas no aporta al scoring y sí cuesta archivo, UI y mantenimiento.
+  4. **La única fuente a mano es municipal.** El campo `GP_IF` de CENAPRED (§3.1) da un
+     valor único para todo Saltillo: la misma falta de granularidad que ya descartó ese
+     dataset.
+* **Criterio de reactivación:** implementar cuando existan los AGEBs de **Arteaga**
+  (`SPEC.md §1.1`). Ahí el riesgo es real —interfaz urbano-forestal en Los Lirios, San
+  Antonio de las Alazanas y la Sierra de Zapalinamé— y habría sectores que analizar. En
+  ese momento hay que volver a buscar fuente (CONAFOR/CONABIO, o el atlas de riesgos de
+  Arteaga si existe), ya que el del IMPLAN de Saltillo no cubre ese municipio.
 
 ---
 
