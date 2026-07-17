@@ -62,6 +62,15 @@
 
             <div class="layer-control">
                 <label class="switch-container">
+                    <input type="checkbox" id="layer-chemical">
+                    <span class="slider"></span>
+                    <span class="layer-name">Riesgo Químico-Tecnológico</span>
+                </label>
+                <p class="layer-desc">Zonas expuestas al almacenamiento de sustancias químicas peligrosas (IMPLAN · Atlas de Riesgos 2024).</p>
+            </div>
+
+            <div class="layer-control">
+                <label class="switch-container">
                     <input type="checkbox" id="layer-investment">
                     <span class="slider"></span>
                     <span class="layer-name">Índice de Inversión Inmobiliaria</span>
@@ -199,7 +208,7 @@
         }
 
         // HTML de leyenda ya construido por capa de riesgo (se llena al cargar).
-        const leyendasRiesgo = { inundacion: null, deslizamientos: null };
+        const leyendasRiesgo = { inundacion: null, deslizamientos: null, quimico: null };
 
         // --- Ubicación de la colonia de un punto (point-in-polygon) ----------
         // Las capas de riesgo del IMPLAN no traen nombre de zona: son un modelo
@@ -346,7 +355,8 @@
             servicios: () => htmlLeyenda('Índice de Servicios Básicos', ESCALONES_SERVICIOS),
             inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION),
             inundacion: () => leyendasRiesgo.inundacion || '<p class="empty-legend">Cargando…</p>',
-            deslizamientos: () => leyendasRiesgo.deslizamientos || '<p class="empty-legend">Cargando…</p>'
+            deslizamientos: () => leyendasRiesgo.deslizamientos || '<p class="empty-legend">Cargando…</p>',
+            quimico: () => leyendasRiesgo.quimico || '<p class="empty-legend">Cargando…</p>'
         };
         let ordenCapasActivas = [];
 
@@ -562,6 +572,15 @@
             checkbox: document.getElementById('layer-landslides'),
             clave: 'deslizamientos',
             titulo: 'Riesgo de Deslizamientos'
+        });
+
+        // Capa 5 — Riesgo Químico-Tecnológico (IMPLAN CARTO, Atlas 2024): vector.
+        // Solo Medio+Alto (ver NIVELES_ELEVADOS_QUIMICO en process_data.py).
+        cargarCapaRiesgo({
+            archivo: 'data/riesgo_quimico.geojson',
+            checkbox: document.getElementById('layer-chemical'),
+            clave: 'quimico',
+            titulo: 'Riesgo Químico-Tecnológico'
         });
 
         // Respaldo (ANRI - CONAGUA): la capa de inundación por severidad Tr=100

@@ -24,9 +24,11 @@ Cuando un dato no se pudo verificar, se dice explícitamente en lugar de estimar
 | 3 | DENUE 05_2026 (Coahuila) | INEGI | 2026-05-20 | 2026-07-08 | En uso |
 | 4 | Riesgo por inundaciones pluviales urbanas (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-15 | En uso |
 | 5 | Riesgo por deslizamientos traslacionales (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-15 | En uso |
-| 6 | ANRI — Severidad por inundación, Tr = 100 años | CONAGUA | No publicada | 2026-07-16 | Respaldo |
-| 7 | Indicadores Municipales PEV | CENAPRED | — | 2026-07-08 | Descartado |
-| 8 | Susceptibilidad a inundaciones pluviales | IMPLAN Saltillo | 2024 | 2026-07-15 | Descartado |
+| 6 | Riesgo químico-tecnológico (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-17 | En uso |
+| 7 | ANRI — Severidad por inundación, Tr = 100 años | CONAGUA | No publicada | 2026-07-16 | Respaldo |
+| 8 | Riesgo por deslizamientos rotacionales (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-17 | Evaluado, no publicado |
+| 9 | Indicadores Municipales PEV | CENAPRED | — | 2026-07-08 | Descartado |
+| 10 | Susceptibilidad a inundaciones pluviales | IMPLAN Saltillo | 2024 | 2026-07-15 | Descartado |
 
 ---
 
@@ -153,7 +155,32 @@ de colonia de cada uno.
 > como el editor nombra el producto (`IMPLAN_FECHA_CORTE` en `scripts/process_data.py`).
 > Vale confirmarlo con el IMPLAN si alguna vez importa la precisión al mes.
 
-### 2.6 CONAGUA — ANRI, Severidad por inundación (Tr = 100 años) *(respaldo)*
+### 2.6 IMPLAN Saltillo — Riesgo químico-tecnológico (Atlas de Riesgos 2024)
+
+**Fuente primaria de riesgo antropogénico**, muy relevante en el corredor industrial
+Saltillo–Ramos Arizpe (GM, Stellantis, GIS).
+
+* **Fuente oficial:** IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024.
+* **Sitio de descarga:** <https://implansaltillo.mx/perfil/>.
+* **Fecha de corte:** 2024 (etiqueta del portal).
+* **Fecha de descarga:** 2026-07-17.
+* **Ruta local:** `raw_data/Riesgo_Quimico_tecnologico/`.
+* **Formato:** shapefile de **polígonos** (no puntos), 12,679 registros, EPSG:6372 — la
+  misma malla que inundación y deslizamientos.
+* **Campos:** `Titulo` ("Riesgo Químico-Tecnológico"), `Intensid_1` (Muy Bajo→Alto; sin
+  "Muy alto"), `Detalle` ("Riesgo por almacenamiento de sustancias químicas peligrosas"),
+  `Fenome` ("Químico-Tecnológico").
+* **Uso en el proyecto:** capa `data/riesgo_quimico.geojson`. **Solo informativa** (no
+  penaliza el Índice de Inversión; igual que deslizamientos, solo la inundación penaliza).
+* **Umbral propio (Medio+Alto).** A diferencia de las otras capas —que solo descartan "Muy
+  bajo"—, esta descarta también **"Bajo"**: ahí ese nivel cubre 9,644 de 12,679 celdas (el
+  93% de la malla), es el fondo del modelo sin valor discriminante y, conservándolo, la
+  capa pesaría **6.9 MB** (rebasa sola el límite de 5 MB de SPEC §2). Con Medio (1,937) +
+  Alto (212) queda en **1.28 MB / 2,136 zonas** mostrando solo la exposición genuina. El
+  umbral vive en `NIVELES_ELEVADOS_QUIMICO` (`scripts/process_data.py`), pasado a
+  `preparar_capa_riesgo(niveles=...)`.
+
+### 2.7 CONAGUA — ANRI, Severidad por inundación (Tr = 100 años) *(respaldo)*
 
 Se conserva como fuente alternativa; **IMPLAN es la primaria** por ser local, vectorial y
 más reciente. Este dataset es raster y de menor granularidad.
@@ -195,6 +222,24 @@ Se documentan para no volver a evaluarlos desde cero.
 * **Motivo del descarte:** mide **susceptibilidad** (predisposición del terreno), no
   **riesgo** (que ya incorpora exposición y vulnerabilidad). La capa de riesgo del mismo
   Atlas es la adecuada para el propósito de la app y las haría redundantes.
+
+### 3.2b IMPLAN — Riesgo por deslizamientos rotacionales (Atlas 2024) — descargado, no publicado
+
+* **Ruta local:** `raw_data/Riesgo_por_Deslizamientos_rotacionales3/` (12,679 polígonos,
+  EPSG:6372). **Fecha de descarga:** 2026-07-17. Se conserva por si se reconsidera.
+* **Motivo de no publicarla:** **valor añadido marginal**. Es la capa hermana de la
+  traslacional que sí usamos (§2.5), pero su nivel de intensidad máximo es apenas "Medio"
+  (75 celdas de 12,679); el resto es "Bajo"/"Muy bajo" de fondo. Con el tratamiento estándar
+  pesaría 2.3 MB de mayoría "bajo", y quedarse solo con "Medio" son 75 celdas (~49 KB) de
+  señal muy débil. **No cambia una decisión de inversión**, que es la vara para incluir una
+  capa. Verificado a nivel de celda contra la traslacional (misma malla): de sus 3,882
+  celdas elevadas solo 76 se solapan con la traslacional, y sus 75 celdas "Medio" caen todas
+  donde la traslacional ve "Muy bajo" — o sea, aporta terreno distinto, pero de intensidad
+  baja. **No se fusiona con la traslacional**: son mecanismos de falla distintos (plano vs.
+  superficie cóncava) con escalas de intensidad no necesariamente comparables; mezclarlas
+  crearía una capa derivada sin fuente propia y rompería la trazabilidad de SPEC §1.2.
+* **Reactivación:** si en el futuro se busca completitud del riesgo geológico, se agrega como
+  **capa aparte** (nunca fusionada), preferentemente solo su nivel "Medio".
 
 ---
 
@@ -242,13 +287,14 @@ De cada archivo servido al navegador, su origen:
 | `indice_inversion.geojson` | ~506 KB | §2.1 + §2.2 + DENUE (§2.3) + riesgo de inundación (§2.4) |
 | `riesgo_inundacion.geojson` | ~1.0 MB | IMPLAN inundación (§2.4) |
 | `riesgo_deslizamientos.geojson` | ~164 KB | IMPLAN deslizamientos (§2.5) |
-| `riesgo_inundacion.png` + `_meta.json` | ~174 KB | CONAGUA ANRI (§2.6) |
+| `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN químico-tecnológico (§2.6) |
+| `riesgo_inundacion.png` + `_meta.json` | ~174 KB | CONAGUA ANRI (§2.7) |
 
 Las capas de riesgo llevan la procedencia embebida en los campos `FUENTE` y `FECHA` de
 cada feature, y la app la muestra en la ficha de detalle al hacer clic (SPEC §1.2).
 
 **Ojo con la ficha de riesgo: combina dos fuentes.** El fenómeno y el nivel de intensidad
-vienen del IMPLAN (§2.4 y §2.5), pero el nombre de colonia y el municipio vienen de los
+vienen del IMPLAN (§2.4, §2.5 y §2.6), pero el nombre de colonia y el municipio vienen de los
 AGEB de INEGI (§2.1), ubicando el punto clicado por point-in-polygon. Las capas del
 IMPLAN no traen nombre de zona: son un modelo de intensidad y se disuelven por nivel. La
 colonia es, por tanto, una referencia de ubicación aproximada —el AGEB que contiene el
@@ -256,11 +302,13 @@ punto—, no una unidad de análisis del IMPLAN: el riesgo se modela por zona, n
 colonia, y una colonia puede contener varios niveles de intensidad.
 
 Las capas de riesgo **descartan el nivel "Muy bajo"**, que cubre el ~90-98% del área y
-solo agrandaría el archivo sin aportar señal. Se disuelven por nivel de intensidad —esa
-es la geometría que alimenta la penalización del Índice de Inversión— y al exportarlas se
-separan en sus zonas individuales (1,358 en inundación, 197 en deslizamientos) para que
-el mapa pueda resaltar una zona a la vez en vez de todo un nivel. La geometría es idéntica
-en ambos casos; separar solo repite las propiedades en cada feature.
+solo agrandaría el archivo sin aportar señal. **La capa química descarta además "Bajo"**
+(ver §2.6: ahí ese nivel es el 93% de la malla y sin recortarlo la capa rebasaría sola el
+límite de 5 MB). Se disuelven por nivel de intensidad —esa es la geometría que alimenta la
+penalización del Índice de Inversión— y al exportarlas se separan en sus zonas individuales
+(1,358 en inundación, 197 en deslizamientos, 2,136 en la química) para que el mapa pueda
+resaltar una zona a la vez en vez de todo un nivel. La geometría es idéntica en ambos
+casos; separar solo repite las propiedades en cada feature.
 
 ---
 
