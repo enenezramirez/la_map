@@ -192,13 +192,17 @@ MUNICIPIOS_AGEB: dict[str, list[Path]] = {
     "Saltillo": [
         RAW_DATA / "marco_geoestadistico" / "saltillo_map_ageb" / "050300001",
     ],
+    # Rutas pre-cableadas: el pipeline las omite con gracia mientras no exista la
+    # carpeta (imprime "se omite" y sigue), y las toma en cuanto se descarguen de
+    # INEGI (mismo producto que Saltillo, ver DATOS.md §2.1). Las claves de
+    # localidad se verificaron contra el Censo 2020 de Coahuila: Ramos Arizpe es
+    # el municipio 027 (no 025), Arteaga el 004.
     "Ramos Arizpe": [
-        # TODO: agregar aquí las carpetas de localidad de Ramos Arizpe
-        # descargadas de INEGI (mismo producto, ver DATOS.md) cuando estén disponibles.
+        RAW_DATA / "marco_geoestadistico" / "ramos_arizpe_map_ageb" / "050270001",  # Ramos Arizpe (ciudad)
     ],
     "Arteaga": [
-        # TODO: agregar aquí las carpetas de localidad de Arteaga
-        # descargadas de INEGI (mismo producto, ver DATOS.md) cuando estén disponibles.
+        RAW_DATA / "marco_geoestadistico" / "arteaga_map_ageb" / "050040001",  # Arteaga (cabecera)
+        RAW_DATA / "marco_geoestadistico" / "arteaga_map_ageb" / "050040107",  # San Antonio de las Alazanas (sierra)
     ],
 }
 
