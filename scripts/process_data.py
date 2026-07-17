@@ -1,9 +1,13 @@
 """
 GeoRiesgos Saltillo - Script de Procesamiento de Datos Espaciales
 ----------------------------------------------------------------
-Fase 2, Tarea 1: Filtrar el Marco Geoestadístico (INEGI) para obtener
-únicamente los polígonos de AGEB de los municipios de interés
-(Saltillo, Ramos Arizpe, Arteaga).
+Fase 2, Tarea 1: Filtrar la capa de AGEB de INEGI para obtener únicamente los
+polígonos de los municipios de interés (Saltillo, Ramos Arizpe, Arteaga).
+
+La fuente de los AGEB es el producto "Información vectorial de localidades
+amanzanadas y números exteriores 2023" de INEGI (NO el Marco Geoestadístico:
+ese es solo una de sus capas base, edición diciembre 2022). La procedencia
+completa de este y de los demás datasets está en DATOS.md.
 
 Por ahora solo hay datos de AGEB descargados para Saltillo. La configuración
 MUNICIPIOS_AGEB está lista para que, en cuanto se descarguen las localidades
@@ -14,14 +18,16 @@ Fase 2, Tarea 2: Procesar los datos de servicios básicos del Censo de
 Población y Vivienda 2020 (INEGI, nivel AGEB urbana) e integrarlos a los
 polígonos de AGEB por CVEGEO.
 
+Fase 2, Tarea 3: Cruce espacial de los AGEB con las zonas de inundación
+(overlay vectorial contra las capas del IMPLAN, ver abajo). El dataset
+municipal de CENAPRED se descartó por no tener granularidad intraurbana.
+
 Fase 2, Tarea 4: Exportar la capa de Servicios Básicos a GeoJSON limpio y
 liviano en la carpeta data/, lista para que Leaflet la cargue directamente.
-(La Tarea 3, cruce espacial con zonas de inundación de CENAPRED, queda
-bloqueada por falta de una capa granular de inundación — ver task.md).
 
-Extra: los AGEB no tienen nombre de colonia en el Marco Geoestadístico (son
-unidades estadísticas, no coinciden 1 a 1 con una colonia). El nombre se
-deriva de la capa "Frente de manzana" (fm), que sí trae el campo NOMASEN
+Extra: los AGEB no tienen nombre de colonia propio (son unidades estadísticas,
+no coinciden 1 a 1 con una colonia). El nombre se deriva de la capa "Frente de
+manzana" (fm), que sí trae el campo NOMASEN
 (nombre de asentamiento) por cada frente de cuadra: se usa el NOMASEN más
 frecuente entre los frentes de cada AGEB como aproximación de su colonia.
 
@@ -88,8 +94,7 @@ CATEGORIAS_DENUE = {
     "supermercado": lambda df: df["nombre_act"].str.contains("supermercado", case=False, na=False),
 }
 
-# Pesos del Índice de Inversión (SPEC.md). W_riesg se excluye del cálculo
-# mientras no haya una capa granular de inundación (ver docstring del módulo).
+# Pesos del Índice de Inversión (SPEC.md).
 PESO_SERVICIOS = 0.4
 PESO_COMERCIOS = 0.3
 # Penalización por riesgo de inundación (SPEC.md). Se aplica como resta sobre
@@ -101,7 +106,20 @@ PESO_RIESGO = 0.3
 # del tamaño de Saltillo; decae linealmente hasta 0 en ese punto.
 RADIO_MAX_KM = 3.0
 
-# CRS métrico (el mismo del Marco Geoestadístico de INEGI) usado solo para
+# Valores de relleno del campo NOMASEN (nombre de asentamiento) en la capa de
+# Frente de manzana de INEGI. No son nombres de colonia: "ND" es "no
+# disponible" (su TIPOASEN también dice "ND") y "NINGUNO" marca los frentes sin
+# asentamiento asignado. Hay que descartarlos antes de calcular el nombre más
+# frecuente por AGEB: si no, un AGEB con 5 frentes "NINGUNO" y 4 con nombre
+# real termina llamándose "NINGUNO" en el mapa. Ojo: no todo valor corto es
+# relleno — "GIS" es real (Sector GIS, por Grupo Industrial Saltillo).
+VALORES_SIN_ASENTAMIENTO = frozenset({"ND", "NINGUNO"})
+
+# Rótulo para un AGEB sin ningún nombre de asentamiento real. Preferible a
+# mostrar el valor de relleno crudo en la ficha del mapa.
+SIN_COLONIA = "SIN NOMBRE REGISTRADO"
+
+# CRS métrico (el mismo de la cartografía vectorial de INEGI) usado solo para
 # calcular distancias en metros; la salida final se reproyecta a EPSG:4326.
 CRS_METRICO = "EPSG:6372"
 
@@ -166,11 +184,11 @@ MUNICIPIOS_AGEB: dict[str, list[Path]] = {
     ],
     "Ramos Arizpe": [
         # TODO: agregar aquí las carpetas de localidad de Ramos Arizpe
-        # descargadas de INEGI (Marco Geoestadístico) cuando estén disponibles.
+        # descargadas de INEGI (mismo producto, ver DATOS.md) cuando estén disponibles.
     ],
     "Arteaga": [
         # TODO: agregar aquí las carpetas de localidad de Arteaga
-        # descargadas de INEGI (Marco Geoestadístico) cuando estén disponibles.
+        # descargadas de INEGI (mismo producto, ver DATOS.md) cuando estén disponibles.
     ],
 }
 
@@ -200,13 +218,13 @@ def cargar_ageb_municipio(nombre_municipio: str, carpetas_localidad: list[Path])
     return gdf_municipio
 
 
-def filtrar_marco_geoestadistico() -> gpd.GeoDataFrame:
+def filtrar_agebs_por_municipio() -> gpd.GeoDataFrame:
     """
     Combina los AGEB de todos los municipios configurados en MUNICIPIOS_AGEB
     en un único GeoDataFrame, reproyectado a EPSG:4326 (WGS84) para su uso
     directo en Leaflet.
     """
-    print("Filtrando Marco Geoestadístico por municipio...")
+    print("Filtrando AGEBs por municipio...")
 
     capas_municipio = []
     for nombre_municipio, carpetas in MUNICIPIOS_AGEB.items():
@@ -231,8 +249,9 @@ def cargar_nombres_colonias() -> pd.DataFrame:
     Deriva el nombre de colonia/asentamiento dominante de cada AGEB a partir
     de la capa "Frente de manzana" (fm): agrupa sus registros por AGEB (los
     primeros 13 caracteres del CVEGEO de frente coinciden con el CVEGEO de
-    AGEB) y toma el NOMASEN más frecuente. Excluye "ND" (sin dato) salvo que
-    sea el único valor disponible para ese AGEB.
+    AGEB) y toma el NOMASEN más frecuente, ignorando los valores de relleno de
+    INEGI (VALORES_SIN_ASENTAMIENTO). Si un AGEB no tiene ningún nombre real,
+    se rotula con SIN_COLONIA en vez de propagar el relleno al mapa.
     """
     registros = []
     for carpetas in MUNICIPIOS_AGEB.values():
@@ -251,9 +270,11 @@ def cargar_nombres_colonias() -> pd.DataFrame:
     df_fm = pd.concat(registros, ignore_index=True)
 
     def _colonia_dominante(grupo: pd.DataFrame) -> str:
-        con_dato = grupo.loc[grupo["NOMASEN"] != "ND", "NOMASEN"]
-        serie = con_dato if not con_dato.empty else grupo["NOMASEN"]
-        return serie.value_counts().idxmax()
+        nombres = grupo["NOMASEN"].astype(str).str.strip()
+        con_dato = nombres[~nombres.str.upper().isin(VALORES_SIN_ASENTAMIENTO)]
+        if con_dato.empty:
+            return SIN_COLONIA
+        return con_dato.value_counts().idxmax()
 
     colonias = df_fm.groupby("CVEGEO").apply(_colonia_dominante, include_groups=False)
     return colonias.rename("COLONIA").reset_index()
@@ -409,8 +430,9 @@ def preparar_capa_riesgo(gdf_riesgo: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     Filtra a los niveles de riesgo relevantes (descarta "Muy bajo") y disuelve
     por nivel de intensidad, produciendo un GeoDataFrame liviano (un multi-
     polígono por nivel), ordenado de menor a mayor intensidad, con el puntaje
-    0-100 de cada nivel. La misma geometría alimenta la capa visible y la
-    penalización del índice, garantizando consistencia.
+    0-100 de cada nivel. Esta geometría alimenta tanto la penalización del
+    Índice de Inversión como la capa visible (que además la separa en zonas al
+    exportarla, ver `exportar_capa_riesgo`), garantizando consistencia.
     """
     sub = gdf_riesgo[gdf_riesgo["INTENSIDAD"].isin(NIVELES_ELEVADOS)]
     disuelto = sub.dissolve(by="INTENSIDAD", as_index=False)[["INTENSIDAD", "geometry"]]
@@ -426,14 +448,28 @@ def exportar_capa_riesgo(
     gdf_disuelto: gpd.GeoDataFrame, salida: Path, titulo: str, fenomeno: str
 ) -> gpd.GeoDataFrame:
     """
-    Simplifica la geometría, adjunta metadatos de trazabilidad (SPEC.md §1.2:
-    título, fenómeno, fuente y fecha de corte) y exporta la capa de riesgo a
-    data/ lista para Leaflet.
+    Simplifica la geometría, separa el multipolígono de cada nivel en sus zonas
+    individuales, adjunta metadatos de trazabilidad (SPEC.md §1.2: título,
+    fenómeno, fuente y fecha de corte) y exporta la capa de riesgo a data/
+    lista para Leaflet.
+
+    El `explode` es lo que permite que, al señalar una zona en el mapa, se
+    resalte solo esa y no todas las manchas del mismo nivel en la ciudad: con
+    el multipolígono disuelto, Leaflet ve un único elemento por nivel. No altera
+    la geometría (es la misma figura, declarada como varias features); solo
+    repite las propiedades en cada una, a un costo de unos ~450 KB en total
+    entre las dos capas, muy por debajo del límite de 5 MB de SPEC.md §2.
+
+    Se explota aquí y no en `preparar_capa_riesgo` a propósito: la versión
+    disuelta sigue alimentando la penalización del Índice de Inversión, donde
+    tener una sola geometría por nivel es lo natural para el overlay.
     """
     gdf = gdf_disuelto.copy()
     gdf["geometry"] = gdf["geometry"].simplify(
         TOLERANCIA_SIMPLIFICACION, preserve_topology=True
     )
+    niveles = len(gdf)
+    gdf = gdf.explode(index_parts=False).reset_index(drop=True)
     gdf["TITULO"] = titulo
     gdf["FENOMENO"] = fenomeno
     gdf["FUENTE"] = IMPLAN_FUENTE
@@ -442,7 +478,10 @@ def exportar_capa_riesgo(
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     gdf.to_file(salida, driver="GeoJSON")
     tamano_kb = salida.stat().st_size / 1024
-    print(f"  Capa de riesgo exportada: {salida} ({len(gdf)} niveles, {tamano_kb:.1f} KB)")
+    print(
+        f"  Capa de riesgo exportada: {salida} "
+        f"({niveles} niveles, {len(gdf)} zonas, {tamano_kb:.1f} KB)"
+    )
     return gdf
 
 
@@ -646,7 +685,7 @@ def descargar_raster_inundacion(bounds_4326: tuple[float, float, float, float]) 
 if __name__ == "__main__":
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    gdf_agebs = filtrar_marco_geoestadistico()
+    gdf_agebs = filtrar_agebs_por_municipio()
 
     salida = PROCESSED_DIR / "ageb_filtrado.geojson"
     gdf_agebs.to_file(salida, driver="GeoJSON")
