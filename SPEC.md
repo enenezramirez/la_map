@@ -12,7 +12,7 @@ Este documento sirve como la especificación del sistema (Single Source of Truth
 2. **Visualización de Capas (Layers):**
    - **Capa 1: Riesgos de Inundación (IMPLAN CARTO Saltillo, Atlas 2024):** Polígonos de zonas de riesgo por inundación pluvial urbana, coloreados semafóricamente por nivel de intensidad. Respaldo: ANRI de CONAGUA (raster de severidad). *El dataset municipal de CENAPRED se descartó por falta de granularidad.*
    - **Capa 2: Riesgo Forestal (CONABIO/CONAFOR):** Áreas con peligro de incendios, especialmente en las zonas boscosas de Arteaga.
-   - **Capa 3: Cobertura de Servicios Básicos (INEGI Censo):** Porcentaje de viviendas con servicios completos (agua, luz, drenaje e internet) por sector.
+   - **Capa 3: Cobertura de Servicios Básicos (INEGI, Censo de Población y Vivienda 2020):** Cobertura de agua, luz, drenaje e internet por sector, y un índice compuesto que las promedia. *Nota: el Censo agregado por AGEB no permite calcular el porcentaje de viviendas que tienen los cuatro servicios simultáneamente (requeriría microdatos); el promedio es la aproximación adoptada.*
    - **Capa 4: Riesgos Geológicos y Deslizamientos (IMPLAN CARTO Saltillo, Atlas 2024):** Zonas de riesgo por remoción de masa en laderas (deslizamientos traslacionales), coloreadas por nivel de intensidad.
 3. **Índice de Inversión Inmobiliaria:**
    - Una capa combinada (Weighted Overlay) calculada en Python que sume los servicios básicos, penalice las zonas de riesgo (inundación, incendios y deslizamientos) y valore la cercanía a infraestructura.
@@ -26,6 +26,7 @@ Este documento sirve como la especificación del sistema (Single Source of Truth
 
 ### 1.2 Legitimidad y Trazabilidad de los Datos
 Dado que la precisión es crítica para la toma de decisiones inmobiliarias, la aplicación debe garantizar la procedencia de la información:
+* **Bitácora de Datos:** `DATOS.md` es el registro único de procedencia del proyecto: fuente oficial, editor, fecha de corte, fecha de descarga, licencia y uso de cada dataset, incluidos los descartados y su motivo. Debe actualizarse al agregar, cambiar o descartar cualquier fuente, y sus fechas deben verificarse contra los metadatos internos de cada paquete, no de memoria.
 * **Metadatos Obligatorios:** Cada capa debe documentar estrictamente en su código/GeoJSON la **Fuente Oficial** y la **Fecha de Descarga/Actualización** (ej. *IMPLAN CARTO Saltillo, Atlas de Riesgos 2024*).
 * **UI Informativa:** Cuando el usuario haga clic en cualquier sector del mapa para ver los detalles, el panel de información debe mostrar visiblemente el origen y la fecha de corte de los datos de riesgo y servicios que está visualizando.
 
@@ -34,6 +35,9 @@ Dado que la precisión es crítica para la toma de decisiones inmobiliarias, la 
 ## 2. Arquitectura de Datos y Backend (Python)
 
 El procesamiento de datos se ejecutará localmente y fuera de línea con Python.
+
+### Unidad Territorial Base:
+El "sector" de todo el análisis es el **AGEB** (Área Geoestadística Básica). Sus polígonos y el nombre de colonia asociado provienen de **INEGI — *Información vectorial de localidades amanzanadas y números exteriores 2023*** (publicado 2023-12-15). Este producto **no es** el Marco Geoestadístico: solo lo utiliza (edición diciembre 2022) como capa base. Toda cita a esta fuente debe usar su título oficial — ver `DATOS.md` §2.1.
 
 ### Herramientas de Datos:
 - `pandas` y `geopandas` para el manejo de dataframes espaciales.

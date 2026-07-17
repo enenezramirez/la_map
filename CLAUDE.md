@@ -5,7 +5,7 @@ Este archivo proporciona contexto y comandos útiles para que la Inteligencia Ar
 ## Resumen del Proyecto
 GeoRiesgos Saltillo es una aplicación web interactiva (mapa) que cruza datos sociodemográficos y económicos para visualizar zonas de riesgo, vulnerabilidad y oportunidades de inversión en Saltillo, Coahuila.
 - **Frontend:** HTML/JS Vanilla con Leaflet.js para el mapa y capas interactivas (estilo glassmorphism oscuro).
-- **Backend/Datos:** Scripts en Python (`geopandas`, `pandas`) que procesan datos brutos del INEGI (Censo, Marco Geoestadístico), DENUE e IMPLAN para generar archivos `.geojson` simplificados.
+- **Backend/Datos:** Scripts en Python (`geopandas`, `pandas`) que procesan datos brutos del INEGI (Censo, cartografía vectorial de AGEB), DENUE e IMPLAN para generar archivos `.geojson` simplificados.
 
 ## Estructura del Workspace
 - `index.html` - Punto de entrada de la aplicación frontend (Leaflet.js).
@@ -14,13 +14,16 @@ GeoRiesgos Saltillo es una aplicación web interactiva (mapa) que cruza datos so
 - `scripts/` - Scripts de procesamiento de datos espaciales en Python (`GeoPandas`).
 - `SPEC.md` - Especificación técnica y requerimientos del proyecto.
 - `task.md` - Lista de tareas activas (actualízala conforme completes hitos).
+- `DATOS.md` - Bitácora de datos: procedencia de cada dataset (fuente oficial, fecha de corte y de descarga, licencia, uso y motivo de descarte). Requerida por `SPEC.md §1.2`; actualízala al agregar, cambiar o descartar cualquier fuente.
 
 ## Comandos del Proyecto
 - **Iniciar Servidor de Desarrollo:** `python -m http.server 8000` (Abre `http://localhost:8000` en tu navegador)
 - **Ejecutar Procesamiento de Datos:** `python scripts/process_data.py`. **Importante:** `geopandas` vive en el entorno virtual, no en el Python del sistema. En Windows usa el intérprete del `venv`: `venv\Scripts\python.exe scripts\process_data.py` (o activa el `venv` primero).
 
 ## Fuentes de Datos
-- **INEGI:** Marco Geoestadístico (polígonos AGEB), Censo de Población 2020 (servicios básicos) y DENUE (equipamiento urbano).
+> Procedencia completa y verificada de cada dataset en **`DATOS.md`**. Lo de abajo es solo el resumen.
+
+- **INEGI:** *Información vectorial de localidades amanzanadas y números exteriores 2023* (polígonos AGEB y nombre de colonia), Censo de Población 2020 (servicios básicos) y DENUE 05_2026 (equipamiento urbano).
 - **IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024** (fuente primaria de riesgo, SHP vectoriales): inundación pluvial urbana y deslizamientos traslacionales.
 - **CONAGUA — ANRI** (respaldo): raster de severidad de inundación (Tr=100), conservado en `data/riesgo_inundacion.png` + `_meta.json`.
 - **Capas generadas en `data/`:** `servicios_basicos.geojson`, `indice_inversion.geojson`, `riesgo_inundacion.geojson`, `riesgo_deslizamientos.geojson`.

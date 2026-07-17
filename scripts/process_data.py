@@ -1,9 +1,13 @@
 """
 GeoRiesgos Saltillo - Script de Procesamiento de Datos Espaciales
 ----------------------------------------------------------------
-Fase 2, Tarea 1: Filtrar el Marco Geoestadístico (INEGI) para obtener
-únicamente los polígonos de AGEB de los municipios de interés
-(Saltillo, Ramos Arizpe, Arteaga).
+Fase 2, Tarea 1: Filtrar la capa de AGEB de INEGI para obtener únicamente los
+polígonos de los municipios de interés (Saltillo, Ramos Arizpe, Arteaga).
+
+La fuente de los AGEB es el producto "Información vectorial de localidades
+amanzanadas y números exteriores 2023" de INEGI (NO el Marco Geoestadístico:
+ese es solo una de sus capas base, edición diciembre 2022). La procedencia
+completa de este y de los demás datasets está en DATOS.md.
 
 Por ahora solo hay datos de AGEB descargados para Saltillo. La configuración
 MUNICIPIOS_AGEB está lista para que, en cuanto se descarguen las localidades
@@ -14,14 +18,16 @@ Fase 2, Tarea 2: Procesar los datos de servicios básicos del Censo de
 Población y Vivienda 2020 (INEGI, nivel AGEB urbana) e integrarlos a los
 polígonos de AGEB por CVEGEO.
 
+Fase 2, Tarea 3: Cruce espacial de los AGEB con las zonas de inundación
+(overlay vectorial contra las capas del IMPLAN, ver abajo). El dataset
+municipal de CENAPRED se descartó por no tener granularidad intraurbana.
+
 Fase 2, Tarea 4: Exportar la capa de Servicios Básicos a GeoJSON limpio y
 liviano en la carpeta data/, lista para que Leaflet la cargue directamente.
-(La Tarea 3, cruce espacial con zonas de inundación de CENAPRED, queda
-bloqueada por falta de una capa granular de inundación — ver task.md).
 
-Extra: los AGEB no tienen nombre de colonia en el Marco Geoestadístico (son
-unidades estadísticas, no coinciden 1 a 1 con una colonia). El nombre se
-deriva de la capa "Frente de manzana" (fm), que sí trae el campo NOMASEN
+Extra: los AGEB no tienen nombre de colonia propio (son unidades estadísticas,
+no coinciden 1 a 1 con una colonia). El nombre se deriva de la capa "Frente de
+manzana" (fm), que sí trae el campo NOMASEN
 (nombre de asentamiento) por cada frente de cuadra: se usa el NOMASEN más
 frecuente entre los frentes de cada AGEB como aproximación de su colonia.
 
@@ -88,8 +94,7 @@ CATEGORIAS_DENUE = {
     "supermercado": lambda df: df["nombre_act"].str.contains("supermercado", case=False, na=False),
 }
 
-# Pesos del Índice de Inversión (SPEC.md). W_riesg se excluye del cálculo
-# mientras no haya una capa granular de inundación (ver docstring del módulo).
+# Pesos del Índice de Inversión (SPEC.md).
 PESO_SERVICIOS = 0.4
 PESO_COMERCIOS = 0.3
 # Penalización por riesgo de inundación (SPEC.md). Se aplica como resta sobre
@@ -101,7 +106,7 @@ PESO_RIESGO = 0.3
 # del tamaño de Saltillo; decae linealmente hasta 0 en ese punto.
 RADIO_MAX_KM = 3.0
 
-# CRS métrico (el mismo del Marco Geoestadístico de INEGI) usado solo para
+# CRS métrico (el mismo de la cartografía vectorial de INEGI) usado solo para
 # calcular distancias en metros; la salida final se reproyecta a EPSG:4326.
 CRS_METRICO = "EPSG:6372"
 
@@ -166,11 +171,11 @@ MUNICIPIOS_AGEB: dict[str, list[Path]] = {
     ],
     "Ramos Arizpe": [
         # TODO: agregar aquí las carpetas de localidad de Ramos Arizpe
-        # descargadas de INEGI (Marco Geoestadístico) cuando estén disponibles.
+        # descargadas de INEGI (mismo producto, ver DATOS.md) cuando estén disponibles.
     ],
     "Arteaga": [
         # TODO: agregar aquí las carpetas de localidad de Arteaga
-        # descargadas de INEGI (Marco Geoestadístico) cuando estén disponibles.
+        # descargadas de INEGI (mismo producto, ver DATOS.md) cuando estén disponibles.
     ],
 }
 
@@ -200,13 +205,13 @@ def cargar_ageb_municipio(nombre_municipio: str, carpetas_localidad: list[Path])
     return gdf_municipio
 
 
-def filtrar_marco_geoestadistico() -> gpd.GeoDataFrame:
+def filtrar_agebs_por_municipio() -> gpd.GeoDataFrame:
     """
     Combina los AGEB de todos los municipios configurados en MUNICIPIOS_AGEB
     en un único GeoDataFrame, reproyectado a EPSG:4326 (WGS84) para su uso
     directo en Leaflet.
     """
-    print("Filtrando Marco Geoestadístico por municipio...")
+    print("Filtrando AGEBs por municipio...")
 
     capas_municipio = []
     for nombre_municipio, carpetas in MUNICIPIOS_AGEB.items():
@@ -646,7 +651,7 @@ def descargar_raster_inundacion(bounds_4326: tuple[float, float, float, float]) 
 if __name__ == "__main__":
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    gdf_agebs = filtrar_marco_geoestadistico()
+    gdf_agebs = filtrar_agebs_por_municipio()
 
     salida = PROCESSED_DIR / "ageb_filtrado.geojson"
     gdf_agebs.to_file(salida, driver="GeoJSON")
