@@ -196,14 +196,12 @@ De cada archivo servido al navegador, su origen:
 |---|---|---|
 | `servicios_basicos.geojson` | ~488 KB | AGEB (§2.1) + Censo 2020 (§2.2) |
 | `indice_inversion.geojson` | ~506 KB | §2.1 + §2.2 + DENUE (§2.3) + riesgo de inundación (§2.4) |
-| `riesgo_inundacion.geojson` | ~648 KB | IMPLAN inundación (§2.4) |
-| `riesgo_deslizamientos.geojson` | ~107 KB | IMPLAN deslizamientos (§2.5) |
+| `riesgo_inundacion.geojson` | ~1.0 MB | IMPLAN inundación (§2.4) |
+| `riesgo_deslizamientos.geojson` | ~164 KB | IMPLAN deslizamientos (§2.5) |
 | `riesgo_inundacion.png` + `_meta.json` | ~174 KB | CONAGUA ANRI (§2.6) |
 
 Las capas de riesgo llevan la procedencia embebida en los campos `FUENTE` y `FECHA` de
-cada feature, y la app la muestra en la ficha de detalle al hacer clic (SPEC §1.2). Las
-capas de riesgo se disuelven por nivel de intensidad y **descartan el nivel "Muy bajo"**,
-que cubre el ~90-98% del área y solo agrandaría el archivo sin aportar señal.
+cada feature, y la app la muestra en la ficha de detalle al hacer clic (SPEC §1.2).
 
 **Ojo con la ficha de riesgo: combina dos fuentes.** El fenómeno y el nivel de intensidad
 vienen del IMPLAN (§2.4 y §2.5), pero el nombre de colonia y el municipio vienen de los
@@ -212,6 +210,13 @@ IMPLAN no traen nombre de zona: son un modelo de intensidad y se disuelven por n
 colonia es, por tanto, una referencia de ubicación aproximada —el AGEB que contiene el
 punto—, no una unidad de análisis del IMPLAN: el riesgo se modela por zona, no por
 colonia, y una colonia puede contener varios niveles de intensidad.
+
+Las capas de riesgo **descartan el nivel "Muy bajo"**, que cubre el ~90-98% del área y
+solo agrandaría el archivo sin aportar señal. Se disuelven por nivel de intensidad —esa
+es la geometría que alimenta la penalización del Índice de Inversión— y al exportarlas se
+separan en sus zonas individuales (1,358 en inundación, 197 en deslizamientos) para que
+el mapa pueda resaltar una zona a la vez en vez de todo un nivel. La geometría es idéntica
+en ambos casos; separar solo repite las propiedades en cada feature.
 
 ---
 
