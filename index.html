@@ -408,6 +408,10 @@
             return valor => {
                 if (sinDato(valor)) return COLOR_SIN_DATO;
                 const escalones = obtenerEscalones();
+                // Sin escalones no hay escala que aplicar (pasaría si una capa
+                // llegara entera sin datos). Antes esto reventaba con
+                // TypeError al leer .color de undefined y tumbaba el render.
+                if (escalones.length === 0) return COLOR_SIN_DATO;
                 const escalon = escalones.find(e => valor >= e.minimo);
                 return escalon ? escalon.color : escalones[escalones.length - 1].color;
             };
