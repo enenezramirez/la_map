@@ -103,6 +103,25 @@ de colonia de cada uno.
 * **Limitación conocida:** al estar agregado por AGEB, el Censo **no permite** calcular el
   porcentaje de viviendas con *todos* los servicios simultáneamente (eso requeriría
   microdatos). `SERVICIOS_INDEX` es el promedio de los cuatro, una aproximación.
+* **Tratamiento de valores ausentes (revisado el 2026-07-18).** El INEGI enmascara con `*`
+  los conteos de 1-2 viviendas por confidencialidad. Hasta esta fecha esos asteriscos se
+  convertían en `0`, y un AGEB sin viviendas habitadas también terminaba en `0%`: el mapa
+  pintaba **21 de 431 AGEBs como si tuvieran la peor cobertura de la ciudad cuando en
+  realidad no estaban medidos**, y el error se propagaba al Índice de Inversión (esos
+  AGEBs recibían índices de 5.9 a 35.7 contra una mediana de 86.1). Ahora se distingue
+  "sin dato" de "cero", con tres motivos registrados en el campo `MOTIVO_SIN_DATO`:
+  * **Sin viviendas habitadas** (`TVIVHAB = 0`): 12 AGEBs. No hay a quién dar servicio.
+  * **Cifras enmascaradas por INEGI** (las 4 columnas con `*`): 6 AGEBs, p. ej. la UAAAN
+    (3 viviendas) y la zona militar (2).
+  * **Sin registro en el Censo 2020** (el AGEB no aparece en el CSV): 3 AGEBs.
+
+  El **enmascarado parcial** (1-3 columnas de 4, 5 AGEBs) sí se calcula: el asterisco
+  significa 1-2 viviendas sobre un total mucho mayor, así que tratar esa columna como 0%
+  se aproxima a la realidad en vez de descartar el AGEB completo. Tras el cambio queda
+  **un solo cero genuino** en toda la ciudad (CENTRO METROPOLITANO, 26 habitantes en 5
+  viviendas, con las cuatro columnas publicadas efectivamente en cero). Los AGEBs sin dato
+  se conservan en las capas —se pintan en gris y la ficha explica el motivo— en vez de
+  desaparecer del mapa, que era el comportamiento anterior del `dropna` al exportar.
 
 ### 2.3 INEGI — DENUE 05_2026 (Coahuila)
 
