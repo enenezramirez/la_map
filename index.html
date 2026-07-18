@@ -686,7 +686,7 @@
             configEscala: {
                 rampa: RAMPA_SERVICIOS,
                 sufijo: '%',
-                asignar: esc => { ESCALONES_SERVICIOS = esc; }
+                asignar: escalones => { ESCALONES_SERVICIOS = escalones; }
             },
             funcionEstilo: crearEstiloCapa('SERVICIOS_INDEX', crearFuncionColor(() => ESCALONES_SERVICIOS)),
             funcionDetalle: mostrarDetalleSector,
@@ -703,7 +703,7 @@
             campoValor: 'INVERSION_INDEX',
             configEscala: {
                 rampa: RAMPA_INVERSION,
-                asignar: esc => { ESCALONES_INVERSION = esc; }
+                asignar: escalones => { ESCALONES_INVERSION = escalones; }
             },
             funcionEstilo: crearEstiloCapa('INVERSION_INDEX', crearFuncionColor(() => ESCALONES_INVERSION)),
             funcionDetalle: mostrarDetalleInversion
