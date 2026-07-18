@@ -172,27 +172,58 @@
 
         // --- Utilidades compartidas de choropleth y leyenda (Fase 4/5) ---
 
+        /* Presupuesto de color del mapa (identidad "Traza", 2026-07-18).
+           Cada familia significa UNA cosa y solo una:
+             · rojo-ladrillo  → PELIGRO (capas de riesgo)
+             · ámbar-crema    → VALOR   (índice de inversión)
+             · teal           → COBERTURA (servicios básicos)
+
+           Antes las tres compartían la misma rampa semafórica verde→rojo, así
+           que el rojo significaba "poca cobertura", "mala inversión" y "zona
+           peligrosa" al mismo tiempo, en el mismo mapa. Además el par
+           rojo-verde es el que peor funciona con deuteranopia (~8% de los
+           hombres): justo el eje que más importa leer aquí.
+
+           Las rampas son SECUENCIALES (oscuro→claro), no divergentes: la
+           luminosidad hace el trabajo, así que siguen leyéndose en escala de
+           grises y para quien no distingue matices. Todas arrancan por encima
+           del fondo del mapa (#0b0c0e) para que el escalón más bajo no
+           desaparezca contra el basemap oscuro.
+
+           Desviación deliberada de SPEC.md §5, que pedía verde-amarillo-
+           naranja-rojo; el motivo quedó documentado ahí mismo. */
+
+        // Cobertura de servicios básicos: teal secuencial (baja → alta).
         const ESCALONES_SERVICIOS = [
-            { minimo: 80, color: '#22c55e', etiqueta: '80% - 100%' },
-            { minimo: 60, color: '#84cc16', etiqueta: '60% - 80%' },
-            { minimo: 40, color: '#eab308', etiqueta: '40% - 60%' },
-            { minimo: 20, color: '#f97316', etiqueta: '20% - 40%' },
-            { minimo: 0, color: '#ef4444', etiqueta: '0% - 20%' }
+            { minimo: 80, color: '#7fd4c4', etiqueta: '80% - 100%' },
+            { minimo: 60, color: '#35a396', etiqueta: '60% - 80%' },
+            { minimo: 40, color: '#2a7d75', etiqueta: '40% - 60%' },
+            { minimo: 20, color: '#235a58', etiqueta: '20% - 40%' },
+            { minimo: 0, color: '#1d3a3c', etiqueta: '0% - 20%' }
         ];
 
-        // Mismos cortes que Servicios; el Índice de Inversión también vive en
-        // escala 0-100 (ver SPEC.md: "escala de color verde a rojo").
-        const ESCALONES_INVERSION = ESCALONES_SERVICIOS;
+        // Índice de inversión: ámbar secuencial (bajo → alto). Mismos cortes
+        // que Servicios — ambos viven en escala 0-100— pero otra familia de
+        // color, porque miden cosas distintas y pueden estar encendidos a la
+        // vez sobre los mismos AGEBs.
+        const ESCALONES_INVERSION = [
+            { minimo: 80, color: '#f2d79c', etiqueta: '80 - 100' },
+            { minimo: 60, color: '#d29b33', etiqueta: '60 - 80' },
+            { minimo: 40, color: '#a87c27', etiqueta: '40 - 60' },
+            { minimo: 20, color: '#7d5c22', etiqueta: '20 - 40' },
+            { minimo: 0, color: '#4a3a24', etiqueta: '0 - 20' }
+        ];
 
         // --- Capas de riesgo IMPLAN (CARTO SALTILLO, Atlas de Riesgos 2024) ---
-        // Escala semafórica categórica por nivel de intensidad (campo
-        // INTENSIDAD). Sirve para inundación y deslizamientos.
+        // Rampa de un solo tono (ladrillo) por nivel de intensidad (campo
+        // INTENSIDAD): a más intensidad, más oscuro y más saturado. Sirve para
+        // inundación, deslizamientos y químico-tecnológico.
         const COLORES_RIESGO = {
-            'Muy alto': '#b91c1c',
-            'Alto': '#ef4444',
-            'Medio': '#f97316',
-            'Bajo': '#eab308',
-            'Muy bajo': '#84cc16'
+            'Muy alto': '#8c2b18',
+            'Alto': '#b8452a',
+            'Medio': '#d9743f',
+            'Bajo': '#e8a86f',
+            'Muy bajo': '#f0cfa8'
         };
         const ORDEN_RIESGO = ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo'];
 
