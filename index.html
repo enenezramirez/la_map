@@ -159,6 +159,20 @@
 
         // --- Utilidades compartidas de choropleth y leyenda (Fase 4/5) ---
 
+        // Escapa texto antes de interpolarlo en las plantillas de innerHTML.
+        // Hoy los GeoJSON se generan localmente con process_data.py a partir de
+        // SHP oficiales (INEGI/IMPLAN) y se sirven del mismo origen, así que no
+        // hay entrada de un tercero; esto blinda las fichas por si alguna capa
+        // llegara a venir de una URL remota o de una subida del usuario.
+        function esc(valor) {
+            return String(valor)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         const ESCALONES_SERVICIOS = [
             { minimo: 80, color: '#22c55e', etiqueta: '80% - 100%' },
             { minimo: 60, color: '#84cc16', etiqueta: '60% - 80%' },
@@ -198,13 +212,13 @@
             const filas = ORDEN_RIESGO.filter(n => nivelesPresentes.has(n)).map(n => `
                 <div class="legend-row">
                     <span class="legend-swatch" style="background:${COLORES_RIESGO[n]}"></span>
-                    <span>${n}</span>
+                    <span>${esc(n)}</span>
                 </div>
             `).join('');
             const src = fuente
-                ? `<p class="legend-source">Fuente: ${fuente}${fecha ? ' · ' + fecha : ''}.</p>`
+                ? `<p class="legend-source">Fuente: ${esc(fuente)}${fecha ? ' · ' + esc(fecha) : ''}.</p>`
                 : '';
-            return `<p class="legend-title">${titulo}</p>${filas}${src}`;
+            return `<p class="legend-title">${esc(titulo)}</p>${filas}${src}`;
         }
 
         // HTML de leyenda ya construido por capa de riesgo (se llena al cargar).
@@ -308,7 +322,7 @@
             // caiga de verdad fuera de la mancha urbana.
             let filaUbicacion;
             if (ageb) {
-                filaUbicacion = `<p class="detail-row"><span>Municipio</span><strong>${ageb.municipio}</strong></p>`;
+                filaUbicacion = `<p class="detail-row"><span>Municipio</span><strong>${esc(ageb.municipio)}</strong></p>`;
             } else if (!agebsParaConsulta) {
                 filaUbicacion = '<p class="detail-row"><span>Colonia</span><strong>Cargando…</strong></p>';
             } else {
@@ -316,9 +330,9 @@
             }
             document.getElementById('sector-info').innerHTML = `
                 ${filaUbicacion}
-                <p class="detail-row"><span>Fenómeno</span><strong>${props.FENOMENO}</strong></p>
-                <p class="detail-row detail-index"><span>Nivel de riesgo</span><strong>${props.INTENSIDAD}</strong></p>
-                <p class="detail-source">Fuente: ${props.FUENTE}. Corte: ${props.FECHA}.</p>
+                <p class="detail-row"><span>Fenómeno</span><strong>${esc(props.FENOMENO)}</strong></p>
+                <p class="detail-row detail-index"><span>Nivel de riesgo</span><strong>${esc(props.INTENSIDAD)}</strong></p>
+                <p class="detail-source">Fuente: ${esc(props.FUENTE)}. Corte: ${esc(props.FECHA)}.</p>
             `;
             detailsSidebar.classList.remove('sidebar-collapsed');
         }
@@ -419,7 +433,7 @@
         function mostrarDetalleSector(props) {
             document.getElementById('sector-title').textContent = props.COLONIA;
             document.getElementById('sector-info').innerHTML = `
-                <p class="detail-row"><span>Municipio</span><strong>${props.NOM_MUN}</strong></p>
+                <p class="detail-row"><span>Municipio</span><strong>${esc(props.NOM_MUN)}</strong></p>
                 <p class="detail-row"><span>Población total</span><strong>${formatoEntero(props.POBTOT)}</strong></p>
                 <p class="detail-row"><span>Viviendas habitadas</span><strong>${formatoEntero(props.TVIVHAB)}</strong></p>
                 <h3>Cobertura de Servicios Básicos</h3>
@@ -435,7 +449,7 @@
         function mostrarDetalleInversion(props) {
             document.getElementById('sector-title').textContent = props.COLONIA;
             document.getElementById('sector-info').innerHTML = `
-                <p class="detail-row"><span>Municipio</span><strong>${props.NOM_MUN}</strong></p>
+                <p class="detail-row"><span>Municipio</span><strong>${esc(props.NOM_MUN)}</strong></p>
                 <p class="detail-row"><span>Índice de Servicios</span><strong>${formatoIndice(props.SERVICIOS_INDEX)}</strong></p>
                 <h3>Cercanía a Equipamiento Urbano</h3>
                 <p class="detail-row"><span>Escuelas</span><strong>${formatoIndice(props.SCORE_ESCUELA)}</strong></p>
