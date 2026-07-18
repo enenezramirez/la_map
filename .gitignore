@@ -29,3 +29,6 @@ raw_data/
 
 # Bitácora personal de sesiones de trabajo (no es parte del proyecto)
 reportes/
+
+# Configuración local/personal de Claude Code (rutas absolutas, allowlist, hooks)
+.claude/settings.local.json

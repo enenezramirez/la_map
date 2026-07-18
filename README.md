@@ -9,6 +9,7 @@ Visualizador web de riesgos e inversión inmobiliaria para Saltillo, Coahuila. C
 - **Cobertura de Servicios Básicos** — cobertura de agua, luz, drenaje e internet por AGEB (Censo de Población y Vivienda 2020, INEGI).
 - **Riesgo de Inundación** — zonas de riesgo por inundación pluvial urbana, por nivel de intensidad (Atlas de Riesgos 2024, IMPLAN Saltillo).
 - **Riesgo de Deslizamientos** — zonas de riesgo por deslizamientos traslacionales en laderas, por nivel de intensidad (Atlas de Riesgos 2024, IMPLAN Saltillo).
+- **Riesgo Químico-Tecnológico** — zonas expuestas al almacenamiento de sustancias químicas peligrosas, relevante en el corredor industrial Saltillo–Ramos Arizpe (Atlas de Riesgos 2024, IMPLAN Saltillo).
 - **Índice de Inversión Inmobiliaria** — combina la cobertura de servicios con la cercanía a equipamiento urbano (escuelas, salud, supermercados del DENUE) y penaliza la exposición a inundación.
 
 Haz clic en cualquier colonia o zona de riesgo del mapa para ver su ficha de detalle, con la fuente y la fecha de corte de los datos que estás viendo.
@@ -46,6 +47,7 @@ data/
   indice_inversion.geojson       Capa del índice de inversión por AGEB
   riesgo_inundacion.geojson      Capa de riesgo por inundación pluvial (IMPLAN)
   riesgo_deslizamientos.geojson  Capa de riesgo por deslizamientos (IMPLAN)
+  riesgo_quimico.geojson         Capa de riesgo químico-tecnológico (IMPLAN)
   riesgo_inundacion.png          Raster de severidad del ANRI (respaldo) + su _meta.json
 SPEC.md              Especificación técnica del proyecto
 DATOS.md             Bitácora de datos: procedencia de cada dataset

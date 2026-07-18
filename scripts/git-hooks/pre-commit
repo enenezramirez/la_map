@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Barrera de seguridad pre-commit para GeoRiesgos Saltillo.
+#
+#   - gitleaks: escanea SECRETOS en los cambios staged. BLOQUEA el commit si encuentra.
+#   - bandit:   SAST de Python sobre los .py staged. Solo AVISA (no bloquea).
+#
+# Cubre TODO commit hecho en este clon (dentro o fuera de Claude Code), a diferencia
+# del hook de IA que solo corre en sesión. Es la capa determinista y siempre-activa.
+#
+# Activar una vez por clon:  git config core.hooksPath scripts/git-hooks
+# (core.hooksPath es config local, no se versiona; por eso se documenta aquí.)
+set -u
+fail=0
+
+# --- 1) Secretos (BLOQUEANTE) ---------------------------------------------
+if command -v gitleaks >/dev/null 2>&1; then
+    if ! gitleaks git --staged --no-banner --redact -v . >/tmp/gr.out 2>&1; then
+        echo ""
+        echo "❌ gitleaks detecto un posible SECRETO en los cambios staged — COMMIT BLOQUEADO:"
+        grep -E "Finding:|Secret:|RuleID:|File:|Line:|Fingerprint:" /tmp/gr.out | sed 's/^/   /' | head -30
+        echo "   Si es un falso positivo: revisa, y si procede ignoralo con .gitleaks.toml o --baseline-path."
+        fail=1
+    fi
+else
+    echo "⚠️  gitleaks no esta en PATH; se omite el escaneo de secretos."
+fi
+
+# --- 2) Python SAST (solo AVISO) ------------------------------------------
+staged_py=$(git diff --cached --name-only --diff-filter=d -- '*.py' 2>/dev/null)
+if [ -n "$staged_py" ] && [ -x venv/Scripts/bandit.exe ]; then
+    if ! printf '%s\n' "$staged_py" | tr '\n' '\0' | xargs -0 -r venv/Scripts/bandit.exe -ll -q >/tmp/bd.out 2>&1; then
+        echo ""
+        echo "⚠️  bandit encontro posibles problemas de seguridad en Python (revisalos; NO bloquea):"
+        grep -iE "Issue:|Severity:|Location:" /tmp/bd.out | sed 's/^/   /' | head -30
+    fi
+fi
+
+exit $fail
