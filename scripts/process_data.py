@@ -308,14 +308,32 @@ def cargar_censo_servicios() -> pd.DataFrame:
 
     df["CVEGEO"] = df["ENTIDAD"] + df["MUN"] + df["LOC"] + df["AGEB"]
 
-    columnas_numericas = ["POBTOT", "TVIVHAB", *COLUMNAS_SERVICIOS]
-    for col in columnas_numericas:
-        # INEGI enmascara conteos pequeños (1-2) con "*" por confidencialidad.
-        # Se tratan como 0 viviendas: el impacto en el % de cobertura es
-        # mínimo y evita descartar el AGEB completo del índice.
+    # POBTOT y TVIVHAB no vienen enmascarados en estos municipios (verificado:
+    # 0 asteriscos), así que un valor no numérico aquí sí es un 0 real.
+    for col in ["POBTOT", "TVIVHAB"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    return df[["CVEGEO", "NOM_MUN", "POBTOT", "TVIVHAB", *COLUMNAS_SERVICIOS]]
+    # INEGI enmascara conteos pequeños (1-2 viviendas) con "*" por
+    # confidencialidad. NO se rellenan con 0 aquí: "enmascarado" y "cero" son
+    # cosas distintas y confundirlas hacía que un AGEB sin dato publicado se
+    # pintara como si tuviera 0% de cobertura. La distinción se resuelve en
+    # calcular_cobertura_servicios(), que sí puede ver cuántas de las cuatro
+    # columnas faltan.
+    for col in COLUMNAS_SERVICIOS:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df["SERVICIOS_ENMASCARADOS"] = df[COLUMNAS_SERVICIOS].isna().sum(axis=1)
+
+    return df[
+        [
+            "CVEGEO",
+            "NOM_MUN",
+            "POBTOT",
+            "TVIVHAB",
+            "SERVICIOS_ENMASCARADOS",
+            *COLUMNAS_SERVICIOS,
+        ]
+    ]
 
 
 def calcular_cobertura_servicios(df_censo: pd.DataFrame) -> pd.DataFrame:
@@ -329,10 +347,33 @@ def calcular_cobertura_servicios(df_censo: pd.DataFrame) -> pd.DataFrame:
     df = df_censo.copy()
     tviv_seguro = df["TVIVHAB"].astype(float).replace(0, np.nan)
 
-    df["PCT_ELECTRICIDAD"] = (df["VPH_C_ELEC"] / tviv_seguro * 100).fillna(0)
-    df["PCT_AGUA"] = (df["VPH_AGUADV"] / tviv_seguro * 100).fillna(0)
-    df["PCT_DRENAJE"] = (df["VPH_DRENAJ"] / tviv_seguro * 100).fillna(0)
-    df["PCT_INTERNET"] = (df["VPH_INTER"] / tviv_seguro * 100).fillna(0)
+    # Un AGEB no tiene dato de cobertura cuando (a) no hay viviendas que servir
+    # o (b) INEGI enmascaró las CUATRO columnas de servicios. En ambos casos el
+    # índice queda en NaN y el frontend lo pinta como "sin datos" en gris, en
+    # vez de mentir con un 0% que se leería como la peor cobertura de la ciudad.
+    sin_viviendas = df["TVIVHAB"] == 0
+    todo_enmascarado = df["SERVICIOS_ENMASCARADOS"] == len(COLUMNAS_SERVICIOS)
+
+    df["MOTIVO_SIN_DATO"] = np.where(
+        sin_viviendas,
+        "Sin viviendas habitadas registradas en el Censo 2020",
+        np.where(
+            todo_enmascarado,
+            "Cifras enmascaradas por INEGI (confidencialidad: 1-2 viviendas)",
+            None,
+        ),
+    )
+
+    # Enmascarado parcial (1-3 de 4 columnas): sí es calculable. El asterisco
+    # significa 1-2 viviendas sobre un total mucho mayor, así que tratar esa
+    # columna como 0% se aproxima a la realidad en vez de tirar el AGEB entero.
+    servicios = df[COLUMNAS_SERVICIOS]
+    servicios = servicios.mask(~todo_enmascarado & servicios.isna(), 0)
+
+    df["PCT_ELECTRICIDAD"] = servicios["VPH_C_ELEC"] / tviv_seguro * 100
+    df["PCT_AGUA"] = servicios["VPH_AGUADV"] / tviv_seguro * 100
+    df["PCT_DRENAJE"] = servicios["VPH_DRENAJ"] / tviv_seguro * 100
+    df["PCT_INTERNET"] = servicios["VPH_INTER"] / tviv_seguro * 100
 
     df["SERVICIOS_INDEX"] = df[
         ["PCT_ELECTRICIDAD", "PCT_AGUA", "PCT_DRENAJE", "PCT_INTERNET"]
@@ -354,14 +395,22 @@ def integrar_censo_a_ageb(
         "PCT_DRENAJE",
         "PCT_INTERNET",
         "SERVICIOS_INDEX",
+        "MOTIVO_SIN_DATO",
     ]
     gdf_unido = gdf_agebs.merge(df_servicios[columnas_censo], on="CVEGEO", how="left")
     gdf_unido = gdf_unido.merge(df_colonias, on="CVEGEO", how="left")
     gdf_unido["COLONIA"] = gdf_unido["COLONIA"].fillna("Sin nombre de colonia")
 
-    sin_censo = gdf_unido["SERVICIOS_INDEX"].isna().sum()
-    if sin_censo:
-        print(f"  Aviso: {sin_censo} AGEB(s) sin datos de censo (probablemente no residenciales).")
+    # Un AGEB que ni siquiera aparece en el Censo es un tercer caso de "sin
+    # dato" y merece su propia explicación en la ficha.
+    sin_registro = gdf_unido["SERVICIOS_INDEX"].isna() & gdf_unido["MOTIVO_SIN_DATO"].isna()
+    gdf_unido.loc[sin_registro, "MOTIVO_SIN_DATO"] = "Sin registro en el Censo 2020"
+
+    sin_dato = gdf_unido["SERVICIOS_INDEX"].isna().sum()
+    if sin_dato:
+        print(f"  Aviso: {sin_dato} AGEB(s) sin dato de servicios. Desglose:")
+        for motivo, n in gdf_unido["MOTIVO_SIN_DATO"].value_counts().items():
+            print(f"    - {motivo}: {n}")
 
     return gdf_unido
 
@@ -571,10 +620,14 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
         "COMERCIOS_INDEX",
         "RIESGO_INDEX",
         "INVERSION_INDEX",
+        "MOTIVO_SIN_DATO",
         "geometry",
     ]
+    # Sin dato de servicios no hay índice: falta el 40% de su peso, así que
+    # INVERSION_INDEX queda nulo por propagación de NaN. Se conservan en la
+    # capa para pintarlos en gris y explicar el motivo, en vez de dejar que
+    # un AGEB no medido se vea como una mala inversión.
     gdf_final = gdf_inversion[columnas_finales].copy()
-    gdf_final = gdf_final.dropna(subset=["INVERSION_INDEX"])
     gdf_final["geometry"] = gdf_final["geometry"].simplify(
         TOLERANCIA_SIMPLIFICACION, preserve_topology=True
     )
@@ -605,10 +658,14 @@ def exportar_capa_servicios_basicos(gdf_ageb_servicios: gpd.GeoDataFrame) -> gpd
         "PCT_DRENAJE",
         "PCT_INTERNET",
         "SERVICIOS_INDEX",
+        "MOTIVO_SIN_DATO",
         "geometry",
     ]
+    # Los AGEBs sin dato se conservan a propósito (con SERVICIOS_INDEX nulo y
+    # su MOTIVO_SIN_DATO): el mapa los pinta en gris y explica por qué. Antes
+    # se descartaban con dropna, así que simplemente desaparecían del mapa sin
+    # que nadie supiera que existían.
     gdf_final = gdf_ageb_servicios[columnas_finales].copy()
-    gdf_final = gdf_final.dropna(subset=["SERVICIOS_INDEX"])
     gdf_final["geometry"] = gdf_final["geometry"].simplify(
         TOLERANCIA_SIMPLIFICACION, preserve_topology=True
     )

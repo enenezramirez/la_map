@@ -77,4 +77,8 @@ Donde los pesos sugeridos son:
 - $W_{com} = 0.3$ (Cercanía a escuelas, hospitales, supermercados del DENUE)
 - $W_{riesg} = 0.3$ (Penalización por intersección con zonas inundables o de incendio)
 
-El resultado final se reescalará a un rango de 0 a 100 y se asignará una paleta de color choropleth (verde, amarillo, naranja, rojo).
+El resultado final se reescalará a un rango de 0 a 100 y se asignará una paleta de color choropleth.
+
+> **Nota (2026-07-18): la paleta cambió respecto a la especificación original.** Aquí se pedía una escala semafórica verde-amarillo-naranja-rojo. Se abandonó por dos razones. **(1) Colisión de significado:** las capas de riesgo ya usaban rojo para *peligro*, así que el mismo color decía "mala inversión", "poca cobertura de servicios" y "zona peligrosa" simultáneamente en el mismo mapa. **(2) Accesibilidad:** el par rojo-verde es el que peor funciona con deuteranopia (~8% de los hombres), y es justo el eje que esta capa necesita comunicar.
+>
+> La paleta vigente asigna una familia de color por significado — **rojo-ladrillo = peligro**, **ámbar-crema = valor (índice de inversión)**, **teal = cobertura de servicios** — con rampas **secuenciales** (oscuro→claro) en vez de divergentes, de modo que la luminosidad haga el trabajo y sigan leyéndose en escala de grises. Definidas en `index.html` (`ESCALONES_SERVICIOS`, `ESCALONES_INVERSION`, `COLORES_RIESGO`).

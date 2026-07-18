@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoRiesgos Saltillo - Visualizador de Riesgos e Inversión Inmobiliaria</title>
-    
-    <!-- Google Fonts (Inter) -->
+    <title>Traza — Inteligencia territorial · Saltillo</title>
+    <link rel="icon" type="image/svg+xml" href="assets/logo-traza.svg">
+
+    <!-- Google Fonts: Inter para la interfaz, IBM Plex Mono para cifras,
+         etiquetas y procedencia (la "voz del instrumento"). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
@@ -26,8 +28,17 @@
     <!-- Panel de Control Flotante (Glassmorphism) -->
     <div class="control-panel">
         <header class="panel-header">
-            <h1>GeoRiesgos Saltillo</h1>
-            <p class="subtitle">Análisis de Riesgos e Inversión Inmobiliaria</p>
+            <div class="brand">
+                <svg class="brand-mark" viewBox="0 0 48 48" role="img" aria-label="Traza">
+                    <path d="M8 37L18 22L29 30L41 11" fill="none" stroke="#f2efe9" stroke-width="2.4"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="29" cy="30" r="4.5" fill="#c8912f"/>
+                </svg>
+                <div>
+                    <h1>TRAZA</h1>
+                    <p class="subtitle">SALTILLO · ZONA METROPOLITANA</p>
+                </div>
+            </div>
         </header>
 
         <section class="panel-section">
@@ -88,7 +99,9 @@
         </section>
 
         <footer class="panel-footer">
-            <p>Datos públicos oficiales: INEGI (Censo y DENUE) y CONAGUA (ANRI).</p>
+            <p>FUENTES OFICIALES<br>
+               INEGI · CENSO 2020 · DENUE 05_2026<br>
+               IMPLAN · ATLAS DE RIESGOS 2024</p>
         </footer>
     </div>
 
@@ -173,27 +186,89 @@
                 .replace(/'/g, '&#39;');
         }
 
-        const ESCALONES_SERVICIOS = [
-            { minimo: 80, color: '#22c55e', etiqueta: '80% - 100%' },
-            { minimo: 60, color: '#84cc16', etiqueta: '60% - 80%' },
-            { minimo: 40, color: '#eab308', etiqueta: '40% - 60%' },
-            { minimo: 20, color: '#f97316', etiqueta: '20% - 40%' },
-            { minimo: 0, color: '#ef4444', etiqueta: '0% - 20%' }
-        ];
+        /* Presupuesto de color del mapa (identidad "Traza", 2026-07-18).
+           Cada familia significa UNA cosa y solo una:
+             · rojo-ladrillo  → PELIGRO (capas de riesgo)
+             · ámbar-crema    → VALOR   (índice de inversión)
+             · teal           → COBERTURA (servicios básicos)
 
-        // Mismos cortes que Servicios; el Índice de Inversión también vive en
-        // escala 0-100 (ver SPEC.md: "escala de color verde a rojo").
-        const ESCALONES_INVERSION = ESCALONES_SERVICIOS;
+           Antes las tres compartían la misma rampa semafórica verde→rojo, así
+           que el rojo significaba "poca cobertura", "mala inversión" y "zona
+           peligrosa" al mismo tiempo, en el mismo mapa. Además el par
+           rojo-verde es el que peor funciona con deuteranopia (~8% de los
+           hombres): justo el eje que más importa leer aquí.
+
+           Las rampas son SECUENCIALES (oscuro→claro), no divergentes: la
+           luminosidad hace el trabajo, así que siguen leyéndose en escala de
+           grises y para quien no distingue matices. Todas arrancan por encima
+           del fondo del mapa (#0b0c0e) para que el escalón más bajo no
+           desaparezca contra el basemap oscuro.
+
+           Desviación deliberada de SPEC.md §5, que pedía verde-amarillo-
+           naranja-rojo; el motivo quedó documentado ahí mismo. */
+
+        // Rampas de menor a mayor. Servicios va en teal, Inversión en ámbar:
+        // miden cosas distintas y pueden estar encendidas a la vez sobre los
+        // mismos AGEBs, así que compartir rampa las volvía indistinguibles.
+        const RAMPA_SERVICIOS = ['#1d3a3c', '#235a58', '#2a7d75', '#35a396', '#7fd4c4'];
+        const RAMPA_INVERSION = ['#4a3a24', '#7d5c22', '#a87c27', '#d29b33', '#f2d79c'];
+
+        // Gris neutro para "sin dato": ni bueno ni malo, y fuera de ambas
+        // rampas para que no se confunda con un valor bajo.
+        const COLOR_SIN_DATO = '#3a3f47';
+
+        /* Los cortes se calculan por CUANTILES sobre los datos reales, no con
+           escalones fijos cada 20 puntos. Motivo: ambos índices están muy
+           sesgados hacia arriba (la mediana de servicios es 91.7 y la de
+           inversión 86.1), así que con cortes fijos ~9 de cada 10 AGEBs caían
+           en la misma clase y el mapa era casi de un solo color: bonito e
+           inútil. Por cuantiles cada clase lleva ~el mismo número de AGEBs y
+           la variación real se vuelve visible.
+
+           El precio, que conviene tener presente al leer el mapa: los cortes
+           dependen de los datos (cambian si cambian), las etiquetas quedan en
+           números irregulares, y dos AGEBs casi idénticos pueden caer en
+           clases distintas si el corte pasa justo entre ellos. Es decir, el
+           color muestra la POSICIÓN RELATIVA dentro de la ciudad, no una
+           calificación absoluta. */
+        function escalonesPorCuantiles(valores, rampa, sufijo = '') {
+            const datos = valores
+                .filter(v => v !== null && v !== undefined && !Number.isNaN(v))
+                .sort((a, b) => a - b);
+            if (datos.length === 0) return [];
+
+            const fmt = v => v.toFixed(1) + sufijo;
+            const cuantil = p => datos[Math.min(datos.length - 1, Math.floor(p * datos.length))];
+
+            const escalones = [];
+            for (let i = rampa.length - 1; i >= 0; i--) {
+                const minimo = i === 0 ? datos[0] : cuantil(i / rampa.length);
+                const maximo = i === rampa.length - 1
+                    ? datos[datos.length - 1]
+                    : cuantil((i + 1) / rampa.length);
+                // Si dos cortes coinciden (muchos valores repetidos) la clase
+                // quedaría vacía; se omite en vez de mostrar un color muerto
+                // en la leyenda.
+                if (escalones.length && minimo >= escalones[escalones.length - 1].minimo) continue;
+                escalones.push({ minimo, color: rampa[i], etiqueta: `${fmt(minimo)} - ${fmt(maximo)}` });
+            }
+            return escalones;
+        }
+
+        // Se llenan al cargar cada GeoJSON (dependen de los datos).
+        let ESCALONES_SERVICIOS = [];
+        let ESCALONES_INVERSION = [];
 
         // --- Capas de riesgo IMPLAN (CARTO SALTILLO, Atlas de Riesgos 2024) ---
-        // Escala semafórica categórica por nivel de intensidad (campo
-        // INTENSIDAD). Sirve para inundación y deslizamientos.
+        // Rampa de un solo tono (ladrillo) por nivel de intensidad (campo
+        // INTENSIDAD): a más intensidad, más oscuro y más saturado. Sirve para
+        // inundación, deslizamientos y químico-tecnológico.
         const COLORES_RIESGO = {
-            'Muy alto': '#b91c1c',
-            'Alto': '#ef4444',
-            'Medio': '#f97316',
-            'Bajo': '#eab308',
-            'Muy bajo': '#84cc16'
+            'Muy alto': '#8c2b18',
+            'Alto': '#b8452a',
+            'Medio': '#d9743f',
+            'Bajo': '#e8a86f',
+            'Muy bajo': '#f0cfa8'
         };
         const ORDEN_RIESGO = ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo'];
 
@@ -337,37 +412,65 @@
             detailsSidebar.classList.remove('sidebar-collapsed');
         }
 
-        function crearFuncionColor(escalones) {
+        function sinDato(valor) {
+            return valor === null || valor === undefined || Number.isNaN(valor);
+        }
+
+        // `obtenerEscalones` es un getter, no un arreglo: los cortes se calculan
+        // al cargar el GeoJSON y el estilo se evalúa después, feature por feature.
+        function crearFuncionColor(obtenerEscalones) {
             return valor => {
+                if (sinDato(valor)) return COLOR_SIN_DATO;
+                const escalones = obtenerEscalones();
+                // Sin escalones no hay escala que aplicar (pasaría si una capa
+                // llegara entera sin datos). Antes esto reventaba con
+                // TypeError al leer .color de undefined y tumbaba el render.
+                if (escalones.length === 0) return COLOR_SIN_DATO;
                 const escalon = escalones.find(e => valor >= e.minimo);
                 return escalon ? escalon.color : escalones[escalones.length - 1].color;
             };
         }
 
         function crearEstiloCapa(campoValor, funcionColor) {
-            return feature => ({
-                fillColor: funcionColor(feature.properties[campoValor]),
-                weight: 1,
-                color: 'rgba(255, 255, 255, 0.25)',
-                fillOpacity: 0.65
-            });
+            return feature => {
+                const valor = feature.properties[campoValor];
+                return {
+                    fillColor: funcionColor(valor),
+                    weight: 1,
+                    color: 'rgba(255, 255, 255, 0.25)',
+                    // Los AGEBs sin dato se pintan más tenues: presentes y
+                    // clicables (la ficha explica por qué no hay dato), pero
+                    // sin competir visualmente con los que sí miden algo.
+                    fillOpacity: sinDato(valor) ? 0.35 : 0.65
+                };
+            };
         }
 
-        function htmlLeyenda(titulo, escalones) {
+        function htmlLeyenda(titulo, escalones, nSinDato = 0) {
+            if (escalones.length === 0) return `<p class="empty-legend">Cargando…</p>`;
             const filas = escalones.map(e => `
                 <div class="legend-row">
                     <span class="legend-swatch" style="background:${e.color}"></span>
-                    <span>${e.etiqueta}</span>
+                    <span>${esc(e.etiqueta)}</span>
                 </div>
             `).join('');
-            return `<p class="legend-title">${titulo}</p>${filas}`;
+            const filaSinDato = nSinDato > 0 ? `
+                <div class="legend-row">
+                    <span class="legend-swatch" style="background:${COLOR_SIN_DATO}"></span>
+                    <span>Sin datos (${nSinDato})</span>
+                </div>
+            ` : '';
+            const nota = '<p class="legend-source">Cortes por cuantiles: el color indica posición relativa dentro de la ciudad, no una calificación absoluta.</p>';
+            return `<p class="legend-title">${esc(titulo)}</p>${filas}${filaSinDato}${nota}`;
         }
 
         // Registro de leyendas por capa: cuando hay varias capas activas a la
         // vez, se muestra la de la que se activó más recientemente.
+        const SIN_DATO_CONTEO = { servicios: 0, inversion: 0 };
+
         const LEYENDAS = {
-            servicios: () => htmlLeyenda('Índice de Servicios Básicos', ESCALONES_SERVICIOS),
-            inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION),
+            servicios: () => htmlLeyenda('Índice de Servicios Básicos', ESCALONES_SERVICIOS, SIN_DATO_CONTEO.servicios),
+            inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION, SIN_DATO_CONTEO.inversion),
             inundacion: () => leyendasRiesgo.inundacion || '<p class="empty-legend">Cargando…</p>',
             deslizamientos: () => leyendasRiesgo.deslizamientos || '<p class="empty-legend">Cargando…</p>',
             quimico: () => leyendasRiesgo.quimico || '<p class="empty-legend">Cargando…</p>'
@@ -426,9 +529,20 @@
 
         map.on('moveend', actualizarDisponibilidadCapas);
 
-        const formatoEntero = valor => Number(valor).toLocaleString('es-MX');
-        const formatoPct = valor => `${Number(valor).toFixed(1)}%`;
-        const formatoIndice = valor => Number(valor).toFixed(1);
+        // Un valor ausente se muestra como raya, no como 0: "no lo sé" y "es
+        // cero" son afirmaciones distintas y el mapa no debe confundirlas.
+        const SIN_VALOR = '—';
+        const formatoEntero = valor => sinDato(valor) ? SIN_VALOR : Number(valor).toLocaleString('es-MX');
+        const formatoPct = valor => sinDato(valor) ? SIN_VALOR : `${Number(valor).toFixed(1)}%`;
+        const formatoIndice = valor => sinDato(valor) ? SIN_VALOR : Number(valor).toFixed(1);
+
+        // Nota que explica por qué un AGEB no tiene índice (sin viviendas,
+        // cifras enmascaradas por confidencialidad, o ausente del Censo).
+        function htmlMotivoSinDato(props) {
+            return props.MOTIVO_SIN_DATO
+                ? `<p class="detail-source">Sin dato de servicios: ${esc(props.MOTIVO_SIN_DATO)}.</p>`
+                : '';
+        }
 
         function mostrarDetalleSector(props) {
             document.getElementById('sector-title').textContent = props.COLONIA;
@@ -442,6 +556,7 @@
                 <p class="detail-row"><span>Drenaje</span><strong>${formatoPct(props.PCT_DRENAJE)}</strong></p>
                 <p class="detail-row"><span>Internet</span><strong>${formatoPct(props.PCT_INTERNET)}</strong></p>
                 <p class="detail-row detail-index"><span>Índice de Servicios</span><strong>${formatoIndice(props.SERVICIOS_INDEX)}</strong></p>
+                ${htmlMotivoSinDato(props)}
             `;
             detailsSidebar.classList.remove('sidebar-collapsed');
         }
@@ -458,11 +573,12 @@
                 <p class="detail-row"><span>Índice de Comercios</span><strong>${formatoIndice(props.COMERCIOS_INDEX)}</strong></p>
                 <p class="detail-row"><span>Riesgo de inundación (−)</span><strong>${formatoIndice(props.RIESGO_INDEX)}</strong></p>
                 <p class="detail-row detail-index"><span>Índice de Inversión</span><strong>${formatoIndice(props.INVERSION_INDEX)}</strong></p>
+                ${htmlMotivoSinDato(props)}
             `;
             detailsSidebar.classList.remove('sidebar-collapsed');
         }
 
-        function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, funcionEstilo, funcionDetalle, alCargarGeojson }) {
+        function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, configEscala, funcionEstilo, funcionDetalle, alCargarGeojson }) {
             let capa = null;
 
             // `no-cache` revalida el GeoJSON con el servidor (evita servir una
@@ -471,6 +587,16 @@
                 .then(respuesta => respuesta.json())
                 .then(geojson => {
                     if (alCargarGeojson) alCargarGeojson(geojson);
+
+                    // Los cortes salen de los datos que acaban de llegar, así
+                    // que se calculan aquí, antes de estilizar nada.
+                    if (configEscala) {
+                        const valores = geojson.features.map(f => f.properties[campoValor]);
+                        configEscala.asignar(
+                            escalonesPorCuantiles(valores, configEscala.rampa, configEscala.sufijo)
+                        );
+                        SIN_DATO_CONTEO[clave] = valores.filter(sinDato).length;
+                    }
 
                     capa = L.geoJSON(geojson, {
                         style: funcionEstilo,
@@ -556,7 +682,13 @@
             archivo: 'data/servicios_basicos.geojson',
             checkbox: document.getElementById('layer-services'),
             clave: 'servicios',
-            funcionEstilo: crearEstiloCapa('SERVICIOS_INDEX', crearFuncionColor(ESCALONES_SERVICIOS)),
+            campoValor: 'SERVICIOS_INDEX',
+            configEscala: {
+                rampa: RAMPA_SERVICIOS,
+                sufijo: '%',
+                asignar: escalones => { ESCALONES_SERVICIOS = escalones; }
+            },
+            funcionEstilo: crearEstiloCapa('SERVICIOS_INDEX', crearFuncionColor(() => ESCALONES_SERVICIOS)),
             funcionDetalle: mostrarDetalleSector,
             // Los AGEB de esta capa son también la referencia para ubicar la
             // colonia de un clic en las capas de riesgo. Se indexan al cargar,
@@ -568,7 +700,12 @@
             archivo: 'data/indice_inversion.geojson',
             checkbox: document.getElementById('layer-investment'),
             clave: 'inversion',
-            funcionEstilo: crearEstiloCapa('INVERSION_INDEX', crearFuncionColor(ESCALONES_INVERSION)),
+            campoValor: 'INVERSION_INDEX',
+            configEscala: {
+                rampa: RAMPA_INVERSION,
+                asignar: escalones => { ESCALONES_INVERSION = escalones; }
+            },
+            funcionEstilo: crearEstiloCapa('INVERSION_INDEX', crearFuncionColor(() => ESCALONES_INVERSION)),
             funcionDetalle: mostrarDetalleInversion
         });
 
