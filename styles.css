@@ -5,10 +5,35 @@
     box-sizing: border-box;
 }
 
+/* Identidad "Traza" — dirección visual "terminal analítica".
+   Superficies neutras casi negras y OPACAS (sin glassmorphism), un solo acento
+   ámbar y voz monoespaciada para cifras y procedencia.
+
+   Regla de color: el ámbar es de la MARCA y del ESTADO ACTIVO (toggle
+   encendido, foco, selección, avisos), nunca del dato. Las rampas del mapa
+   (ESCALA_CHOROPLETH y COLORES_RIESGO en index.html) tienen su propio
+   presupuesto de color; si el cromo compite con ellas, el mapa deja de leerse. */
+:root {
+    --tz-bg: #0b0c0e;
+    --tz-surface: #131519;
+    --tz-border: #24272d;
+    --tz-border-strong: #2b2f36;
+
+    --tz-text: #f2efe9;
+    --tz-text-2: #8a8f98;
+    --tz-text-3: #6f747c;
+
+    --tz-accent: #c8912f;
+    --tz-danger: #d97757;
+
+    --tz-sans: 'Inter', sans-serif;
+    --tz-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
 body {
-    font-family: 'Inter', sans-serif;
-    background-color: #0c0c0c;
-    color: #f3f4f6;
+    font-family: var(--tz-sans);
+    background-color: var(--tz-bg);
+    color: var(--tz-text);
     overflow: hidden;
     height: 100vh;
     width: 100vw;
@@ -24,7 +49,7 @@ body {
     z-index: 1;
 }
 
-/* Panel de Control Flotante (Glassmorphism) */
+/* Panel de Control Flotante (superficie opaca) */
 .control-panel {
     position: absolute;
     top: 24px;
@@ -33,11 +58,9 @@ body {
     max-height: calc(100vh - 48px);
     overflow-y: auto;
     z-index: 1000;
-    background: rgba(18, 18, 18, 0.75);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    background: var(--tz-surface);
+    border: 1px solid var(--tz-border);
+    border-radius: 12px;
     padding: 24px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
     display: flex;
@@ -45,36 +68,51 @@ body {
     gap: 20px;
 }
 
-/* Header */
+/* Header: lockup de marca (vértice + wordmark) */
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-mark {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+}
+
 .panel-header h1 {
-    font-size: 1.4rem;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-    background: linear-gradient(135deg, #38bdf8, #818cf8);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin-bottom: 4px;
+    font-family: var(--tz-mono);
+    font-size: 1.2rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    color: var(--tz-text);
+    line-height: 1.1;
 }
 
 .panel-header .subtitle {
-    font-size: 0.8rem;
-    color: #9ca3af;
+    font-family: var(--tz-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    color: var(--tz-text-2);
     font-weight: 400;
+    margin-top: 3px;
 }
 
 /* Secciones del Panel */
 .panel-section {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--tz-border);
     padding-top: 16px;
 }
 
 .panel-section h2 {
-    font-size: 0.9rem;
+    font-family: var(--tz-mono);
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #9ca3af;
+    letter-spacing: 0.08em;
+    color: var(--tz-text-3);
     margin-bottom: 14px;
-    font-weight: 600;
+    font-weight: 400;
 }
 
 /* Layer Control */
@@ -91,7 +129,7 @@ body {
 
 .layer-desc {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--tz-text-3);
     padding-left: 48px;
     line-height: 1.35;
 }
@@ -116,7 +154,7 @@ body {
     display: inline-block;
     width: 36px;
     height: 20px;
-    background-color: #374151;
+    background-color: var(--tz-border-strong);
     border-radius: 20px;
     transition: background-color 0.3s;
     margin-right: 12px;
@@ -130,38 +168,51 @@ body {
     width: 14px;
     left: 3px;
     bottom: 3px;
-    background-color: #ffffff;
+    background-color: var(--tz-text-3);
     border-radius: 50%;
-    transition: transform 0.3s;
+    transition: transform 0.3s, background-color 0.3s;
 }
 
+/* Estado activo: el ámbar de la marca. Al encenderse, la perilla se oscurece
+   para que el contraste lo aporte el fondo del acento, no un blanco que
+   compita con él. */
 .switch-container input:checked + .slider {
-    background-color: #6366f1;
+    background-color: var(--tz-accent);
 }
 
 .switch-container input:checked + .slider:before {
     transform: translateX(16px);
+    background-color: var(--tz-bg);
+}
+
+/* Foco visible por teclado: el input real está oculto, así que el anillo va
+   sobre el riel del switch. */
+.switch-container input:focus-visible + .slider {
+    outline: 2px solid var(--tz-accent);
+    outline-offset: 2px;
 }
 
 .layer-name {
     font-size: 0.875rem;
     font-weight: 500;
-    color: #e5e7eb;
+    color: var(--tz-text);
 }
 
 /* Leyenda Estilo */
 .empty-legend {
     font-size: 0.8rem;
-    color: #6b7280;
-    font-style: italic;
+    color: var(--tz-text-3);
     text-align: center;
     padding: 12px 0;
 }
 
 .legend-title {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #e5e7eb;
+    font-family: var(--tz-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 400;
+    color: var(--tz-text-2);
     margin-bottom: 10px;
 }
 
@@ -169,8 +220,10 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 0.8rem;
-    color: #d1d5db;
+    font-family: var(--tz-mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--tz-text);
     padding: 3px 0;
 }
 
@@ -182,24 +235,29 @@ body {
     flex-shrink: 0;
 }
 
-/* Fuente y fecha de corte de los datos (trazabilidad, SPEC.md §1.2) */
+/* Fuente y fecha de corte de los datos (trazabilidad, SPEC.md §1.2).
+   Va en monoespaciada a propósito: si la promesa del proyecto es que el índice
+   se puede seguir hasta su fuente, la procedencia no es letra chica legal —
+   es parte de la marca, y habla con la misma voz que las cifras. */
 .legend-source {
     margin-top: 10px;
     padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    font-size: 0.7rem;
-    line-height: 1.4;
-    color: #9ca3af;
+    border-top: 1px solid var(--tz-border);
+    font-family: var(--tz-mono);
+    font-size: 0.68rem;
+    line-height: 1.5;
+    color: var(--tz-text-3);
 }
 
 /* Fuente/fecha en la ficha de detalle del sidebar (trazabilidad, §1.2) */
 .detail-source {
     margin-top: 14px;
     padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    font-size: 0.72rem;
-    line-height: 1.45;
-    color: #9ca3af;
+    border-top: 1px solid var(--tz-border);
+    font-family: var(--tz-mono);
+    font-size: 0.68rem;
+    line-height: 1.5;
+    color: var(--tz-text-3);
 }
 
 /* Switch deshabilitado (capas sin datos todavía) */
@@ -215,7 +273,7 @@ body {
 .layer-status {
     display: none;
     font-size: 0.72rem;
-    color: #f59e0b;
+    color: var(--tz-accent);
     padding-left: 48px;
     line-height: 1.35;
 }
@@ -226,10 +284,12 @@ body {
 
 /* Footer */
 .panel-footer {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--tz-border);
     padding-top: 12px;
-    font-size: 0.7rem;
-    color: #4b5563;
+    font-family: var(--tz-mono);
+    font-size: 0.68rem;
+    line-height: 1.6;
+    color: var(--tz-text-3);
     text-align: center;
 }
 
@@ -242,11 +302,9 @@ body {
     max-height: calc(100vh - 48px);
     overflow-y: auto;
     z-index: 1000;
-    background: rgba(18, 18, 18, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    background: var(--tz-surface);
+    border: 1px solid var(--tz-border);
+    border-radius: 12px;
     padding: 24px;
     box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
@@ -264,31 +322,32 @@ body {
     right: 16px;
     background: none;
     border: none;
-    color: #9ca3af;
+    color: var(--tz-text-3);
     font-size: 1.5rem;
     cursor: pointer;
     transition: color 0.2s;
 }
 
 .close-btn:hover {
-    color: #ffffff;
+    color: var(--tz-text);
 }
 
 .sidebar-content h2 {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #e5e7eb;
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--tz-text);
     margin-bottom: 16px;
     padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--tz-border);
 }
 
 .sidebar-content h3 {
-    font-size: 0.75rem;
+    font-family: var(--tz-mono);
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #9ca3af;
-    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--tz-text-3);
+    font-weight: 400;
     margin: 18px 0 6px;
 }
 
@@ -298,28 +357,32 @@ body {
     align-items: baseline;
     gap: 12px;
     font-size: 0.85rem;
-    color: #d1d5db;
+    color: var(--tz-text);
     padding: 6px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--tz-border);
 }
 
 .detail-row span {
-    color: #9ca3af;
+    color: var(--tz-text-2);
 }
 
+/* Las cifras van en monoespaciada tabular: alinean por la coma decimal, así
+   que comparar sectores es leer una columna en vez de descifrar. */
 .detail-row strong {
-    color: #f3f4f6;
-    font-weight: 600;
+    font-family: var(--tz-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--tz-text);
+    font-weight: 500;
     text-align: right;
 }
 
 .detail-index strong {
-    color: #38bdf8;
+    color: var(--tz-accent);
 }
 
 .placeholder-text {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--tz-text-3);
     line-height: 1.5;
     text-align: center;
     padding-top: 40px;
@@ -327,26 +390,26 @@ body {
 
 /* Modificadores estéticos de Leaflet para encajar con el diseño oscuro */
 .leaflet-container {
-    background-color: #0c0c0c !important;
+    background-color: var(--tz-bg) !important;
 }
 
 /* Redondear botones de zoom y darles tema oscuro */
 .leaflet-bar {
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid var(--tz-border) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
     border-radius: 8px !important;
     overflow: hidden;
 }
 
 .leaflet-bar a {
-    background-color: rgba(20, 20, 20, 0.9) !important;
-    color: #ffffff !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background-color: var(--tz-surface) !important;
+    color: var(--tz-text) !important;
+    border-bottom: 1px solid var(--tz-border) !important;
     transition: background-color 0.2s;
 }
 
 .leaflet-bar a:hover {
-    background-color: #2a2a2a !important;
+    background-color: var(--tz-border-strong) !important;
 }
 
 /* Responsive / Dispositivos Móviles */
