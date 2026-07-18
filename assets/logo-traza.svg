@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Traza">
+    <title>Traza</title>
+    <path d="M8 37L18 22L29 30L41 11" fill="none" stroke="#f2efe9" stroke-width="3.2"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="29" cy="30" r="5" fill="#c8912f"/>
+</svg>
