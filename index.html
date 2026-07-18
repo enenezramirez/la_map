@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoRiesgos Saltillo - Visualizador de Riesgos e Inversión Inmobiliaria</title>
-    
-    <!-- Google Fonts (Inter) -->
+    <title>Traza — Inteligencia territorial · Saltillo</title>
+    <link rel="icon" type="image/svg+xml" href="assets/logo-traza.svg">
+
+    <!-- Google Fonts: Inter para la interfaz, IBM Plex Mono para cifras,
+         etiquetas y procedencia (la "voz del instrumento"). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
@@ -26,8 +28,17 @@
     <!-- Panel de Control Flotante (Glassmorphism) -->
     <div class="control-panel">
         <header class="panel-header">
-            <h1>GeoRiesgos Saltillo</h1>
-            <p class="subtitle">Análisis de Riesgos e Inversión Inmobiliaria</p>
+            <div class="brand">
+                <svg class="brand-mark" viewBox="0 0 48 48" role="img" aria-label="Traza">
+                    <path d="M8 37L18 22L29 30L41 11" fill="none" stroke="#f2efe9" stroke-width="2.4"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="29" cy="30" r="4.5" fill="#c8912f"/>
+                </svg>
+                <div>
+                    <h1>TRAZA</h1>
+                    <p class="subtitle">SALTILLO · ZONA METROPOLITANA</p>
+                </div>
+            </div>
         </header>
 
         <section class="panel-section">
@@ -88,7 +99,9 @@
         </section>
 
         <footer class="panel-footer">
-            <p>Datos públicos oficiales: INEGI (Censo y DENUE) y CONAGUA (ANRI).</p>
+            <p>FUENTES OFICIALES<br>
+               INEGI · CENSO 2020 · DENUE 05_2026<br>
+               IMPLAN · ATLAS DE RIESGOS 2024</p>
         </footer>
     </div>
 
