@@ -198,20 +198,32 @@
            rojo-verde es el que peor funciona con deuteranopia (~8% de los
            hombres): justo el eje que más importa leer aquí.
 
-           Las rampas son SECUENCIALES (oscuro→claro), no divergentes: la
-           luminosidad hace el trabajo, así que siguen leyéndose en escala de
-           grises y para quien no distingue matices. Todas arrancan por encima
-           del fondo del mapa (#0b0c0e) para que el escalón más bajo no
-           desaparezca contra el basemap oscuro.
+           Las rampas son SECUENCIALES y todas comparten la MISMA dirección
+           que las capas de riesgo: claro = bajo, oscuro/intenso = alto. Así el
+           mapa tiene una sola ley de lectura. Antes los índices iban al revés
+           que el riesgo (en índices "alto" era el tono más claro; en riesgo el
+           más oscuro), y aunque cada leyenda estaba al lado, el ojo no puede
+           sostener dos reglas opuestas en el mismo lienzo: confundía al
+           presentar. La luminosidad sigue haciendo el trabajo, así que las
+           rampas se leen en escala de grises y para quien no distingue matices.
+
+           El extremo ALTO (oscuro) usa tonos profundos pero SATURADOS, nunca
+           cercanos al negro del fondo (#0b0c0e) —son los mismos tonos que la
+           identidad ya había elegido por situar sobre el basemap—, así que el
+           escalón más alto no se pierde; y el extremo BAJO ahora es claro,
+           imposible de perder. Además cada AGEB lleva un borde tenue que lo
+           delinea aun con relleno oscuro.
 
            Desviación deliberada de SPEC.md §5, que pedía verde-amarillo-
            naranja-rojo; el motivo quedó documentado ahí mismo. */
 
-        // Rampas de menor a mayor. Servicios va en teal, Inversión en ámbar:
+        // Rampas de menor a mayor (claro → oscuro): el índice 0 es el valor
+        // más bajo (tono claro) y el último el más alto (tono oscuro), igual
+        // que las capas de riesgo. Servicios va en teal, Inversión en ámbar:
         // miden cosas distintas y pueden estar encendidas a la vez sobre los
         // mismos AGEBs, así que compartir rampa las volvía indistinguibles.
-        const RAMPA_SERVICIOS = ['#1d3a3c', '#235a58', '#2a7d75', '#35a396', '#7fd4c4'];
-        const RAMPA_INVERSION = ['#4a3a24', '#7d5c22', '#a87c27', '#d29b33', '#f2d79c'];
+        const RAMPA_SERVICIOS = ['#7fd4c4', '#35a396', '#2a7d75', '#235a58', '#1d3a3c'];
+        const RAMPA_INVERSION = ['#f2d79c', '#d29b33', '#a87c27', '#7d5c22', '#4a3a24'];
 
         // Gris neutro para "sin dato": ni bueno ni malo, y fuera de ambas
         // rampas para que no se confunda con un valor bajo.
