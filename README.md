@@ -1,91 +1,91 @@
 # Traza
 
-**Inteligencia territorial · Zona Metropolitana de Saltillo**
+**Territorial intelligence · Saltillo Metropolitan Area**
 
-Visualizador web de riesgos e inversión inmobiliaria. Cruza datos públicos de INEGI (Censo 2020, DENUE) y del Atlas de Riesgos del IMPLAN Saltillo para mostrar, por AGEB/colonia, la cobertura de servicios básicos, las zonas de riesgo natural y un índice de inversión inmobiliaria sobre un mapa interactivo.
+Web visualizer for real-estate risk and investment. It combines public data from INEGI (2020 Census, DENUE) and the IMPLAN Saltillo Risk Atlas to show, per AGEB/colonia, basic-service coverage, natural-risk zones and a real-estate investment index on an interactive map.
 
-Cubre **431 AGEBs en tres municipios**: Saltillo, Ramos Arizpe y Arteaga.
+Covers **431 AGEBs across three municipalities**: Saltillo, Ramos Arizpe and Arteaga.
 
 **Demo:** https://enenezramirez.github.io/la_map/
 
-## Capas del mapa
+## Map layers
 
-- **Cobertura de Servicios Básicos** — cobertura de agua, luz, drenaje e internet por AGEB (Censo de Población y Vivienda 2020, INEGI).
-- **Riesgo de Inundación** — zonas de riesgo por inundación pluvial urbana, por nivel de intensidad (Atlas de Riesgos 2024, IMPLAN Saltillo).
-- **Riesgo de Deslizamientos** — zonas de riesgo por deslizamientos traslacionales en laderas, por nivel de intensidad (Atlas de Riesgos 2024, IMPLAN Saltillo).
-- **Riesgo Químico-Tecnológico** — zonas expuestas al almacenamiento de sustancias químicas peligrosas, relevante en el corredor industrial Saltillo–Ramos Arizpe (Atlas de Riesgos 2024, IMPLAN Saltillo).
-- **Índice de Inversión Inmobiliaria** — combina la cobertura de servicios con la cercanía a equipamiento urbano (escuelas, salud, supermercados del DENUE) y penaliza la exposición a inundación.
+- **Basic Services Coverage** — water, electricity, sewage and internet coverage per AGEB (2020 Population and Housing Census, INEGI).
+- **Flood Risk** — urban pluvial flood risk zones, by intensity level (2024 Risk Atlas, IMPLAN Saltillo).
+- **Landslide Risk** — translational hillside landslide risk zones, by intensity level (2024 Risk Atlas, IMPLAN Saltillo).
+- **Chemical-Technological Risk** — zones exposed to the storage of hazardous chemical substances, relevant along the Saltillo–Ramos Arizpe industrial corridor (2024 Risk Atlas, IMPLAN Saltillo).
+- **Real-Estate Investment Index** — combines service coverage with proximity to urban amenities (schools, healthcare, supermarkets from DENUE) and penalizes flood exposure.
 
-Haz clic en cualquier colonia o zona de riesgo del mapa para ver su ficha de detalle, con la fuente y la fecha de corte de los datos que estás viendo.
+Click any colonia or risk zone on the map to see its detail card, with the source and cutoff date of the data you are viewing.
 
-### Cómo leer los colores
+### How to read the colors
 
-Cada familia de color significa una sola cosa: **rojo-ladrillo = peligro**, **ámbar = valor** (índice de inversión) y **teal = cobertura** de servicios. Las rampas son secuenciales, así que también se leen en escala de grises y funcionan con daltonismo rojo-verde.
+Each color family means exactly one thing: **brick-red = danger**, **amber = value** (investment index) and **teal = coverage** of services. The ramps are sequential, so they also read in grayscale and work for red-green color blindness.
 
-Los cortes del choropleth se calculan **por cuantiles** sobre los datos reales, no en escalones fijos: el color indica la **posición relativa** de un sector dentro de la ciudad, no una calificación absoluta.
+The choropleth breaks are computed **by quantiles** over the real data, not on fixed steps: the color indicates a sector's **relative position** within the city, not an absolute score.
 
-Un sector en **gris** no es un sector malo: es un sector **sin dato**. Ocurre cuando no tiene viviendas habitadas, cuando el INEGI enmascaró sus cifras por confidencialidad (conteos de 1-2 viviendas) o cuando no aparece en el Censo. La ficha dice cuál de los tres es. Estos sectores tampoco reciben índice de inversión, porque les falta el 40% de su peso.
+A sector shown in **gray** is not a bad sector: it is a sector **without data**. This happens when it has no inhabited dwellings, when INEGI masked its figures for confidentiality (counts of 1-2 dwellings) or when it does not appear in the Census. The detail card states which of the three applies. These sectors also receive no investment index, because they are missing 40% of its weight.
 
 ## Stack
 
-- **Frontend:** HTML/CSS/JavaScript vanilla + [Leaflet.js](https://leafletjs.com/), sin frameworks ni build step.
-- **Procesamiento de datos:** Python (GeoPandas, pandas) para limpiar, cruzar y exportar los datos a GeoJSON.
+- **Frontend:** vanilla HTML/CSS/JavaScript + [Leaflet.js](https://leafletjs.com/), no frameworks or build step.
+- **Data processing:** Python (GeoPandas, pandas) to clean, cross-reference and export the data to GeoJSON.
 
-## Correr el proyecto localmente
+## Running the project locally
 
 ```bash
-# 1. Entorno de Python (solo si vas a reprocesar los datos)
+# 1. Python environment (only if you are going to reprocess the data)
 python -m venv venv
 venv\Scripts\pip install pandas geopandas jupyter shapely pyproj
 
-# 2. Regenerar los GeoJSON de data/ (opcional, ya vienen incluidos en el repo)
+# 2. Regenerate the GeoJSON files in data/ (optional, they are already included in the repo)
 venv\Scripts\python scripts/process_data.py
 
-# 3. Servir el sitio
+# 3. Serve the site
 python -m http.server 8000
 ```
 
-Abre `http://localhost:8000` en tu navegador.
+Open `http://localhost:8000` in your browser.
 
-## Estructura
+## Structure
 
 ```
-index.html           Mapa (Leaflet) y lógica de la interfaz
-styles.css           Estilos (tema oscuro, tokens de diseño en :root)
+index.html           Map (Leaflet) and interface logic
+styles.css           Styles (dark theme, design tokens in :root)
 assets/
-  logo-traza.svg     Marca de vértice; también favicon
+  logo-traza.svg     Vertex mark; also the favicon
 scripts/
-  process_data.py    Pipeline de procesamiento de datos (GeoPandas)
+  process_data.py    Data processing pipeline (GeoPandas)
 data/
-  servicios_basicos.geojson      Capa de servicios básicos por AGEB
-  indice_inversion.geojson       Capa del índice de inversión por AGEB
-  riesgo_inundacion.geojson      Capa de riesgo por inundación pluvial (IMPLAN)
-  riesgo_deslizamientos.geojson  Capa de riesgo por deslizamientos (IMPLAN)
-  riesgo_quimico.geojson         Capa de riesgo químico-tecnológico (IMPLAN)
-  riesgo_inundacion.png          Raster de severidad del ANRI (respaldo) + su _meta.json
-SPEC.md              Especificación técnica del proyecto
-DATOS.md             Bitácora de datos: procedencia de cada dataset
-task.md              Lista de tareas y estado de avance
+  servicios_basicos.geojson      Basic-services layer per AGEB
+  indice_inversion.geojson       Investment-index layer per AGEB
+  riesgo_inundacion.geojson      Pluvial flood-risk layer (IMPLAN)
+  riesgo_deslizamientos.geojson  Landslide-risk layer (IMPLAN)
+  riesgo_quimico.geojson         Chemical-technological risk layer (IMPLAN)
+  riesgo_inundacion.png          ANRI severity raster (backup) + its _meta.json
+SPEC.md              Project technical specification
+DATOS.md             Data log: provenance of each dataset
+task.md              Task list and progress status
 ```
 
-Los datos crudos (`raw_data/`) no se incluyen en el repositorio por su tamaño; [DATOS.md](DATOS.md) documenta de dónde sale cada uno y `scripts/process_data.py` cómo se procesan.
+The raw data (`raw_data/`) is not included in the repository because of its size; [DATOS.md](DATOS.md) documents where each dataset comes from and `scripts/process_data.py` how they are processed.
 
-## Fuentes de datos
+## Data sources
 
-Todas son fuentes oficiales y de acceso público. La procedencia completa —editor, fecha de corte, fecha de descarga, licencia y limitaciones de cada dataset, más los que se descartaron y por qué— está en la bitácora [DATOS.md](DATOS.md).
+All are official, publicly accessible sources. The complete provenance —publisher, cutoff date, download date, license and limitations of each dataset, plus the ones that were discarded and why— is in the [DATOS.md](DATOS.md) log. (Official dataset titles are kept in Spanish, as published.)
 
-- [INEGI — Información vectorial de localidades amanzanadas y números exteriores 2023](https://www.inegi.org.mx/app/mapas/) (polígonos de AGEB y nombre de colonia)
-- [INEGI — Censo de Población y Vivienda 2020](https://www.inegi.org.mx/programas/ccpv/2020/) (servicios básicos por AGEB)
-- [INEGI — DENUE 05_2026](https://www.inegi.org.mx/app/mapa/denue/default.aspx) (escuelas, salud, supermercados)
-- [IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024](https://implansaltillo.mx/perfil/) (riesgo por inundación pluvial, por deslizamientos traslacionales y químico-tecnológico)
-- [CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI)](https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer) (raster de severidad, Tr = 100 años; se conserva como respaldo del IMPLAN)
+- [INEGI — Información vectorial de localidades amanzanadas y números exteriores 2023](https://www.inegi.org.mx/app/mapas/) (AGEB polygons and colonia name)
+- [INEGI — Censo de Población y Vivienda 2020](https://www.inegi.org.mx/programas/ccpv/2020/) (basic services per AGEB)
+- [INEGI — DENUE 05_2026](https://www.inegi.org.mx/app/mapa/denue/default.aspx) (schools, healthcare, supermarkets)
+- [IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024](https://implansaltillo.mx/perfil/) (pluvial flood, translational landslide and chemical-technological risk)
+- [CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI)](https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer) (severity raster, Tr = 100 years; kept as an IMPLAN backup)
 
-## Estado del proyecto
+## Project status
 
-Las cinco capas están en funcionamiento sobre los 431 AGEBs de los tres municipios. Las capas de riesgo del IMPLAN, en cambio, **solo cubren Saltillo**: su Atlas es municipal, así que al navegar a Ramos Arizpe o Arteaga el panel deshabilita esas capas y lo explica en vez de mostrar un mapa vacío sin motivo.
+All five layers are operational across the 431 AGEBs of the three municipalities. The IMPLAN risk layers, however, **only cover Saltillo**: its Atlas is municipal, so when navigating to Ramos Arizpe or Arteaga the panel disables those layers and explains why, instead of showing an empty map for no apparent reason.
 
-Pendientes principales: la capa de riesgo forestal sigue sin fuente (relevante ahora que Arteaga aporta AGEBs en la sierra), y las capas de vulnerabilidad del IMPLAN están sin evaluar. El detalle completo está en [task.md](task.md).
+Main pending items: the forest-fire risk layer still lacks a source (relevant now that Arteaga contributes AGEBs in the sierra), and the IMPLAN vulnerability layers are unevaluated. The full detail is in [task.md](task.md).
 
-Los datos de riesgo son modelos de intensidad a escala urbana: sirven para comparar zonas, no sustituyen un estudio de sitio.
+The risk data are urban-scale intensity models: they help compare zones, they do not replace a site study.
 
-El repositorio se llama `la_map` por razones históricas; `Traza` es el nombre del producto.
+The repository is named `la_map` for historical reasons; `Traza` is the product name.
