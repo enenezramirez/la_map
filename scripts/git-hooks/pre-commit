@@ -1,36 +1,36 @@
 #!/usr/bin/env bash
-# Barrera de seguridad pre-commit para GeoRiesgos Saltillo.
+# Pre-commit security barrier for Traza.
 #
-#   - gitleaks: escanea SECRETOS en los cambios staged. BLOQUEA el commit si encuentra.
-#   - bandit:   SAST de Python sobre los .py staged. Solo AVISA (no bloquea).
+#   - gitleaks: scans for SECRETS in the staged changes. BLOCKS the commit if found.
+#   - bandit:   Python SAST over the staged .py files. WARNS only (does not block).
 #
-# Cubre TODO commit hecho en este clon (dentro o fuera de Claude Code), a diferencia
-# del hook de IA que solo corre en sesión. Es la capa determinista y siempre-activa.
+# Covers EVERY commit made in this clone (inside or outside Claude Code), unlike
+# the AI hook that only runs in-session. This is the deterministic, always-on layer.
 #
-# Activar una vez por clon:  git config core.hooksPath scripts/git-hooks
-# (core.hooksPath es config local, no se versiona; por eso se documenta aquí.)
+# Activate once per clone:  git config core.hooksPath scripts/git-hooks
+# (core.hooksPath is local config, not versioned; that is why it is documented here.)
 set -u
 fail=0
 
-# --- 1) Secretos (BLOQUEANTE) ---------------------------------------------
+# --- 1) Secrets (BLOCKING) ------------------------------------------------
 if command -v gitleaks >/dev/null 2>&1; then
     if ! gitleaks git --staged --no-banner --redact -v . >/tmp/gr.out 2>&1; then
         echo ""
-        echo "❌ gitleaks detecto un posible SECRETO en los cambios staged — COMMIT BLOQUEADO:"
+        echo "❌ gitleaks detected a possible SECRET in the staged changes — COMMIT BLOCKED:"
         grep -E "Finding:|Secret:|RuleID:|File:|Line:|Fingerprint:" /tmp/gr.out | sed 's/^/   /' | head -30
-        echo "   Si es un falso positivo: revisa, y si procede ignoralo con .gitleaks.toml o --baseline-path."
+        echo "   If it is a false positive: review, and if appropriate ignore it with .gitleaks.toml or --baseline-path."
         fail=1
     fi
 else
-    echo "⚠️  gitleaks no esta en PATH; se omite el escaneo de secretos."
+    echo "⚠️  gitleaks is not on PATH; skipping the secrets scan."
 fi
 
-# --- 2) Python SAST (solo AVISO) ------------------------------------------
+# --- 2) Python SAST (WARNING only) ----------------------------------------
 staged_py=$(git diff --cached --name-only --diff-filter=d -- '*.py' 2>/dev/null)
 if [ -n "$staged_py" ] && [ -x venv/Scripts/bandit.exe ]; then
     if ! printf '%s\n' "$staged_py" | tr '\n' '\0' | xargs -0 -r venv/Scripts/bandit.exe -ll -q >/tmp/bd.out 2>&1; then
         echo ""
-        echo "⚠️  bandit encontro posibles problemas de seguridad en Python (revisalos; NO bloquea):"
+        echo "⚠️  bandit found possible Python security issues (review them; does NOT block):"
         grep -iE "Issue:|Severity:|Location:" /tmp/bd.out | sed 's/^/   /' | head -30
     fi
 fi

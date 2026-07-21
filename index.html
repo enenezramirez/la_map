@@ -6,8 +6,8 @@
     <title>Traza — Inteligencia territorial · Saltillo</title>
     <link rel="icon" type="image/svg+xml" href="assets/logo-traza.svg">
 
-    <!-- Google Fonts: Inter para la interfaz, IBM Plex Mono para cifras,
-         etiquetas y procedencia (la "voz del instrumento"). -->
+    <!-- Google Fonts: Inter for the UI, IBM Plex Mono for figures,
+         labels and provenance (the "instrument's voice"). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -22,10 +22,10 @@
 </head>
 <body>
 
-    <!-- Contenedor del Mapa -->
+    <!-- Map container -->
     <div id="map"></div>
 
-    <!-- Panel de Control Flotante (Glassmorphism) -->
+    <!-- Floating control panel (glassmorphism) -->
     <div class="control-panel">
         <header class="panel-header">
             <div class="brand">
@@ -90,7 +90,7 @@
             </div>
         </section>
 
-        <!-- Sección de Leyendas Dinámicas -->
+        <!-- Dynamic legends section -->
         <section class="panel-section" id="legend-section">
             <h2>Leyenda</h2>
             <div id="legend-container">
@@ -105,7 +105,7 @@
         </footer>
     </div>
 
-    <!-- Panel de Información de Detalles (Sidebar derecho) -->
+    <!-- Detail info panel (right sidebar) -->
     <div id="details-sidebar" class="sidebar-collapsed">
         <button id="close-sidebar" class="close-btn">&times;</button>
         <div class="sidebar-content">
@@ -123,60 +123,60 @@
 
     <!-- App Logic JS -->
     <script>
-        // Inicializar Mapa (el centro/zoom real lo define fitBounds más abajo)
+        // Initialize the map (the real center/zoom is set by fitBounds below)
         const map = L.map('map', {
-            zoomControl: false, // Ocultamos los botones por defecto para posicionarlos mejor
-            // Las capas de riesgo son multipolígonos muy densos (disueltos de
-            // ~12,700 polígonos): rasterizarlos en Canvas evita el jank de SVG.
+            zoomControl: false, // Hide the default buttons so we can position them ourselves
+            // The risk layers are very dense multipolygons (dissolved from
+            // ~12,700 polygons): rasterizing them on Canvas avoids SVG jank.
             preferCanvas: true
         });
 
-        // Reposicionar el control de Zoom abajo a la derecha para no chocar con el menú
+        // Move the zoom control to the bottom-right so it doesn't clash with the menu
         L.control.zoom({
             position: 'bottomright'
         }).addTo(map);
 
-        // Encuadre inicial: cubre Saltillo, Ramos Arizpe y Arteaga
+        // Initial framing: covers Saltillo, Ramos Arizpe and Arteaga
         const REGION_BOUNDS = L.latLngBounds([
-            [25.28, -101.08], // suroeste (bajo Saltillo)
-            [25.62, -100.80]  // noreste (sobre Ramos Arizpe / Arteaga)
+            [25.28, -101.08], // southwest (below Saltillo)
+            [25.62, -100.80]  // northeast (above Ramos Arizpe / Arteaga)
         ]);
         map.fitBounds(REGION_BOUNDS, { padding: [20, 20] });
 
-        // Añadir Capa Base - CartoDB Dark Matter (Estilo Oscuro Premium)
+        // Add base layer - CartoDB Dark Matter (premium dark style)
         const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
 
-        // Capa Base Alternativa - CartoDB Positron (Estilo Claro Premium por si el usuario prefiere luz)
+        // Alternative base layer - CartoDB Positron (premium light style, in case the user prefers light)
         const lightBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 20
         });
 
-        // Control de capas base (oscuro / claro), abajo a la izquierda
+        // Base layer control (dark / light), bottom-left
         L.control.layers(
             { 'Oscuro': darkBaseLayer, 'Claro': lightBaseLayer },
             null,
             { position: 'bottomleft', collapsed: true }
         ).addTo(map);
 
-        // Panel lateral de detalles: botón de cierre
+        // Detail sidebar: close button
         const detailsSidebar = document.getElementById('details-sidebar');
         document.getElementById('close-sidebar').addEventListener('click', () => {
             detailsSidebar.classList.add('sidebar-collapsed');
         });
 
-        // --- Utilidades compartidas de choropleth y leyenda (Fase 4/5) ---
+        // --- Shared choropleth and legend utilities (Phase 4/5) ---
 
-        // Escapa texto antes de interpolarlo en las plantillas de innerHTML.
-        // Hoy los GeoJSON se generan localmente con process_data.py a partir de
-        // SHP oficiales (INEGI/IMPLAN) y se sirven del mismo origen, así que no
-        // hay entrada de un tercero; esto blinda las fichas por si alguna capa
-        // llegara a venir de una URL remota o de una subida del usuario.
+        // Escapes text before interpolating it into innerHTML templates.
+        // Today the GeoJSON files are generated locally by process_data.py from
+        // official SHP files (INEGI/IMPLAN) and served from the same origin, so
+        // there is no third-party input; this hardens the cards in case a layer
+        // ever comes from a remote URL or a user upload.
         function esc(valor) {
             return String(valor)
                 .replace(/&/g, '&amp;')
@@ -186,63 +186,63 @@
                 .replace(/'/g, '&#39;');
         }
 
-        /* Presupuesto de color del mapa (identidad "Traza", 2026-07-18).
-           Cada familia significa UNA cosa y solo una:
-             · rojo-ladrillo  → PELIGRO (capas de riesgo)
-             · ámbar-crema    → VALOR   (índice de inversión)
-             · teal           → COBERTURA (servicios básicos)
+        /* Map color budget ("Traza" identity, 2026-07-18).
+           Each family means ONE thing and only one:
+             · brick-red    → DANGER   (risk layers)
+             · amber-cream  → VALUE    (investment index)
+             · teal         → COVERAGE (basic services)
 
-           Antes las tres compartían la misma rampa semafórica verde→rojo, así
-           que el rojo significaba "poca cobertura", "mala inversión" y "zona
-           peligrosa" al mismo tiempo, en el mismo mapa. Además el par
-           rojo-verde es el que peor funciona con deuteranopia (~8% de los
-           hombres): justo el eje que más importa leer aquí.
+           The three used to share the same green→red traffic-light ramp, so
+           red meant "low coverage", "bad investment" and "dangerous zone" at
+           the same time, on the same map. On top of that, the red-green pair
+           is the one that works worst with deuteranopia (~8% of men): exactly
+           the axis that matters most to read here.
 
-           Las rampas son SECUENCIALES y todas comparten la MISMA dirección
-           que las capas de riesgo: claro = bajo, oscuro/intenso = alto. Así el
-           mapa tiene una sola ley de lectura. Antes los índices iban al revés
-           que el riesgo (en índices "alto" era el tono más claro; en riesgo el
-           más oscuro), y aunque cada leyenda estaba al lado, el ojo no puede
-           sostener dos reglas opuestas en el mismo lienzo: confundía al
-           presentar. La luminosidad sigue haciendo el trabajo, así que las
-           rampas se leen en escala de grises y para quien no distingue matices.
+           The ramps are SEQUENTIAL and all share the SAME direction as the
+           risk layers: light = low, dark/intense = high. That gives the map a
+           single reading rule. The indices used to run opposite to the risk
+           layers (in the indices "high" was the lightest tone; in risk the
+           darkest), and even with each legend beside it, the eye cannot hold
+           two opposing rules on the same canvas: it confused people during
+           presentations. Luminosity still does the work, so the ramps read in
+           grayscale and for anyone who can't distinguish hues.
 
-           El extremo ALTO (oscuro) usa tonos profundos pero SATURADOS, nunca
-           cercanos al negro del fondo (#0b0c0e) —son los mismos tonos que la
-           identidad ya había elegido por situar sobre el basemap—, así que el
-           escalón más alto no se pierde; y el extremo BAJO ahora es claro,
-           imposible de perder. Además cada AGEB lleva un borde tenue que lo
-           delinea aun con relleno oscuro.
+           The HIGH (dark) end uses deep but SATURATED tones, never close to the
+           near-black background (#0b0c0e) —they are the same tones the identity
+           had already chosen because they sit above the basemap—, so the top
+           step is not lost; and the LOW end is now light, impossible to lose.
+           Each AGEB also carries a faint border that outlines it even with a
+           dark fill.
 
-           Desviación deliberada de SPEC.md §5, que pedía verde-amarillo-
-           naranja-rojo; el motivo quedó documentado ahí mismo. */
+           Deliberate deviation from SPEC.md §5, which asked for green-yellow-
+           orange-red; the reason is documented there. */
 
-        // Rampas de menor a mayor (claro → oscuro): el índice 0 es el valor
-        // más bajo (tono claro) y el último el más alto (tono oscuro), igual
-        // que las capas de riesgo. Servicios va en teal, Inversión en ámbar:
-        // miden cosas distintas y pueden estar encendidas a la vez sobre los
-        // mismos AGEBs, así que compartir rampa las volvía indistinguibles.
+        // Ramps from low to high (light → dark): index 0 is the lowest value
+        // (light tone) and the last is the highest (dark tone), matching the
+        // risk layers. Services uses teal, Investment amber: they measure
+        // different things and can be on at the same time over the same AGEBs,
+        // so sharing a ramp made them indistinguishable.
         const RAMPA_SERVICIOS = ['#7fd4c4', '#35a396', '#2a7d75', '#235a58', '#1d3a3c'];
         const RAMPA_INVERSION = ['#f2d79c', '#d29b33', '#a87c27', '#7d5c22', '#4a3a24'];
 
-        // Gris neutro para "sin dato": ni bueno ni malo, y fuera de ambas
-        // rampas para que no se confunda con un valor bajo.
+        // Neutral gray for "no data": neither good nor bad, and outside both
+        // ramps so it isn't confused with a low value.
         const COLOR_SIN_DATO = '#3a3f47';
 
-        /* Los cortes se calculan por CUANTILES sobre los datos reales, no con
-           escalones fijos cada 20 puntos. Motivo: ambos índices están muy
-           sesgados hacia arriba (la mediana de servicios es 91.7 y la de
-           inversión 86.1), así que con cortes fijos ~9 de cada 10 AGEBs caían
-           en la misma clase y el mapa era casi de un solo color: bonito e
-           inútil. Por cuantiles cada clase lleva ~el mismo número de AGEBs y
-           la variación real se vuelve visible.
+        /* The breaks are computed by QUANTILES over the real data, not with
+           fixed steps every 20 points. Reason: both indices are heavily skewed
+           upward (the median for services is 91.7 and for investment 86.1), so
+           with fixed breaks ~9 of every 10 AGEBs fell into the same class and
+           the map was almost a single color: pretty and useless. By quantiles
+           each class holds ~the same number of AGEBs and the real variation
+           becomes visible.
 
-           El precio, que conviene tener presente al leer el mapa: los cortes
-           dependen de los datos (cambian si cambian), las etiquetas quedan en
-           números irregulares, y dos AGEBs casi idénticos pueden caer en
-           clases distintas si el corte pasa justo entre ellos. Es decir, el
-           color muestra la POSICIÓN RELATIVA dentro de la ciudad, no una
-           calificación absoluta. */
+           The price, worth keeping in mind when reading the map: the breaks
+           depend on the data (they change if it changes), the labels end up on
+           irregular numbers, and two nearly identical AGEBs can fall into
+           different classes if the break passes right between them. In other
+           words, the color shows RELATIVE POSITION within the city, not an
+           absolute score. */
         function escalonesPorCuantiles(valores, rampa, sufijo = '') {
             const datos = valores
                 .filter(v => v !== null && v !== undefined && !Number.isNaN(v))
@@ -258,23 +258,23 @@
                 const maximo = i === rampa.length - 1
                     ? datos[datos.length - 1]
                     : cuantil((i + 1) / rampa.length);
-                // Si dos cortes coinciden (muchos valores repetidos) la clase
-                // quedaría vacía; se omite en vez de mostrar un color muerto
-                // en la leyenda.
+                // If two breaks coincide (many repeated values) the class
+                // would be empty; skip it instead of showing a dead color
+                // in the legend.
                 if (escalones.length && minimo >= escalones[escalones.length - 1].minimo) continue;
                 escalones.push({ minimo, color: rampa[i], etiqueta: `${fmt(minimo)} - ${fmt(maximo)}` });
             }
             return escalones;
         }
 
-        // Se llenan al cargar cada GeoJSON (dependen de los datos).
+        // Filled when each GeoJSON loads (they depend on the data).
         let ESCALONES_SERVICIOS = [];
         let ESCALONES_INVERSION = [];
 
-        // --- Capas de riesgo IMPLAN (CARTO SALTILLO, Atlas de Riesgos 2024) ---
-        // Rampa de un solo tono (ladrillo) por nivel de intensidad (campo
-        // INTENSIDAD): a más intensidad, más oscuro y más saturado. Sirve para
-        // inundación, deslizamientos y químico-tecnológico.
+        // --- IMPLAN risk layers (CARTO SALTILLO, 2024 Risk Atlas) ---
+        // Single-hue ramp (brick) by intensity level (INTENSIDAD field): the
+        // higher the intensity, the darker and more saturated. Used for flood,
+        // landslide and chemical-technological risk.
         const COLORES_RIESGO = {
             'Muy alto': '#8c2b18',
             'Alto': '#b8452a',
@@ -293,8 +293,8 @@
             });
         }
 
-        // Leyenda de una capa de riesgo: solo los niveles presentes + la
-        // fuente/fecha de corte (SPEC.md §1.2), tomadas del GeoJSON cargado.
+        // Legend for a risk layer: only the levels present + the source/cutoff
+        // date (SPEC.md §1.2), taken from the loaded GeoJSON.
         function htmlLeyendaRiesgo(titulo, nivelesPresentes, fuente, fecha) {
             const filas = ORDEN_RIESGO.filter(n => nivelesPresentes.has(n)).map(n => `
                 <div class="legend-row">
@@ -308,19 +308,19 @@
             return `<p class="legend-title">${esc(titulo)}</p>${filas}${src}`;
         }
 
-        // HTML de leyenda ya construido por capa de riesgo (se llena al cargar).
+        // Pre-built legend HTML per risk layer (filled on load).
         const leyendasRiesgo = { inundacion: null, deslizamientos: null, quimico: null };
 
-        // --- Ubicación de la colonia de un punto (point-in-polygon) ----------
-        // Las capas de riesgo del IMPLAN no traen nombre de zona: son un modelo
-        // de intensidad y, además, se disuelven por nivel, así que una sola
-        // figura cubre media ciudad. Para responder "¿qué colonia es esta?" al
-        // hacer clic, se ubica el punto dentro de los AGEB (que sí tienen
-        // COLONIA) con un ray-casting propio: son ~340 polígonos y un clic
-        // aislado, así que no amerita sumar una dependencia como Turf.js.
+        // --- Locate the colonia of a point (point-in-polygon) ----------------
+        // The IMPLAN risk layers carry no zone name: they are an intensity
+        // model and, on top of that, are dissolved by level, so a single shape
+        // covers half the city. To answer "which colonia is this?" on click, we
+        // locate the point inside the AGEBs (which do have COLONIA) with our own
+        // ray-casting: ~340 polygons and an isolated click, so it isn't worth
+        // adding a dependency like Turf.js.
 
-        // Índice de AGEBs para consulta, con su bounding box precalculada para
-        // descartar rápido la mayoría sin recorrer sus vértices.
+        // AGEB index for lookups, with a precomputed bounding box to quickly
+        // discard most of them without walking their vertices.
         let agebsParaConsulta = null;
 
         function calcularBbox(geometria) {
@@ -350,8 +350,8 @@
                 }));
         }
 
-        // Ray casting sobre un anillo: cuenta cruces de una semirrecta
-        // horizontal hacia el este; impar = dentro. Coordenadas GeoJSON [lng, lat].
+        // Ray casting over a ring: counts crossings of a horizontal ray toward
+        // the east; odd = inside. GeoJSON coordinates [lng, lat].
         function puntoEnAnillo([x, y], anillo) {
             let dentro = false;
             for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
@@ -365,8 +365,8 @@
             return dentro;
         }
 
-        // Un polígono GeoJSON es [anillo exterior, ...huecos]: el punto cuenta
-        // si cae dentro del exterior y fuera de todos los huecos.
+        // A GeoJSON polygon is [outer ring, ...holes]: the point counts if it
+        // falls inside the outer ring and outside every hole.
         function puntoEnPoligono(punto, anillos) {
             if (!puntoEnAnillo(punto, anillos[0])) return false;
             return !anillos.slice(1).some(hueco => puntoEnAnillo(punto, hueco));
@@ -382,9 +382,9 @@
             return false;
         }
 
-        // Devuelve el AGEB que contiene el punto, o null si cae fuera de todos
-        // (las zonas de riesgo se extienden más allá de la mancha urbana con
-        // AGEBs, así que esto es esperable, no un error).
+        // Returns the AGEB that contains the point, or null if it falls outside
+        // all of them (risk zones extend beyond the urban footprint covered by
+        // AGEBs, so this is expected, not an error).
         function buscarAgebEnPunto(latlng) {
             if (!agebsParaConsulta) return null;
             const punto = [latlng.lng, latlng.lat];
@@ -398,15 +398,15 @@
             return null;
         }
 
-        // Ficha de detalle al hacer clic en una zona de riesgo: colonia (si el
-        // punto cae en un AGEB), intensidad + fuente y fecha de corte (SPEC §1.2).
+        // Detail card when clicking a risk zone: colonia (if the point falls
+        // in an AGEB), intensity + source and cutoff date (SPEC §1.2).
         function mostrarDetalleRiesgo(props, latlng) {
             const ageb = buscarAgebEnPunto(latlng);
             document.getElementById('sector-title').textContent = ageb ? ageb.colonia : props.TITULO;
 
-            // Sin AGEB hay dos causas distintas y no deben confundirse: que los
-            // AGEB todavía no carguen (el clic llegó primero) o que el punto
-            // caiga de verdad fuera de la mancha urbana.
+            // With no AGEB there are two distinct causes that must not be
+            // confused: the AGEBs haven't loaded yet (the click arrived first)
+            // or the point truly falls outside the urban footprint.
             let filaUbicacion;
             if (ageb) {
                 filaUbicacion = `<p class="detail-row"><span>Municipio</span><strong>${esc(ageb.municipio)}</strong></p>`;
@@ -428,15 +428,15 @@
             return valor === null || valor === undefined || Number.isNaN(valor);
         }
 
-        // `obtenerEscalones` es un getter, no un arreglo: los cortes se calculan
-        // al cargar el GeoJSON y el estilo se evalúa después, feature por feature.
+        // `obtenerEscalones` is a getter, not an array: the breaks are computed
+        // when the GeoJSON loads and the style is evaluated later, feature by feature.
         function crearFuncionColor(obtenerEscalones) {
             return valor => {
                 if (sinDato(valor)) return COLOR_SIN_DATO;
                 const escalones = obtenerEscalones();
-                // Sin escalones no hay escala que aplicar (pasaría si una capa
-                // llegara entera sin datos). Antes esto reventaba con
-                // TypeError al leer .color de undefined y tumbaba el render.
+                // With no breaks there is no scale to apply (would happen if a
+                // whole layer arrived without data). This used to blow up with a
+                // TypeError reading .color of undefined and crashed the render.
                 if (escalones.length === 0) return COLOR_SIN_DATO;
                 const escalon = escalones.find(e => valor >= e.minimo);
                 return escalon ? escalon.color : escalones[escalones.length - 1].color;
@@ -450,9 +450,9 @@
                     fillColor: funcionColor(valor),
                     weight: 1,
                     color: 'rgba(255, 255, 255, 0.25)',
-                    // Los AGEBs sin dato se pintan más tenues: presentes y
-                    // clicables (la ficha explica por qué no hay dato), pero
-                    // sin competir visualmente con los que sí miden algo.
+                    // AGEBs with no data are drawn fainter: present and
+                    // clickable (the card explains why there's no data), but
+                    // without visually competing with those that do measure something.
                     fillOpacity: sinDato(valor) ? 0.35 : 0.65
                 };
             };
@@ -476,8 +476,8 @@
             return `<p class="legend-title">${esc(titulo)}</p>${filas}${filaSinDato}${nota}`;
         }
 
-        // Registro de leyendas por capa: cuando hay varias capas activas a la
-        // vez, se muestra la de la que se activó más recientemente.
+        // Legend registry per layer: when several layers are active at once,
+        // the one from the most recently activated layer is shown.
         const SIN_DATO_CONTEO = { servicios: 0, inversion: 0 };
 
         const LEYENDAS = {
@@ -510,13 +510,13 @@
             actualizarLeyenda();
         }
 
-        // --- Disponibilidad de capas según la zona visible -------------------
-        // Al navegar fuera de la cobertura de una capa (p. ej. a Arteaga, donde
-        // aún no hay AGEBs), su toggle se deshabilita y se explica en vez de
-        // dejar el mapa vacío sin motivo. La cobertura se deriva de la bbox real
-        // del GeoJSON ya cargado (capa.getBounds()), nunca de un zoom ni un
-        // rectángulo hardcodeado, para que el estado se mantenga solo cuando se
-        // sumen datos de municipios nuevos.
+        // --- Layer availability by visible area ------------------------------
+        // When navigating outside a layer's coverage (e.g. to Arteaga, where
+        // there are no AGEBs yet), its toggle is disabled and explained instead
+        // of leaving the map empty for no reason. Coverage is derived from the
+        // real bbox of the already-loaded GeoJSON (capa.getBounds()), never from
+        // a zoom or a hardcoded rectangle, so the state keeps working on its own
+        // when data from new municipalities is added.
         const capasEnVista = [];
 
         function registrarCapaEnVista(checkbox, capa) {
@@ -541,15 +541,15 @@
 
         map.on('moveend', actualizarDisponibilidadCapas);
 
-        // Un valor ausente se muestra como raya, no como 0: "no lo sé" y "es
-        // cero" son afirmaciones distintas y el mapa no debe confundirlas.
+        // A missing value is shown as a dash, not as 0: "I don't know" and "it
+        // is zero" are different statements and the map must not confuse them.
         const SIN_VALOR = '—';
         const formatoEntero = valor => sinDato(valor) ? SIN_VALOR : Number(valor).toLocaleString('es-MX');
         const formatoPct = valor => sinDato(valor) ? SIN_VALOR : `${Number(valor).toFixed(1)}%`;
         const formatoIndice = valor => sinDato(valor) ? SIN_VALOR : Number(valor).toFixed(1);
 
-        // Nota que explica por qué un AGEB no tiene índice (sin viviendas,
-        // cifras enmascaradas por confidencialidad, o ausente del Censo).
+        // Note explaining why an AGEB has no index (no dwellings, figures
+        // masked for confidentiality, or absent from the Census).
         function htmlMotivoSinDato(props) {
             return props.MOTIVO_SIN_DATO
                 ? `<p class="detail-source">Sin dato de servicios: ${esc(props.MOTIVO_SIN_DATO)}.</p>`
@@ -593,15 +593,15 @@
         function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, configEscala, funcionEstilo, funcionDetalle, alCargarGeojson }) {
             let capa = null;
 
-            // `no-cache` revalida el GeoJSON con el servidor (evita servir una
-            // versión vieja tras regenerar los datos con process_data.py).
+            // `no-cache` revalidates the GeoJSON with the server (avoids serving
+            // a stale version after regenerating the data with process_data.py).
             fetch(archivo, { cache: 'no-cache' })
                 .then(respuesta => respuesta.json())
                 .then(geojson => {
                     if (alCargarGeojson) alCargarGeojson(geojson);
 
-                    // Los cortes salen de los datos que acaban de llegar, así
-                    // que se calculan aquí, antes de estilizar nada.
+                    // The breaks come from the data that just arrived, so they
+                    // are computed here, before styling anything.
                     if (configEscala) {
                         const valores = geojson.features.map(f => f.properties[campoValor]);
                         configEscala.asignar(
@@ -628,7 +628,7 @@
 
                     registrarCapaEnVista(checkbox, capa);
                 })
-                .catch(error => console.error(`Error cargando la capa "${archivo}":`, error));
+                .catch(error => console.error(`Error loading layer "${archivo}":`, error));
 
             checkbox.addEventListener('change', () => {
                 if (!capa) return;
@@ -643,9 +643,9 @@
             });
         }
 
-        // Cargador para capas de riesgo IMPLAN (choropleth categórico por
-        // INTENSIDAD). Construye su leyenda con los niveles presentes y la
-        // fuente/fecha del propio GeoJSON.
+        // Loader for IMPLAN risk layers (categorical choropleth by INTENSIDAD).
+        // Builds its legend from the levels present and the source/date of the
+        // GeoJSON itself.
         function cargarCapaRiesgo({ archivo, checkbox, clave, titulo }) {
             let capa = null;
 
@@ -675,7 +675,7 @@
 
                     registrarCapaEnVista(checkbox, capa);
                 })
-                .catch(error => console.error(`Error cargando la capa "${archivo}":`, error));
+                .catch(error => console.error(`Error loading layer "${archivo}":`, error));
 
             checkbox.addEventListener('change', () => {
                 if (!capa) return;
@@ -702,9 +702,9 @@
             },
             funcionEstilo: crearEstiloCapa('SERVICIOS_INDEX', crearFuncionColor(() => ESCALONES_SERVICIOS)),
             funcionDetalle: mostrarDetalleSector,
-            // Los AGEB de esta capa son también la referencia para ubicar la
-            // colonia de un clic en las capas de riesgo. Se indexan al cargar,
-            // independientemente de si la capa está visible o no.
+            // This layer's AGEBs are also the reference for locating the colonia
+            // of a click on the risk layers. They are indexed on load,
+            // regardless of whether the layer is visible.
             alCargarGeojson: indexarAgebs
         });
 
@@ -721,7 +721,7 @@
             funcionDetalle: mostrarDetalleInversion
         });
 
-        // Capa 1 — Riesgo de Inundación (IMPLAN CARTO, Atlas 2024): vector.
+        // Layer 1 — Flood Risk (IMPLAN CARTO, 2024 Atlas): vector.
         cargarCapaRiesgo({
             archivo: 'data/riesgo_inundacion.geojson',
             checkbox: document.getElementById('layer-floods'),
@@ -729,7 +729,7 @@
             titulo: 'Riesgo de Inundación Pluvial'
         });
 
-        // Capa 4 — Riesgo de Deslizamientos (IMPLAN CARTO, Atlas 2024): vector.
+        // Layer 4 — Landslide Risk (IMPLAN CARTO, 2024 Atlas): vector.
         cargarCapaRiesgo({
             archivo: 'data/riesgo_deslizamientos.geojson',
             checkbox: document.getElementById('layer-landslides'),
@@ -737,8 +737,8 @@
             titulo: 'Riesgo de Deslizamientos'
         });
 
-        // Capa 5 — Riesgo Químico-Tecnológico (IMPLAN CARTO, Atlas 2024): vector.
-        // Solo Medio+Alto (ver NIVELES_ELEVADOS_QUIMICO en process_data.py).
+        // Layer 5 — Chemical-Technological Risk (IMPLAN CARTO, 2024 Atlas): vector.
+        // Only Medio+Alto (see NIVELES_ELEVADOS_QUIMICO in process_data.py).
         cargarCapaRiesgo({
             archivo: 'data/riesgo_quimico.geojson',
             checkbox: document.getElementById('layer-chemical'),
@@ -746,12 +746,12 @@
             titulo: 'Riesgo Químico-Tecnológico'
         });
 
-        // Respaldo (ANRI - CONAGUA): la capa de inundación por severidad Tr=100
-        // se conserva como raster en data/riesgo_inundacion.png (+_meta.json).
-        // Para reactivarla como imageOverlay, cargar meta.bounds y usar
-        // L.imageOverlay(...). IMPLAN es la fuente primaria (local, vectorial).
+        // Backup (ANRI - CONAGUA): the flood layer by Tr=100 severity is kept
+        // as a raster in data/riesgo_inundacion.png (+_meta.json). To reactivate
+        // it as an imageOverlay, load meta.bounds and use L.imageOverlay(...).
+        // IMPLAN is the primary source (local, vector).
 
-        console.log("Leaflet inicializado con éxito.");
+        console.log("Leaflet initialized successfully.");
     </script>
 </body>
 </html>
