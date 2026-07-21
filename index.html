@@ -41,6 +41,15 @@
             </div>
         </header>
 
+        <section class="panel-section" id="search-section">
+            <h2>Buscar Colonia</h2>
+            <div class="search-box">
+                <input type="text" id="colonia-search" placeholder="Buscar colonia por nombre…" autocomplete="off" disabled>
+                <button type="button" id="colonia-search-clear" class="search-clear" aria-label="Limpiar búsqueda" hidden>&times;</button>
+                <ul id="colonia-suggestions" class="search-suggestions" role="listbox" hidden></ul>
+            </div>
+        </section>
+
         <section class="panel-section">
             <h2>Capas de Riesgo y Servicios</h2>
             
@@ -690,6 +699,167 @@
             });
         }
 
+        // --- Colonia search ------------------------------------------------
+        // Jump to a colonia by name. The colonia names and geometries already
+        // live in the services GeoJSON (indexed as AGEBs on load), so the search
+        // index is built from that same data with no extra request.
+        const buscadorInput = document.getElementById('colonia-search');
+        const buscadorSugerencias = document.getElementById('colonia-suggestions');
+        const buscadorLimpiar = document.getElementById('colonia-search-clear');
+
+        // One entry per real colonia: its combined bbox (a colonia spans several
+        // AGEBs) and the AGEB geometries used to draw the selection highlight.
+        let indiceColonias = [];
+        let coloniasFiltradas = [];
+        let sugerenciaActiva = -1;
+        let capaColoniaResaltada = null;
+
+        // Placeholder labels are not real places; keep them out of the search.
+        const COLONIAS_NO_BUSCABLES = new Set(['SIN NOMBRE REGISTRADO', 'Sin nombre de colonia']);
+
+        // Fold accents and case so "peñas" matches "penas" and "Centro" "centro".
+        const normalizarTexto = t => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
+        function construirIndiceColonias(geojson) {
+            const grupos = new Map();
+            for (const f of geojson.features) {
+                const colonia = f.properties.COLONIA;
+                if (!colonia || COLONIAS_NO_BUSCABLES.has(colonia) || !f.geometry) continue;
+                const municipio = f.properties.NOM_MUN || '';
+                const clave = `${colonia}|${municipio}`;
+                let g = grupos.get(clave);
+                if (!g) {
+                    g = { colonia, municipio, geometrias: [], bbox: [Infinity, Infinity, -Infinity, -Infinity] };
+                    grupos.set(clave, g);
+                }
+                g.geometrias.push(f.geometry);
+                const [minLng, minLat, maxLng, maxLat] = calcularBbox(f.geometry);
+                if (minLng < g.bbox[0]) g.bbox[0] = minLng;
+                if (minLat < g.bbox[1]) g.bbox[1] = minLat;
+                if (maxLng > g.bbox[2]) g.bbox[2] = maxLng;
+                if (maxLat > g.bbox[3]) g.bbox[3] = maxLat;
+            }
+            indiceColonias = Array.from(grupos.values());
+            indiceColonias.sort((a, b) => a.colonia.localeCompare(b.colonia, 'es'));
+            for (const g of indiceColonias) g.normalizado = normalizarTexto(g.colonia);
+        }
+
+        // The services layer is the source of colonia names; when it loads we
+        // both index the AGEBs (for risk-click lookups) and build the search.
+        function alCargarAgebs(geojson) {
+            indexarAgebs(geojson);
+            construirIndiceColonias(geojson);
+            buscadorInput.disabled = false;
+        }
+
+        function filtrarColonias(consulta) {
+            const q = normalizarTexto(consulta.trim());
+            if (!q) return [];
+            const encontrados = [];
+            for (const g of indiceColonias) {
+                const pos = g.normalizado.indexOf(q);
+                if (pos !== -1) encontrados.push({ g, pos });
+            }
+            // Prefix matches first, then alphabetical; cap the list so the
+            // dropdown stays scannable.
+            encontrados.sort((a, b) => (a.pos - b.pos) || a.g.colonia.localeCompare(b.g.colonia, 'es'));
+            return encontrados.slice(0, 8).map(r => r.g);
+        }
+
+        function renderSugerencias(lista) {
+            coloniasFiltradas = lista;
+            sugerenciaActiva = -1;
+            if (lista.length === 0) {
+                buscadorSugerencias.hidden = true;
+                buscadorSugerencias.innerHTML = '';
+                return;
+            }
+            buscadorSugerencias.innerHTML = lista.map((g, i) => `
+                <li class="search-suggestion" role="option" data-i="${i}">
+                    <span class="suggestion-name">${esc(g.colonia)}</span>
+                    <span class="suggestion-mun">${esc(g.municipio)}</span>
+                </li>
+            `).join('');
+            buscadorSugerencias.hidden = false;
+        }
+
+        function resaltarColonia(g) {
+            if (capaColoniaResaltada) {
+                map.removeLayer(capaColoniaResaltada);
+                capaColoniaResaltada = null;
+            }
+            const features = g.geometrias.map(geom => ({ type: 'Feature', geometry: geom, properties: {} }));
+            // Amber outline = the identity's "active/selection" color; no fill so
+            // the choropleth underneath stays readable, and non-interactive so it
+            // doesn't intercept clicks meant for the layers below.
+            capaColoniaResaltada = L.geoJSON(
+                { type: 'FeatureCollection', features },
+                { interactive: false, style: { color: '#c8912f', weight: 3, fill: false } }
+            ).addTo(map);
+            capaColoniaResaltada.bringToFront();
+        }
+
+        function seleccionarColonia(g) {
+            if (!g) return;
+            const bounds = L.latLngBounds([[g.bbox[1], g.bbox[0]], [g.bbox[3], g.bbox[2]]]);
+            // maxZoom keeps a tiny colonia from snapping to street level.
+            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+            resaltarColonia(g);
+            buscadorInput.value = g.colonia;
+            buscadorSugerencias.hidden = true;
+            buscadorLimpiar.hidden = false;
+        }
+
+        function limpiarBusqueda() {
+            buscadorInput.value = '';
+            buscadorSugerencias.hidden = true;
+            buscadorLimpiar.hidden = true;
+            coloniasFiltradas = [];
+            sugerenciaActiva = -1;
+            if (capaColoniaResaltada) {
+                map.removeLayer(capaColoniaResaltada);
+                capaColoniaResaltada = null;
+            }
+        }
+
+        function moverSugerencia(delta) {
+            const items = buscadorSugerencias.querySelectorAll('.search-suggestion');
+            if (!items.length) return;
+            sugerenciaActiva = (sugerenciaActiva + delta + items.length) % items.length;
+            items.forEach((el, i) => el.classList.toggle('active', i === sugerenciaActiva));
+            items[sugerenciaActiva].scrollIntoView({ block: 'nearest' });
+        }
+
+        buscadorInput.addEventListener('input', () => {
+            renderSugerencias(filtrarColonias(buscadorInput.value));
+            buscadorLimpiar.hidden = buscadorInput.value.length === 0;
+        });
+
+        buscadorInput.addEventListener('keydown', e => {
+            if (e.key === 'ArrowDown') { e.preventDefault(); moverSugerencia(1); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); moverSugerencia(-1); }
+            else if (e.key === 'Enter') {
+                e.preventDefault();
+                const idx = sugerenciaActiva >= 0 ? sugerenciaActiva : 0;
+                if (coloniasFiltradas[idx]) seleccionarColonia(coloniasFiltradas[idx]);
+            } else if (e.key === 'Escape') {
+                buscadorSugerencias.hidden = true;
+                sugerenciaActiva = -1;
+            }
+        });
+
+        buscadorSugerencias.addEventListener('click', e => {
+            const li = e.target.closest('.search-suggestion');
+            if (li) seleccionarColonia(coloniasFiltradas[Number(li.dataset.i)]);
+        });
+
+        buscadorLimpiar.addEventListener('click', limpiarBusqueda);
+
+        // Close the dropdown when clicking anywhere outside the search box.
+        document.addEventListener('click', e => {
+            if (!e.target.closest('#search-section')) buscadorSugerencias.hidden = true;
+        });
+
         cargarCapaChoropleth({
             archivo: 'data/servicios_basicos.geojson',
             checkbox: document.getElementById('layer-services'),
@@ -703,9 +873,10 @@
             funcionEstilo: crearEstiloCapa('SERVICIOS_INDEX', crearFuncionColor(() => ESCALONES_SERVICIOS)),
             funcionDetalle: mostrarDetalleSector,
             // This layer's AGEBs are also the reference for locating the colonia
-            // of a click on the risk layers. They are indexed on load,
-            // regardless of whether the layer is visible.
-            alCargarGeojson: indexarAgebs
+            // of a click on the risk layers, and the source of the colonia
+            // search index. Both are built on load (alCargarAgebs), regardless
+            // of whether the layer is visible.
+            alCargarGeojson: alCargarAgebs
         });
 
         cargarCapaChoropleth({
