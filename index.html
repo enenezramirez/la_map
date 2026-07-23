@@ -223,8 +223,8 @@
            Each AGEB also carries a faint border that outlines it even with a
            dark fill.
 
-           Deliberate deviation from SPEC.md §5, which asked for green-yellow-
-           orange-red; the reason is documented there. */
+           Deliberate deviation from the original green-yellow-orange-red color
+           spec; the reason is the unified color law explained above. */
 
         // Ramps from low to high (light → dark): index 0 is the lowest value
         // (light tone) and the last is the highest (dark tone), matching the
@@ -303,7 +303,7 @@
         }
 
         // Legend for a risk layer: only the levels present + the source/cutoff
-        // date (SPEC.md §1.2), taken from the loaded GeoJSON.
+        // date (for data traceability), taken from the loaded GeoJSON.
         function htmlLeyendaRiesgo(titulo, nivelesPresentes, fuente, fecha) {
             const filas = ORDEN_RIESGO.filter(n => nivelesPresentes.has(n)).map(n => `
                 <div class="legend-row">

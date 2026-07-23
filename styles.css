@@ -235,7 +235,7 @@ body {
     flex-shrink: 0;
 }
 
-/* Data source and cutoff date (traceability, SPEC.md §1.2).
+/* Data source and cutoff date (traceability).
    Monospaced on purpose: if the project's promise is that the index can be
    traced back to its source, provenance is not legal fine print — it is part
    of the brand, and speaks with the same voice as the figures. */

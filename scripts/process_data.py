@@ -31,7 +31,7 @@ manzana" (fm) layer, which does carry the NOMASEN field (settlement name) per
 block front: the most frequent NOMASEN among each AGEB's fronts is used as an
 approximation of its colonia.
 
-Phase 5, Task 1: Real-Estate Investment Index (see formula in SPEC.md). The
+Phase 5, Task 1: Real-Estate Investment Index (formula defined below). The
 "Comercios" component is computed from DENUE (schools, healthcare and
 supermarkets) as the proximity of each AGEB's centroid to the nearest
 establishment of each category. The "Riesgo" component (weight 0.3) is
@@ -86,7 +86,7 @@ CENSO_CSV = (
 DENUE_CSV = RAW_DATA / "denue_05_csv" / "conjunto_de_datos" / "denue_inegi_05_.csv"
 
 # Urban amenity categories for the "Comercios" component of the Investment
-# Index (see SPEC.md). "escuela" and "salud" are identified by their SCIAN
+# Index. "escuela" and "salud" are identified by their SCIAN
 # sector (the first two digits of codigo_act); "supermercado" has no sector of
 # its own in SCIAN, so it is identified by business-activity name.
 CATEGORIAS_DENUE = {
@@ -95,10 +95,10 @@ CATEGORIAS_DENUE = {
     "supermercado": lambda df: df["nombre_act"].str.contains("supermercado", case=False, na=False),
 }
 
-# Investment Index weights (SPEC.md).
+# Investment Index weights.
 PESO_SERVICIOS = 0.4
 PESO_COMERCIOS = 0.3
-# Flood-risk penalty (SPEC.md). Applied as a subtraction on the base
+# Flood-risk penalty. Applied as a subtraction on the base
 # Services+Comercios index (see calcular_indice_inversion).
 PESO_RIESGO = 0.3
 
@@ -173,7 +173,7 @@ PUNTAJE_INTENSIDAD = {"Muy bajo": 0, "Bajo": 25, "Medio": 50, "Alto": 75, "Muy a
 NIVELES_ELEVADOS = ["Bajo", "Medio", "Alto", "Muy alto"]
 # Higher threshold for chemical-technological risk: there "Bajo" covers 93% of
 # the grid (the model's background, no discriminating value) and, if kept, the
-# layer alone would exceed SPEC.md §2's 5 MB limit (6.9 MB measured). With
+# layer alone would exceed the project's 5 MB limit (6.9 MB measured). With
 # Medio+Alto it stays at ~1.2 MB, showing only the genuinely exposed zones.
 NIVELES_ELEVADOS_QUIMICO = ["Medio", "Alto", "Muy alto"]
 
@@ -181,9 +181,9 @@ RIESGO_INUNDACION_GEOJSON = DATA_DIR / "riesgo_inundacion.geojson"
 RIESGO_DESLIZAMIENTOS_GEOJSON = DATA_DIR / "riesgo_deslizamientos.geojson"
 RIESGO_QUIMICO_GEOJSON = DATA_DIR / "riesgo_quimico.geojson"
 
-# 2020 Census variables used for the basic-services coverage index (see
-# SPEC.md). The "positive" variants are used (dwellings that DO have the
-# service): VPH_AGUADV instead of VPH_AGUAFV (the negative one).
+# 2020 Census variables used for the basic-services coverage index. The
+# "positive" variants are used (dwellings that DO have the service):
+# VPH_AGUADV instead of VPH_AGUAFV (the negative one).
 COLUMNAS_SERVICIOS = ["VPH_C_ELEC", "VPH_AGUADV", "VPH_DRENAJ", "VPH_INTER"]
 
 # Each entry maps a municipality to the locality folders (INEGI) that contain
@@ -503,7 +503,7 @@ def preparar_capa_riesgo(
     the area). A layer may pass a higher threshold: e.g. chemical-technological
     risk also discards "Bajo" because there that level covers 93% of the grid
     (the model's background, no discriminating value) and, without trimming it,
-    the layer alone would exceed SPEC.md §2's 5 MB limit.
+    the layer alone would exceed the project's 5 MB limit.
     """
     sub = gdf_riesgo[gdf_riesgo["INTENSIDAD"].isin(niveles)]
     disuelto = sub.dissolve(by="INTENSIDAD", as_index=False)[["INTENSIDAD", "geometry"]]
@@ -520,7 +520,7 @@ def exportar_capa_riesgo(
 ) -> gpd.GeoDataFrame:
     """
     Simplify the geometry, split each level's multipolygon into its individual
-    zones, attach traceability metadata (SPEC.md §1.2: title, phenomenon,
+    zones, attach traceability metadata (title, phenomenon,
     source and cutoff date) and export the risk layer to data/ ready for
     Leaflet.
 
@@ -529,7 +529,7 @@ def exportar_capa_riesgo(
     dissolved multipolygon, Leaflet sees a single element per level. It does not
     alter the geometry (same shape, declared as several features); it only
     repeats the properties on each one, at a cost of about ~450 KB total across
-    the two layers, well below SPEC.md §2's 5 MB limit.
+    the two layers, well below the project's 5 MB limit.
 
     It is exploded here and not in `preparar_capa_riesgo` on purpose: the
     dissolved version still feeds the Investment Index penalty, where having a
@@ -588,7 +588,7 @@ def calcular_indice_inversion(
     df_riesgo: pd.DataFrame,
 ) -> gpd.GeoDataFrame:
     """
-    Compute the Real-Estate Investment Index (SPEC.md). The base index combines
+    Compute the Real-Estate Investment Index. The base index combines
     Services (0.4) and Comercios (0.3) renormalized to 0-100; on top of it the
     flood-Risk penalty (0.3) is applied, subtracting up to 30 points based on
     the AGEB's exposure. The result is clipped to [0, 100].
