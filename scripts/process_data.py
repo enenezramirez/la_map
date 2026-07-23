@@ -1,5 +1,5 @@
 """
-GeoRiesgos Saltillo - Script de Procesamiento de Datos Espaciales
+Traza - Script de Procesamiento de Datos Espaciales
 ----------------------------------------------------------------
 Fase 2, Tarea 1: Filtrar la capa de AGEB de INEGI para obtener únicamente los
 polígonos de los municipios de interés (Saltillo, Ramos Arizpe, Arteaga).

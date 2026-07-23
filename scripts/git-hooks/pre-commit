@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Barrera de seguridad pre-commit para GeoRiesgos Saltillo.
+# Barrera de seguridad pre-commit para Traza.
 #
 #   - gitleaks: escanea SECRETOS en los cambios staged. BLOQUEA el commit si encuentra.
 #   - bandit:   SAST de Python sobre los .py staged. Solo AVISA (no bloquea).
