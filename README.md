@@ -63,9 +63,7 @@ data/
   riesgo_deslizamientos.geojson  Landslide-risk layer (IMPLAN)
   riesgo_quimico.geojson         Chemical-technological risk layer (IMPLAN)
   riesgo_inundacion.png          ANRI severity raster (backup) + its _meta.json
-SPEC.md              Project technical specification
 DATOS.md             Data log: provenance of each dataset
-task.md              Task list and progress status
 ```
 
 The raw data (`raw_data/`) is not included in the repository because of its size; [DATOS.md](DATOS.md) documents where each dataset comes from and `scripts/process_data.py` how they are processed.
@@ -84,7 +82,7 @@ All are official, publicly accessible sources. The complete provenance —publis
 
 All five layers are operational across the 431 AGEBs of the three municipalities. The IMPLAN risk layers, however, **only cover Saltillo**: its Atlas is municipal, so when navigating to Ramos Arizpe or Arteaga the panel disables those layers and explains why, instead of showing an empty map for no apparent reason.
 
-Main pending items: the forest-fire risk layer still lacks a source (relevant now that Arteaga contributes AGEBs in the sierra), and the IMPLAN vulnerability layers are unevaluated. The full detail is in [task.md](task.md).
+Main pending items: the forest-fire risk layer still lacks a source (relevant now that Arteaga contributes AGEBs in the sierra), and the IMPLAN vulnerability layers are unevaluated.
 
 The risk data are urban-scale intensity models: they help compare zones, they do not replace a site study.
 

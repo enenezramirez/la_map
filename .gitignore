@@ -32,3 +32,9 @@ reportes/
 
 # Configuración local/personal de Claude Code (rutas absolutas, allowlist, hooks)
 .claude/settings.local.json
+
+# Documentos internos de desarrollo — se mantienen locales, fuera del repo público.
+# Contienen notas de trabajo, especificación y contexto para asistentes de IA.
+CLAUDE.md
+SPEC.md
+task.md
