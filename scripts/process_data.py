@@ -31,7 +31,7 @@ manzana" (fm), que sí trae el campo NOMASEN
 (nombre de asentamiento) por cada frente de cuadra: se usa el NOMASEN más
 frecuente entre los frentes de cada AGEB como aproximación de su colonia.
 
-Fase 5, Tarea 1: Índice de Inversión Inmobiliaria (ver fórmula en SPEC.md).
+Fase 5, Tarea 1: Índice de Inversión Inmobiliaria (fórmula definida abajo).
 El componente de "Comercios" se calcula con el DENUE (escuelas, salud y
 supermercados) como cercanía del centroide de cada AGEB al establecimiento
 más próximo de cada categoría. El componente de "Riesgo" (peso 0.3) se
@@ -85,7 +85,7 @@ CENSO_CSV = (
 DENUE_CSV = RAW_DATA / "denue_05_csv" / "conjunto_de_datos" / "denue_inegi_05_.csv"
 
 # Categorías de equipamiento urbano para el componente "Comercios" del Índice
-# de Inversión (ver SPEC.md). "escuela" y "salud" se identifican por su
+# de Inversión. "escuela" y "salud" se identifican por su
 # sector SCIAN (los dos primeros dígitos de codigo_act); "supermercado" no
 # tiene un sector propio en SCIAN, así que se identifica por nombre de giro.
 CATEGORIAS_DENUE = {
@@ -94,10 +94,10 @@ CATEGORIAS_DENUE = {
     "supermercado": lambda df: df["nombre_act"].str.contains("supermercado", case=False, na=False),
 }
 
-# Pesos del Índice de Inversión (SPEC.md).
+# Pesos del Índice de Inversión.
 PESO_SERVICIOS = 0.4
 PESO_COMERCIOS = 0.3
-# Penalización por riesgo de inundación (SPEC.md). Se aplica como resta sobre
+# Penalización por riesgo de inundación. Se aplica como resta sobre
 # el índice base de Servicios+Comercios (ver calcular_indice_inversion).
 PESO_RIESGO = 0.3
 
@@ -172,7 +172,7 @@ PUNTAJE_INTENSIDAD = {"Muy bajo": 0, "Bajo": 25, "Medio": 50, "Alto": 75, "Muy a
 NIVELES_ELEVADOS = ["Bajo", "Medio", "Alto", "Muy alto"]
 # Umbral más alto para el riesgo químico-tecnológico: ahí "Bajo" cubre el 93%
 # de la malla (el fondo del modelo, sin valor discriminante) y, conservándolo,
-# la capa rebasaría sola el límite de 5 MB de SPEC.md §2 (6.9 MB medidos). Con
+# la capa rebasaría sola el límite de 5 MB del proyecto (6.9 MB medidos). Con
 # Medio+Alto queda en ~1.2 MB mostrando solo las zonas genuinamente expuestas.
 NIVELES_ELEVADOS_QUIMICO = ["Medio", "Alto", "Muy alto"]
 
@@ -181,7 +181,7 @@ RIESGO_DESLIZAMIENTOS_GEOJSON = DATA_DIR / "riesgo_deslizamientos.geojson"
 RIESGO_QUIMICO_GEOJSON = DATA_DIR / "riesgo_quimico.geojson"
 
 # Variables del Censo 2020 usadas para el índice de cobertura de servicios
-# básicos (ver SPEC.md). Se usan las variantes "positivas" (viviendas que SÍ
+# básicos. Se usan las variantes "positivas" (viviendas que SÍ
 # disponen del servicio): VPH_AGUADV en vez de VPH_AGUAFV (que es la negativa).
 COLUMNAS_SERVICIOS = ["VPH_C_ELEC", "VPH_AGUADV", "VPH_DRENAJ", "VPH_INTER"]
 
@@ -504,7 +504,7 @@ def preparar_capa_riesgo(
     área). Una capa puede pasar un umbral más alto: p. ej. el riesgo
     químico-tecnológico descarta también "Bajo" porque ahí ese nivel cubre el
     93% de la malla (el fondo del modelo, sin valor discriminante) y, sin
-    recortarlo, la capa rebasaría por sí sola el límite de 5 MB de SPEC.md §2.
+    recortarlo, la capa rebasaría por sí sola el límite de 5 MB del proyecto.
     """
     sub = gdf_riesgo[gdf_riesgo["INTENSIDAD"].isin(niveles)]
     disuelto = sub.dissolve(by="INTENSIDAD", as_index=False)[["INTENSIDAD", "geometry"]]
@@ -521,7 +521,7 @@ def exportar_capa_riesgo(
 ) -> gpd.GeoDataFrame:
     """
     Simplifica la geometría, separa el multipolígono de cada nivel en sus zonas
-    individuales, adjunta metadatos de trazabilidad (SPEC.md §1.2: título,
+    individuales, adjunta metadatos de trazabilidad (título,
     fenómeno, fuente y fecha de corte) y exporta la capa de riesgo a data/
     lista para Leaflet.
 
@@ -530,7 +530,7 @@ def exportar_capa_riesgo(
     el multipolígono disuelto, Leaflet ve un único elemento por nivel. No altera
     la geometría (es la misma figura, declarada como varias features); solo
     repite las propiedades en cada una, a un costo de unos ~450 KB en total
-    entre las dos capas, muy por debajo del límite de 5 MB de SPEC.md §2.
+    entre las dos capas, muy por debajo del límite de 5 MB del proyecto.
 
     Se explota aquí y no en `preparar_capa_riesgo` a propósito: la versión
     disuelta sigue alimentando la penalización del Índice de Inversión, donde
@@ -589,7 +589,7 @@ def calcular_indice_inversion(
     df_riesgo: pd.DataFrame,
 ) -> gpd.GeoDataFrame:
     """
-    Calcula el Índice de Inversión Inmobiliaria (SPEC.md). El índice base
+    Calcula el Índice de Inversión Inmobiliaria. El índice base
     combina Servicios (0.4) y Comercios (0.3) renormalizado a 0-100; sobre él
     se aplica la penalización por Riesgo de inundación (0.3), que resta hasta
     30 puntos según la exposición del AGEB. El resultado se recorta a [0, 100].

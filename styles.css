@@ -235,7 +235,7 @@ body {
     flex-shrink: 0;
 }
 
-/* Fuente y fecha de corte de los datos (trazabilidad, SPEC.md §1.2).
+/* Fuente y fecha de corte de los datos (trazabilidad).
    Va en monoespaciada a propósito: si la promesa del proyecto es que el índice
    se puede seguir hasta su fuente, la procedencia no es letra chica legal —
    es parte de la marca, y habla con la misma voz que las cifras. */
@@ -249,7 +249,7 @@ body {
     color: var(--tz-text-3);
 }
 
-/* Fuente/fecha en la ficha de detalle del sidebar (trazabilidad, §1.2) */
+/* Fuente/fecha en la ficha de detalle del sidebar (trazabilidad) */
 .detail-source {
     margin-top: 14px;
     padding-top: 10px;

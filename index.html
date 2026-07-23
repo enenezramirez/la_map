@@ -204,8 +204,8 @@
            del fondo del mapa (#0b0c0e) para que el escalón más bajo no
            desaparezca contra el basemap oscuro.
 
-           Desviación deliberada de SPEC.md §5, que pedía verde-amarillo-
-           naranja-rojo; el motivo quedó documentado ahí mismo. */
+           Desviación deliberada del spec de color original (verde-amarillo-
+           naranja-rojo); el motivo es la ley cromática unificada explicada arriba. */
 
         // Rampas de menor a mayor. Servicios va en teal, Inversión en ámbar:
         // miden cosas distintas y pueden estar encendidas a la vez sobre los
@@ -282,7 +282,7 @@
         }
 
         // Leyenda de una capa de riesgo: solo los niveles presentes + la
-        // fuente/fecha de corte (SPEC.md §1.2), tomadas del GeoJSON cargado.
+        // fuente/fecha de corte (para trazabilidad), tomadas del GeoJSON cargado.
         function htmlLeyendaRiesgo(titulo, nivelesPresentes, fuente, fecha) {
             const filas = ORDEN_RIESGO.filter(n => nivelesPresentes.has(n)).map(n => `
                 <div class="legend-row">
@@ -387,7 +387,7 @@
         }
 
         // Ficha de detalle al hacer clic en una zona de riesgo: colonia (si el
-        // punto cae en un AGEB), intensidad + fuente y fecha de corte (SPEC §1.2).
+        // punto cae en un AGEB), intensidad + fuente y fecha de corte (para trazabilidad).
         function mostrarDetalleRiesgo(props, latlng) {
             const ageb = buscarAgebEnPunto(latlng);
             document.getElementById('sector-title').textContent = ageb ? ageb.colonia : props.TITULO;
