@@ -63,9 +63,7 @@ data/
   riesgo_deslizamientos.geojson  Capa de riesgo por deslizamientos (IMPLAN)
   riesgo_quimico.geojson         Capa de riesgo químico-tecnológico (IMPLAN)
   riesgo_inundacion.png          Raster de severidad del ANRI (respaldo) + su _meta.json
-SPEC.md              Especificación técnica del proyecto
 DATOS.md             Bitácora de datos: procedencia de cada dataset
-task.md              Lista de tareas y estado de avance
 ```
 
 Los datos crudos (`raw_data/`) no se incluyen en el repositorio por su tamaño; [DATOS.md](DATOS.md) documenta de dónde sale cada uno y `scripts/process_data.py` cómo se procesan.
@@ -84,7 +82,7 @@ Todas son fuentes oficiales y de acceso público. La procedencia completa —edi
 
 Las cinco capas están en funcionamiento sobre los 431 AGEBs de los tres municipios. Las capas de riesgo del IMPLAN, en cambio, **solo cubren Saltillo**: su Atlas es municipal, así que al navegar a Ramos Arizpe o Arteaga el panel deshabilita esas capas y lo explica en vez de mostrar un mapa vacío sin motivo.
 
-Pendientes principales: la capa de riesgo forestal sigue sin fuente (relevante ahora que Arteaga aporta AGEBs en la sierra), y las capas de vulnerabilidad del IMPLAN están sin evaluar. El detalle completo está en [task.md](task.md).
+Pendientes principales: la capa de riesgo forestal sigue sin fuente (relevante ahora que Arteaga aporta AGEBs en la sierra), y las capas de vulnerabilidad del IMPLAN están sin evaluar.
 
 Los datos de riesgo son modelos de intensidad a escala urbana: sirven para comparar zonas, no sustituyen un estudio de sitio.
 
