@@ -1,393 +1,397 @@
-# Bitácora de Datos: GeoRiesgos Saltillo
+# Data Log: GeoRiesgos Saltillo
 
-Registro de procedencia de todos los conjuntos de datos usados en el proyecto, en
-cumplimiento de **SPEC.md §1.2 (Legitimidad y Trazabilidad de los Datos)**. Como el
-análisis se usa para decisiones inmobiliarias, cada capa debe poder rastrearse hasta su
-fuente oficial, su fecha de corte y la fecha en que la descargamos.
+Provenance record for every dataset used in the project. Because the analysis feeds
+real-estate decisions, each layer must be traceable to its official source, its cutoff
+date and the date we downloaded it — this is the project's data-legitimacy-and-traceability
+requirement.
 
-**Cómo se llenó esta bitácora:** las fechas de publicación y los títulos oficiales se
-tomaron de los metadatos que vienen dentro de cada paquete descargado (archivos
-`metadatos/*.txt` de INEGI y `*.shp.xml` de los shapefiles), no de lo que recordábamos.
-Las fechas de descarga provienen de la marca de tiempo de las carpetas en `raw_data/`.
-Cuando un dato no se pudo verificar, se dice explícitamente en lugar de estimarlo.
+**How this log was filled in:** publication dates and official titles were taken from the
+metadata shipped inside each downloaded package (INEGI `metadatos/*.txt` files and the
+shapefiles' `*.shp.xml`), not from memory. Download dates come from the timestamps of the
+folders under `raw_data/`. When a value could not be verified, that is stated explicitly
+instead of estimating it.
 
-**Última actualización:** 2026-07-16
-
----
-
-## 1. Resumen
-
-| # | Dataset | Editor | Corte / edición | Descarga | Estado |
-|---|---------|--------|-----------------|----------|--------|
-| 1 | Información vectorial de localidades amanzanadas y números exteriores 2023 | INEGI | 2023-12-15 | 2026-07-08 | En uso |
-| 2 | Censo de Población y Vivienda 2020 (AGEB y manzana urbana, Coahuila) | INEGI | 2021-07-26 | 2026-07-08 | En uso |
-| 3 | DENUE 05_2026 (Coahuila) | INEGI | 2026-05-20 | 2026-07-08 | En uso |
-| 4 | Riesgo por inundaciones pluviales urbanas (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-15 | En uso |
-| 5 | Riesgo por deslizamientos traslacionales (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-15 | En uso |
-| 6 | Riesgo químico-tecnológico (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-17 | En uso |
-| 7 | ANRI — Severidad por inundación, Tr = 100 años | CONAGUA | No publicada | 2026-07-16 | Respaldo |
-| 8 | Riesgo por deslizamientos rotacionales (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-17 | Evaluado, no publicado |
-| 9 | Indicadores Municipales PEV | CENAPRED | — | 2026-07-08 | Descartado |
-| 10 | Susceptibilidad a inundaciones pluviales | IMPLAN Saltillo | 2024 | 2026-07-15 | Descartado |
+**Last updated:** 2026-07-22
 
 ---
 
-## 2. Datasets en uso
+## 1. Summary
+
+| # | Dataset | Publisher | Cutoff / edition | Downloaded | Status |
+|---|---------|-----------|------------------|------------|--------|
+| 1 | Información vectorial de localidades amanzanadas y números exteriores 2023 | INEGI | 2023-12-15 | 2026-07-08 | In use |
+| 2 | Censo de Población y Vivienda 2020 (AGEB y manzana urbana, Coahuila) | INEGI | 2021-07-26 | 2026-07-08 | In use |
+| 3 | DENUE 05_2026 (Coahuila) | INEGI | 2026-05-20 | 2026-07-08 | In use |
+| 4 | Riesgo por inundaciones pluviales urbanas (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-15 | In use |
+| 5 | Riesgo por deslizamientos traslacionales (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-15 | In use |
+| 6 | Riesgo químico-tecnológico (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-17 | In use |
+| 7 | ANRI — Severidad por inundación, Tr = 100 años | CONAGUA | Not published | 2026-07-16 | Backup |
+| 8 | Riesgo por deslizamientos rotacionales (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-17 | Evaluated, not published |
+| 9 | Indicadores Municipales PEV | CENAPRED | — | 2026-07-08 | Discarded |
+| 10 | Susceptibilidad a inundaciones pluviales | IMPLAN Saltillo | 2024 | 2026-07-15 | Discarded |
+
+---
+
+## 2. Datasets in use
 
 ### 2.1 INEGI — Información vectorial de localidades amanzanadas y números exteriores 2023
 
-Aporta los polígonos de AGEB (la unidad territorial base de todo el análisis) y el nombre
-de colonia de cada uno.
+Provides the AGEB polygons (the base territorial unit of the whole analysis) and the
+colonia name of each one.
 
-* **Título oficial:** *Información vectorial de localidades amanzanadas y números
+* **Official title:** *Información vectorial de localidades amanzanadas y números
   exteriores 2023. 050300001 (SALTILLO).*
-* **Editor:** Instituto Nacional de Estadística y Geografía (INEGI).
-* **Fechas (metadatos del producto):** creación 2023-10-02, revisión 2023-10-16,
-  **publicación 2023-12-15**. Actualización anual.
-* **Fecha de descarga:** 2026-07-08.
-* **Ruta local:** `raw_data/marco_geoestadistico/saltillo_map_ageb/` (una carpeta por
-  localidad: `050300001` Saltillo ciudad + 3 localidades rurales).
-* **Colección:** *Información vectorial de localidades amanzanadas y números exteriores*.
-  **Edición: 2023.** Cobertura temporal: 2011-01-01 a 2023-09-30.
-* **Sitio de descarga:** Biblioteca digital de Mapas de INEGI
-  (<https://www.inegi.org.mx/app/mapas/>), una ficha descargable por localidad.
-* **Licencia:** Términos de Libre Uso de la Información del INEGI
+* **Publisher:** Instituto Nacional de Estadística y Geografía (INEGI).
+* **Dates (product metadata):** created 2023-10-02, revised 2023-10-16,
+  **published 2023-12-15**. Annual update.
+* **Download date:** 2026-07-08.
+* **Local path:** `raw_data/marco_geoestadistico/saltillo_map_ageb/` (one folder per
+  locality: `050300001` Saltillo city + 3 rural localities).
+* **Collection:** *Información vectorial de localidades amanzanadas y números exteriores*.
+  **Edition: 2023.** Temporal coverage: 2011-01-01 to 2023-09-30.
+* **Download site:** INEGI's digital Map Library
+  (<https://www.inegi.org.mx/app/mapas/>), one downloadable record per locality.
+* **License:** INEGI Free Use of Information terms
   (<https://www.inegi.org.mx/inegi/terminos.html>).
-* **Uso en el proyecto:** capa AGEB (`filtrar_agebs_por_municipio`) y nombre de colonia
-  por AGEB, derivado de la capa de Frente de manzana (`fm`, campo `NOMASEN`) tomando el
-  asentamiento más frecuente en cada AGEB (`cargar_nombres_colonias`).
-* **Limitación conocida:** el AGEB es una unidad estadística y no coincide 1 a 1 con una
-  colonia. El nombre es el asentamiento *dominante* entre los frentes del AGEB, no una
-  frontera oficial de colonia: un AGEB puede abarcar varias.
-* **Valores de relleno en `NOMASEN`:** el campo usa **`ND`** (no disponible; su `TIPOASEN`
-  también dice `ND`, 363 frentes) y **`NINGUNO`** (frente sin asentamiento asignado, 141
-  frentes) como marcadores, no como nombres. Hay que descartarlos antes de calcular el
-  asentamiento dominante: un AGEB con 5 frentes `NINGUNO` y 4 con nombre real acabaría
-  llamándose "NINGUNO". Ver `VALORES_SIN_ASENTAMIENTO` en `scripts/process_data.py`.
-  **Cuidado al ampliar la lista:** no todo valor corto o extraño es relleno — `GIS` es un
-  nombre real (Sector GIS, por Grupo Industrial Saltillo).
-* **Cobertura actual (2026-07-17):** 3 municipios, **431 AGEBs** — Saltillo (342), Ramos
-  Arizpe (61) y Arteaga (28), la Zona Metropolitana que pide `SPEC.md §1.1`. Descargados
-  por municipio (paquetes `05004`/`05027`, producto `vla_ne_mg_2022`) y reorganizados a
-  `arteaga_map_ageb/` y `ramos_arizpe_map_ageb/` (mismo patrón que `saltillo_map_ageb/`).
-  Localidades con capa de AGEB: `050040001` Arteaga cabecera, `050040107` San Antonio de
-  las Alazanas (sierra) y `050270001` Ramos Arizpe ciudad; el resto de localidades de cada
-  paquete son rurales sin AGEB (se omiten con gracia). 428/431 AGEBs con datos de censo (3
-  sin match, probablemente no residenciales); 0 con `SIN_COLONIA`.
+* **Use in the project:** AGEB layer (`filtrar_agebs_por_municipio`) and colonia name
+  per AGEB, derived from the block-front layer (`fm`, field `NOMASEN`) by taking the most
+  frequent settlement in each AGEB (`cargar_nombres_colonias`).
+* **Known limitation:** the AGEB is a statistical unit and does not match a colonia 1:1.
+  The name is the *dominant* settlement among the AGEB's block fronts, not an official
+  colonia boundary: a single AGEB can span several.
+* **Filler values in `NOMASEN`:** the field uses **`ND`** (not available; its `TIPOASEN`
+  also reads `ND`, 363 fronts) and **`NINGUNO`** (front with no assigned settlement, 141
+  fronts) as markers, not as names. They must be discarded before computing the dominant
+  settlement: an AGEB with 5 `NINGUNO` fronts and 4 with a real name would end up called
+  "NINGUNO". See `VALORES_SIN_ASENTAMIENTO` in `scripts/process_data.py`. **Be careful
+  when extending the list:** not every short or odd value is filler — `GIS` is a real name
+  (Sector GIS, after Grupo Industrial Saltillo).
+* **Current coverage (2026-07-17):** 3 municipalities, **431 AGEBs** — Saltillo (342),
+  Ramos Arizpe (61) and Arteaga (28), the Metropolitan Area targeted by the project scope.
+  Downloaded per municipality (packages `05004`/`05027`, product `vla_ne_mg_2022`) and
+  reorganized into `arteaga_map_ageb/` and `ramos_arizpe_map_ageb/` (same pattern as
+  `saltillo_map_ageb/`). Localities with an AGEB layer: `050040001` Arteaga seat,
+  `050040107` San Antonio de las Alazanas (sierra) and `050270001` Ramos Arizpe city; the
+  rest of the localities in each package are rural without AGEBs (skipped gracefully).
+  428/431 AGEBs with census data (3 without a match, probably non-residential); 0 with
+  `SIN_COLONIA`.
 
-> **Corrección de atribución.** Este producto se venía citando como *"Marco
-> Geoestadístico"*. **No lo es**, aunque la confusión es entendible: INEGI lo clasifica
-> bajo el **tema** "Marco Geoestadístico" y se descarga del mismo portal. Pero es un
-> producto distinto, que *usa* el Marco Geoestadístico (edición diciembre 2022) como capa
-> base, junto con GEODOM 2010-2016, la Cartografía Urbana y Rural 2017-2023, los Censos
-> Económicos 2019 y el CPV 2020. Cítese siempre con el título y la edición de este
-> apartado. Corregido en `README.md`, `CLAUDE.md`, `SPEC.md`, `task.md` y
-> `scripts/process_data.py`. La carpeta `raw_data/marco_geoestadistico/` conserva el
-> nombre viejo a propósito: renombrarla rompería copias locales de datos no versionados
-> sin ganar nada.
+> **Attribution correction.** This product used to be cited as the *"Marco
+> Geoestadístico"*. **It is not**, although the confusion is understandable: INEGI files it
+> under the **theme** "Marco Geoestadístico" and it downloads from the same portal. But it
+> is a distinct product that *uses* the Marco Geoestadístico (December 2022 edition) as a
+> base layer, together with GEODOM 2010-2016, the 2017-2023 Urban and Rural Cartography,
+> the 2019 Economic Censuses and the 2020 Census. Always cite it with the title and edition
+> from this section. Corrected across the project's docs and `scripts/process_data.py`. The
+> `raw_data/marco_geoestadistico/` folder keeps the old name on purpose: renaming it would
+> break local copies of unversioned data for no gain.
 
-### 2.2 INEGI — Censo de Población y Vivienda 2020 (AGEB y manzana urbana)
+### 2.2 INEGI — Censo de Población y Vivienda 2020 (AGEB and urban block)
 
-* **Título oficial:** *Principales resultados por AGEB y manzana urbana del Censo de
-  Población y Vivienda 2020. Datos oportunos* — entidad Coahuila de Zaragoza.
-* **Identificador:** `MEX-INEGI.ESD2.01-CPV-2020`.
-* **Editor:** INEGI. Información de Interés Nacional (SNIEG).
-* **Fecha de corte del censo:** 2020. **Última modificación del archivo: 2021-07-26**
-  (se agregaron AGEBs y manzanas de localidades urbanas de menos de 2,500 habitantes).
-* **Fecha de descarga:** 2026-07-08.
-* **Ruta local:** `raw_data/ageb_mza_urbana_05_cpv2020_csv/.../conjunto_de_datos_ageb_urbana_05_cpv2020.csv`.
-* **Licencia:** Términos de Libre Uso de la Información del INEGI.
-* **Uso en el proyecto:** cobertura de servicios básicos por AGEB — `VPH_C_ELEC`
-  (electricidad), `VPH_AGUADV` (agua), `VPH_DRENAJ` (drenaje) y `VPH_INTER` (internet),
-  todas sobre `TVIVHAB`, más el compuesto `SERVICIOS_INDEX`.
-* **Limitación conocida:** al estar agregado por AGEB, el Censo **no permite** calcular el
-  porcentaje de viviendas con *todos* los servicios simultáneamente (eso requeriría
-  microdatos). `SERVICIOS_INDEX` es el promedio de los cuatro, una aproximación.
-* **Tratamiento de valores ausentes (revisado el 2026-07-18).** El INEGI enmascara con `*`
-  los conteos de 1-2 viviendas por confidencialidad. Hasta esta fecha esos asteriscos se
-  convertían en `0`, y un AGEB sin viviendas habitadas también terminaba en `0%`: el mapa
-  pintaba **21 de 431 AGEBs como si tuvieran la peor cobertura de la ciudad cuando en
-  realidad no estaban medidos**, y el error se propagaba al Índice de Inversión (esos
-  AGEBs recibían índices de 5.9 a 35.7 contra una mediana de 86.1). Ahora se distingue
-  "sin dato" de "cero", con tres motivos registrados en el campo `MOTIVO_SIN_DATO`:
-  * **Sin viviendas habitadas** (`TVIVHAB = 0`): 12 AGEBs. No hay a quién dar servicio.
-  * **Cifras enmascaradas por INEGI** (las 4 columnas con `*`): 6 AGEBs, p. ej. la UAAAN
-    (3 viviendas) y la zona militar (2).
-  * **Sin registro en el Censo 2020** (el AGEB no aparece en el CSV): 3 AGEBs.
+* **Official title:** *Principales resultados por AGEB y manzana urbana del Censo de
+  Población y Vivienda 2020. Datos oportunos* — Coahuila de Zaragoza state.
+* **Identifier:** `MEX-INEGI.ESD2.01-CPV-2020`.
+* **Publisher:** INEGI. Information of National Interest (SNIEG).
+* **Census cutoff date:** 2020. **File last modified: 2021-07-26** (AGEBs and blocks of
+  urban localities under 2,500 inhabitants were added).
+* **Download date:** 2026-07-08.
+* **Local path:** `raw_data/ageb_mza_urbana_05_cpv2020_csv/.../conjunto_de_datos_ageb_urbana_05_cpv2020.csv`.
+* **License:** INEGI Free Use of Information terms.
+* **Use in the project:** basic-service coverage per AGEB — `VPH_C_ELEC` (electricity),
+  `VPH_AGUADV` (water), `VPH_DRENAJ` (sewage) and `VPH_INTER` (internet), all over
+  `TVIVHAB`, plus the composite `SERVICIOS_INDEX`.
+* **Known limitation:** being aggregated per AGEB, the Census **does not allow** computing
+  the share of dwellings with *all* services simultaneously (that would require
+  microdata). `SERVICIOS_INDEX` is the average of the four, an approximation.
+* **Handling of missing values (reviewed 2026-07-18).** INEGI masks counts of 1-2
+  dwellings with `*` for confidentiality. Until this date those asterisks were turned into
+  `0`, and an AGEB with no inhabited dwellings also ended up at `0%`: the map painted
+  **21 of 431 AGEBs as if they had the city's worst coverage when they were actually
+  unmeasured**, and the error propagated into the Investment Index (those AGEBs got indices
+  from 5.9 to 35.7 against a median of 86.1). Now "no data" is distinguished from "zero",
+  with three reasons recorded in the `MOTIVO_SIN_DATO` field:
+  * **No inhabited dwellings** (`TVIVHAB = 0`): 12 AGEBs. There is no one to serve.
+  * **Figures masked by INEGI** (all 4 columns with `*`): 6 AGEBs, e.g. the UAAAN
+    (3 dwellings) and the military zone (2).
+  * **Not recorded in the 2020 Census** (the AGEB does not appear in the CSV): 3 AGEBs.
 
-  El **enmascarado parcial** (1-3 columnas de 4, 5 AGEBs) sí se calcula: el asterisco
-  significa 1-2 viviendas sobre un total mucho mayor, así que tratar esa columna como 0%
-  se aproxima a la realidad en vez de descartar el AGEB completo. Tras el cambio queda
-  **un solo cero genuino** en toda la ciudad (CENTRO METROPOLITANO, 26 habitantes en 5
-  viviendas, con las cuatro columnas publicadas efectivamente en cero). Los AGEBs sin dato
-  se conservan en las capas —se pintan en gris y la ficha explica el motivo— en vez de
-  desaparecer del mapa, que era el comportamiento anterior del `dropna` al exportar.
+  **Partial masking** (1-3 of 4 columns, 5 AGEBs) *is* computed: the asterisk means 1-2
+  dwellings out of a much larger total, so treating that column as 0% approximates reality
+  rather than discarding the whole AGEB. After the change there is **a single genuine zero**
+  left in the whole city (CENTRO METROPOLITANO, 26 inhabitants in 5 dwellings, with all
+  four columns published as effectively zero). AGEBs without data are kept in the layers —
+  painted gray, with the detail card explaining the reason — instead of vanishing from the
+  map, which was the previous behavior of the `dropna` on export.
 
 ### 2.3 INEGI — DENUE 05_2026 (Coahuila)
 
-* **Título oficial:** *Directorio Estadístico Nacional de Unidades Económicas (DENUE)
+* **Official title:** *Directorio Estadístico Nacional de Unidades Económicas (DENUE)
   05_2026.*
-* **Identificador:** `MEX-INEGI.EEC2.05-DENUE-2026`.
-* **Editor:** INEGI.
-* **Fecha de corte / modificación: 2026-05-20.** Actualización anual.
-* **Fecha de descarga:** 2026-07-08.
-* **Sitio de descarga:** <https://www.inegi.org.mx/app/descarga/?ti=6>.
-* **Ruta local:** `raw_data/denue_05_csv/conjunto_de_datos/denue_inegi_05_.csv`.
-* **Licencia:** Términos de Libre Uso de la Información del INEGI.
-* **Uso en el proyecto:** componente "Comercios" del Índice de Inversión — escuelas
-  (SCIAN 61), salud (SCIAN 62) y supermercados (por nombre de giro, ya que no tienen
-  sector SCIAN propio), medidos como cercanía del centroide del AGEB al establecimiento
-  más próximo de cada categoría.
+* **Identifier:** `MEX-INEGI.EEC2.05-DENUE-2026`.
+* **Publisher:** INEGI.
+* **Cutoff / modification date: 2026-05-20.** Annual update.
+* **Download date:** 2026-07-08.
+* **Download site:** <https://www.inegi.org.mx/app/descarga/?ti=6>.
+* **Local path:** `raw_data/denue_05_csv/conjunto_de_datos/denue_inegi_05_.csv`.
+* **License:** INEGI Free Use of Information terms.
+* **Use in the project:** the "Amenities" component of the Investment Index — schools
+  (SCIAN 61), healthcare (SCIAN 62) and supermarkets (by business-name matching, since they
+  have no SCIAN sector of their own), measured as the distance from the AGEB centroid to
+  the nearest establishment of each category.
 
 ### 2.4 IMPLAN Saltillo — Riesgo por inundaciones pluviales urbanas (Atlas de Riesgos 2024)
 
-**Fuente primaria de riesgo hidrometeorológico** (SPEC Capa 1).
+**Primary source of hydrometeorological risk** (Layer 1).
 
-* **Fuente oficial:** IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024.
-* **Sitio de descarga:** <https://implansaltillo.mx/perfil/> (portal CARTO SALTILLO;
-  ofrece las capas en SHP, KML y PDF).
-* **Fecha de corte:** **2024**, según la etiqueta del portal ("Atlas de Riesgos 2024").
-* **Fecha de descarga:** 2026-07-15.
-* **Ruta local:** `raw_data/Riesgo_por_inundaciones_pluviales3/`.
-* **Formato:** shapefile, 12,679 registros, EPSG:6372 (MEXICO_ITRF_2008_LCC).
-* **Campos:** `Titulo`, `Intensid_1` (nivel de intensidad), `Detall`, `Fenom`.
-* **Título interno del shapefile:** `R050300001_R_INUNDACION_PLUVIAL`.
-* **Licencia / condiciones:** el portal ofrece acceso público a la información y deslinda
-  al IMPLAN de la responsabilidad por el mal uso de los datos.
-* **Uso en el proyecto:** capa `data/riesgo_inundacion.geojson` y penalización por riesgo
-  del Índice de Inversión (`RIESGO_INDEX`, vía overlay AGEB↔riesgo en EPSG:6372).
+* **Official source:** IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024.
+* **Download site:** <https://implansaltillo.mx/perfil/> (CARTO SALTILLO portal; serves the
+  layers in SHP, KML and PDF).
+* **Cutoff date:** **2024**, per the portal label ("Atlas de Riesgos 2024").
+* **Download date:** 2026-07-15.
+* **Local path:** `raw_data/Riesgo_por_inundaciones_pluviales3/`.
+* **Format:** shapefile, 12,679 records, EPSG:6372 (MEXICO_ITRF_2008_LCC).
+* **Fields:** `Titulo`, `Intensid_1` (intensity level), `Detall`, `Fenom`.
+* **Shapefile internal title:** `R050300001_R_INUNDACION_PLUVIAL`.
+* **License / conditions:** the portal offers public access to the information and
+  disclaims IMPLAN from liability for misuse of the data.
+* **Use in the project:** layer `data/riesgo_inundacion.geojson` and the risk penalty of
+  the Investment Index (`RIESGO_INDEX`, via an AGEB↔risk overlay in EPSG:6372).
 
 ### 2.5 IMPLAN Saltillo — Riesgo por deslizamientos traslacionales (Atlas de Riesgos 2024)
 
-**Fuente primaria de riesgo geológico** (SPEC Capa 4).
+**Primary source of geological risk** (Layer 4).
 
-* **Fuente oficial:** IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024.
-* **Crédito de autoría (metadatos del shapefile):** **Instituto de Geografía de la UNAM**
-  (`idCredit: "IGg. UNAM"`). El shapefile de inundación no trae crédito.
-* **Sitio de descarga:** <https://implansaltillo.mx/perfil/>.
-* **Fecha de corte:** 2024 (etiqueta del portal).
-* **Fecha de descarga:** 2026-07-15.
-* **Ruta local:** `raw_data/Riesgo_por_Deslizamientos_traslacionales2/`.
-* **Formato:** shapefile, 12,679 registros, EPSG:6372.
-* **Campos:** `Titulo`, `Intensid_1`, `Detalle`, `Fenome`.
-* **Título interno del shapefile:** `R05030_RIESGO_PRM_DESLIZAMIENTOS_TRASLACIONALES_TR2_MZ`.
-* **Uso en el proyecto:** capa `data/riesgo_deslizamientos.geojson`.
+* **Official source:** IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024.
+* **Authorship credit (shapefile metadata):** **Instituto de Geografía de la UNAM**
+  (`idCredit: "IGg. UNAM"`). The flood shapefile carries no credit.
+* **Download site:** <https://implansaltillo.mx/perfil/>.
+* **Cutoff date:** 2024 (portal label).
+* **Download date:** 2026-07-15.
+* **Local path:** `raw_data/Riesgo_por_Deslizamientos_traslacionales2/`.
+* **Format:** shapefile, 12,679 records, EPSG:6372.
+* **Fields:** `Titulo`, `Intensid_1`, `Detalle`, `Fenome`.
+* **Shapefile internal title:** `R05030_RIESGO_PRM_DESLIZAMIENTOS_TRASLACIONALES_TR2_MZ`.
+* **Use in the project:** layer `data/riesgo_deslizamientos.geojson`.
 
-> **Sobre las fechas de las dos capas IMPLAN.** Los archivos declaran internamente
-> modificación 2025-02-27 y creación 2025-04-01/02, posteriores a la etiqueta "2024" del
-> portal. Se interpretan como fechas de exportación del archivo, no de la edición del
-> Atlas, por lo que **la fecha de corte publicada en la app sigue siendo 2024**, que es
-> como el editor nombra el producto (`IMPLAN_FECHA_CORTE` en `scripts/process_data.py`).
-> Vale confirmarlo con el IMPLAN si alguna vez importa la precisión al mes.
+> **On the dates of the two IMPLAN layers.** The files internally declare modification
+> 2025-02-27 and creation 2025-04-01/02, later than the portal's "2024" label. These are
+> interpreted as file-export dates, not the Atlas edition date, so **the cutoff date
+> published in the app remains 2024**, which is how the publisher names the product
+> (`IMPLAN_FECHA_CORTE` in `scripts/process_data.py`). Worth confirming with IMPLAN if
+> month-level precision ever matters.
 
 ### 2.6 IMPLAN Saltillo — Riesgo químico-tecnológico (Atlas de Riesgos 2024)
 
-**Fuente primaria de riesgo antropogénico**, muy relevante en el corredor industrial
-Saltillo–Ramos Arizpe (GM, Stellantis, GIS).
+**Primary source of anthropogenic risk**, highly relevant along the Saltillo–Ramos Arizpe
+industrial corridor (GM, Stellantis, GIS).
 
-* **Fuente oficial:** IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024.
-* **Sitio de descarga:** <https://implansaltillo.mx/perfil/>.
-* **Fecha de corte:** 2024 (etiqueta del portal).
-* **Fecha de descarga:** 2026-07-17.
-* **Ruta local:** `raw_data/Riesgo_Quimico_tecnologico/`.
-* **Formato:** shapefile de **polígonos** (no puntos), 12,679 registros, EPSG:6372 — la
-  misma malla que inundación y deslizamientos.
-* **Campos:** `Titulo` ("Riesgo Químico-Tecnológico"), `Intensid_1` (Muy Bajo→Alto; sin
+* **Official source:** IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024.
+* **Download site:** <https://implansaltillo.mx/perfil/>.
+* **Cutoff date:** 2024 (portal label).
+* **Download date:** 2026-07-17.
+* **Local path:** `raw_data/Riesgo_Quimico_tecnologico/`.
+* **Format:** **polygon** shapefile (not points), 12,679 records, EPSG:6372 — the same grid
+  as flood and landslides.
+* **Fields:** `Titulo` ("Riesgo Químico-Tecnológico"), `Intensid_1` (Muy Bajo→Alto; no
   "Muy alto"), `Detalle` ("Riesgo por almacenamiento de sustancias químicas peligrosas"),
   `Fenome` ("Químico-Tecnológico").
-* **Uso en el proyecto:** capa `data/riesgo_quimico.geojson`. **Solo informativa** (no
-  penaliza el Índice de Inversión; igual que deslizamientos, solo la inundación penaliza).
-* **Umbral propio (Medio+Alto).** A diferencia de las otras capas —que solo descartan "Muy
-  bajo"—, esta descarta también **"Bajo"**: ahí ese nivel cubre 9,644 de 12,679 celdas (el
-  93% de la malla), es el fondo del modelo sin valor discriminante y, conservándolo, la
-  capa pesaría **6.9 MB** (rebasa sola el límite de 5 MB de SPEC §2). Con Medio (1,937) +
-  Alto (212) queda en **1.28 MB / 2,136 zonas** mostrando solo la exposición genuina. El
-  umbral vive en `NIVELES_ELEVADOS_QUIMICO` (`scripts/process_data.py`), pasado a
-  `preparar_capa_riesgo(niveles=...)`.
+* **Use in the project:** layer `data/riesgo_quimico.geojson`. **Informational only** (it
+  does not penalize the Investment Index; like landslides, only flooding penalizes).
+* **Its own threshold (Medium+High).** Unlike the other layers — which only drop "Muy
+  bajo" — this one also drops **"Bajo"**: there that level covers 9,644 of 12,679 cells
+  (93% of the grid), it is the model's background with no discriminating value, and keeping
+  it would make the layer weigh **6.9 MB** (exceeding the project's 5 MB per-layer limit on
+  its own). With Medium (1,937) + High (212) it comes to **1.28 MB / 2,136 zones**, showing
+  only genuine exposure. The threshold lives in `NIVELES_ELEVADOS_QUIMICO`
+  (`scripts/process_data.py`), passed to `preparar_capa_riesgo(niveles=...)`.
 
-### 2.7 CONAGUA — ANRI, Severidad por inundación (Tr = 100 años) *(respaldo)*
+### 2.7 CONAGUA — ANRI, flood severity (Tr = 100 years) *(backup)*
 
-Se conserva como fuente alternativa; **IMPLAN es la primaria** por ser local, vectorial y
-más reciente. Este dataset es raster y de menor granularidad.
+Kept as an alternative source; **IMPLAN is the primary one** for being local, vectorial and
+more recent. This dataset is raster and of coarser granularity.
 
-* **Fuente oficial:** CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI), Región
-  Noreste. Capa "Severidad, periodo de retorno 100 años" (Saltillo, Coahuila).
-* **Servicio:** <https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer/142>
-  (ArcGIS REST, capa 142).
-* **Fecha de descarga / consulta:** 2026-07-15; re-descargado el 2026-07-16 y el raster
-  volvió byte-idéntico, así que la fuente no ha cambiado entre ambas fechas. El servicio
-  no publica fecha de corte. `fecha_descarga` en `riesgo_inundacion_meta.json` se
-  reescribe con la fecha del día cada vez que se corre el pipeline.
-* **Variable:** severidad (índice compuesto de tirante y velocidad); clases alta, media y baja.
-* **Ruta local:** `data/riesgo_inundacion.png` + `data/riesgo_inundacion_meta.json`
-  (PNG georreferenciado para usarse como `imageOverlay` en Leaflet).
-* **Generado por:** `descargar_raster_inundacion()` en `scripts/process_data.py`.
-* **Nota oficial:** aproximación por modelación hidráulica; no sustituye un estudio de sitio.
+* **Official source:** CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI), Northeast
+  Region. Layer "Severity, 100-year return period" (Saltillo, Coahuila).
+* **Service:** <https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer/142>
+  (ArcGIS REST, layer 142).
+* **Download / query date:** 2026-07-15; re-downloaded on 2026-07-16 and the raster came
+  back byte-identical, so the source has not changed between the two dates. The service
+  publishes no cutoff date. `fecha_descarga` in `riesgo_inundacion_meta.json` is rewritten
+  with the current date every time the pipeline runs.
+* **Variable:** severity (a composite index of depth and velocity); high, medium and low
+  classes.
+* **Local path:** `data/riesgo_inundacion.png` + `data/riesgo_inundacion_meta.json`
+  (a georeferenced PNG used as a Leaflet `imageOverlay`).
+* **Generated by:** `descargar_raster_inundacion()` in `scripts/process_data.py`.
+* **Official note:** an approximation from hydraulic modeling; it does not replace a site
+  study.
 
 ---
 
-## 3. Datasets descartados y fuentes evaluadas
+## 3. Discarded datasets and evaluated sources
 
-Se documentan para no volver a evaluarlos desde cero.
+Documented so they are not re-evaluated from scratch.
 
 ### 3.1 CENAPRED — Indicadores Municipales PEV
 
-* **Ruta local:** `raw_data/cenapred_indicadores_municipales/` (2,469 registros, todo México).
-* **Fecha de descarga:** 2026-07-08.
-* **Motivo del descarte:** **resolución municipal**. Sus campos de peligro
-  (`GP_INUNDAC`, `SUSCEPLAD`, `GP_SISMICO`…) dan un solo valor para todo el municipio de
-  Saltillo, inservible para distinguir riesgo entre colonias, que es justo el propósito de
-  la app. Sustituido por las capas vectoriales del IMPLAN.
+* **Local path:** `raw_data/cenapred_indicadores_municipales/` (2,469 records, all of Mexico).
+* **Download date:** 2026-07-08.
+* **Reason for discarding:** **municipal resolution**. Its hazard fields
+  (`GP_INUNDAC`, `SUSCEPLAD`, `GP_SISMICO`…) give a single value for the whole municipality
+  of Saltillo, useless for distinguishing risk between colonias, which is exactly the app's
+  purpose. Superseded by IMPLAN's vector layers.
 
 ### 3.2 IMPLAN — Susceptibilidad a inundaciones pluviales
 
-* **Ruta local:** `raw_data/SUSCEPTIBILIDAD_INUNDACIONES_PLUVIALES/`
+* **Local path:** `raw_data/SUSCEPTIBILIDAD_INUNDACIONES_PLUVIALES/`
   (`S05030_SUSCEPTIBILIDAD_INUNDACIONES_PLUVIALES`).
-* **Fecha de descarga:** 2026-07-15.
-* **Motivo del descarte:** mide **susceptibilidad** (predisposición del terreno), no
-  **riesgo** (que ya incorpora exposición y vulnerabilidad). La capa de riesgo del mismo
-  Atlas es la adecuada para el propósito de la app y las haría redundantes.
+* **Download date:** 2026-07-15.
+* **Reason for discarding:** it measures **susceptibility** (the terrain's predisposition),
+  not **risk** (which already incorporates exposure and vulnerability). The risk layer from
+  the same Atlas is the right one for the app's purpose and would make them redundant.
 
-### 3.2b IMPLAN — Riesgo por deslizamientos rotacionales (Atlas 2024) — descargado, no publicado
+### 3.2b IMPLAN — Riesgo por deslizamientos rotacionales (Atlas 2024) — downloaded, not published
 
-* **Ruta local:** `raw_data/Riesgo_por_Deslizamientos_rotacionales3/` (12,679 polígonos,
-  EPSG:6372). **Fecha de descarga:** 2026-07-17. Se conserva por si se reconsidera.
-* **Motivo de no publicarla:** **valor añadido marginal**. Es la capa hermana de la
-  traslacional que sí usamos (§2.5), pero su nivel de intensidad máximo es apenas "Medio"
-  (75 celdas de 12,679); el resto es "Bajo"/"Muy bajo" de fondo. Con el tratamiento estándar
-  pesaría 2.3 MB de mayoría "bajo", y quedarse solo con "Medio" son 75 celdas (~49 KB) de
-  señal muy débil. **No cambia una decisión de inversión**, que es la vara para incluir una
-  capa. Verificado a nivel de celda contra la traslacional (misma malla): de sus 3,882
-  celdas elevadas solo 76 se solapan con la traslacional, y sus 75 celdas "Medio" caen todas
-  donde la traslacional ve "Muy bajo" — o sea, aporta terreno distinto, pero de intensidad
-  baja. **No se fusiona con la traslacional**: son mecanismos de falla distintos (plano vs.
-  superficie cóncava) con escalas de intensidad no necesariamente comparables; mezclarlas
-  crearía una capa derivada sin fuente propia y rompería la trazabilidad de SPEC §1.2.
-* **Reactivación:** si en el futuro se busca completitud del riesgo geológico, se agrega como
-  **capa aparte** (nunca fusionada), preferentemente solo su nivel "Medio".
-
----
-
-### 3.3 Riesgo por incendios forestales (SPEC Capa 2) — evaluado y aplazado
-
-**No se descargó ningún dataset.** La capa se evaluó el 2026-07-16 y se decidió no
-implementarla mientras el alcance sea Saltillo urbano. No es un descarte definitivo:
-tiene criterio de reactivación.
-
-* **Fuentes contempladas:** CONABIO/CONAFOR, IMPLAN, CENAPRED.
-* **Motivos del aplazamiento:**
-  1. **El IMPLAN no publica una capa de incendio.** Su Atlas de Riesgos 2024 (CARTO
-     SALTILLO) mapea 7 capas —deslizamientos rotacionales y traslacionales, inundación
-     pluvial urbana, susceptibilidad a inundación, almacenamiento de sustancias químicas,
-     vulnerabilidad socio-organizativa y sanitario-ecológica— y ninguna es de incendio.
-     El instituto de planeación del municipio, al cartografiar los riesgos de su propio
-     territorio, no lo consideró relevante. Es la evidencia más fuerte en contra.
-  2. **No hay unidad de análisis donde está el peligro.** El AGEB (§2.1) es urbano y hoy
-     solo cubre Saltillo. El peligro de incendio está en la sierra y en Arteaga, donde no
-     hay AGEBs: la capa pintaría territorio sobre el que la app no analiza nada. Compárese
-     con las capas de riesgo actuales, que caen 100% dentro de la cobertura de AGEBs
-     (1095/1095 y 195/195 puntos representativos verificados).
-  3. **No discriminaría en el Índice de Inversión.** La penalización se calcula por
-     intersección de área con cada AGEB; si el peligro apenas roza la mancha urbana, el
-     resultado sería ≈0 para casi todos los sectores. Una variable que no distingue entre
-     zonas no aporta al scoring y sí cuesta archivo, UI y mantenimiento.
-  4. **La única fuente a mano es municipal.** El campo `GP_IF` de CENAPRED (§3.1) da un
-     valor único para todo Saltillo: la misma falta de granularidad que ya descartó ese
-     dataset.
-* **Criterio de reactivación:** implementar cuando existan los AGEBs de **Arteaga**
-  (`SPEC.md §1.1`). Ahí el riesgo es real —interfaz urbano-forestal en Los Lirios, San
-  Antonio de las Alazanas y la Sierra de Zapalinamé— y habría sectores que analizar. En
-  ese momento hay que volver a buscar fuente (CONAFOR/CONABIO, o el atlas de riesgos de
-  Arteaga si existe), ya que el del IMPLAN de Saltillo no cubre ese municipio.
-
-### 3.4 Inseguridad / incidencia delictiva — investigada y aplazada
-
-Idea del usuario: muy relevante para una decisión inmobiliaria (pesa más que un 2º tipo de
-deslizamiento). Se investigó a fondo el **2026-07-17** y se aplazó por **falta de dato con
-granularidad útil**. No es descarte definitivo: tiene criterio de reactivación.
-
-* **No se descargó ningún dataset.** El problema es de disponibilidad, no de esfuerzo.
-* **Fuentes revisadas y su granularidad:**
-  * **SESNSP** (nacional, oficial) — solo **estatal y municipal**; nada por debajo de
-    municipio fuera de CDMX. Un valor único para todo Saltillo.
-  * **Fiscalía General de Coahuila / Comisaría de Seguridad de Saltillo** — no publican
-    dataset de incidencia por colonia. La Comisaría solo ofrece apps de **reporte
-    ciudadano** (Saltillo Seguro, bot de WhatsApp) y encuestas de **percepción**.
-  * **Observatorios** (ONC `delitosmexico`, Semáforo Delictivo Coahuila, RID del Consejo
-    Cívico) — todos municipales.
-  * **`mapa.ocl.org.mx`** — es el Observatorio Ciudadano de **León, Guanajuato** (dato por
-    colonia con descarga .xlsx), **no** Coahuila. Prueba que el modelo por colonia existe
-    en otras ciudades, pero no cubre Saltillo.
-  * **HoyoDeCrimen** — georreferenciado por colonia pero **exclusivo de CDMX**.
-  * **El Crimen (`elcri.men`), `lapanquecita/incidencia-delictiva` (GitHub)** — la mejor
-    herramienta comunitaria; se alimenta del SESNSP, o sea **municipal**.
-* **Motivo del aplazamiento:** misma **trampa de granularidad** que descartó a CENAPRED
-  (§3.1). Un valor municipal único no discrimina entre colonias → peso muerto en el índice.
-  La razón es estructural: el SESNSP no publica sub-municipal fuera de CDMX, por eso ningún
-  proyecto comunitario lo ha resuelto para Saltillo.
-* **Consideración ética (para cuando se reactive):** los datos de delito están sesgados por
-  tasa de denuncia y un choropleth de "colonias peligrosas" en una app de scoring
-  inmobiliario afecta el valor de propiedades de gente real y puede volverse profecía
-  autocumplida. Si se implementa, debe ser con fuente oficial verificada, el sesgo
-  declarado en la ficha, y decidiendo explícitamente si entra al índice o queda informativa.
-* **Criterio de reactivación:** la única vía viable es la **macrozona del IMPLAN** — 12
-  polígonos que agrupan AGEBs (definidos desde ~2017); la Comisaría analiza la inseguridad
-  por macrozona ("Oriente" es la más insegura). Integraría limpio (misma fuente IMPLAN,
-  base AGEB), pero **hoy no es dato abierto**: requeriría una gestión institucional ante el
-  IMPLAN o la Comisaría (solicitud de transparencia / informe municipal con cifras por
-  macrozona), no búsqueda web.
+* **Local path:** `raw_data/Riesgo_por_Deslizamientos_rotacionales3/` (12,679 polygons,
+  EPSG:6372). **Download date:** 2026-07-17. Kept in case it is reconsidered.
+* **Reason for not publishing it:** **marginal added value**. It is the sibling layer of
+  the translational one we do use (§2.5), but its maximum intensity level is barely "Medium"
+  (75 of 12,679 cells); the rest is background "Low"/"Very low". With the standard treatment
+  it would weigh 2.3 MB of mostly "low", and keeping only "Medium" is 75 cells (~49 KB) of
+  very weak signal. **It does not change an investment decision**, which is the bar for
+  including a layer. Verified at the cell level against the translational layer (same grid):
+  of its 3,882 elevated cells only 76 overlap the translational one, and its 75 "Medium"
+  cells all fall where the translational layer sees "Very low" — i.e. it contributes
+  different terrain, but of low intensity. **It is not merged with the translational one:**
+  they are distinct failure mechanisms (planar vs. concave surface) with intensity scales
+  that are not necessarily comparable; mixing them would create a derived layer with no
+  source of its own and would break traceability.
+* **Reactivation:** if geological-risk completeness is ever sought, add it as a **separate
+  layer** (never merged), preferably only its "Medium" level.
 
 ---
 
-## 4. Trazabilidad de las capas publicadas
+### 3.3 Riesgo por incendios forestales (forest-fire risk, Layer 2) — evaluated and deferred
 
-De cada archivo servido al navegador, su origen:
+**No dataset was downloaded.** The layer was evaluated on 2026-07-16 and it was decided not
+to implement it while the scope is urban Saltillo. This is not a final discard: it has a
+reactivation criterion.
 
-| Capa en `data/` | Tamaño | Derivada de |
+* **Sources considered:** CONABIO/CONAFOR, IMPLAN, CENAPRED.
+* **Reasons for deferring:**
+  1. **IMPLAN publishes no fire layer.** Its Atlas de Riesgos 2024 (CARTO SALTILLO) maps 7
+     layers — rotational and translational landslides, urban pluvial flooding, flood
+     susceptibility, hazardous-chemical storage, socio-organizational and
+     sanitary-ecological vulnerability — and none is about fire. The municipality's
+     planning institute, mapping the risks of its own territory, did not consider it
+     relevant. This is the strongest evidence against.
+  2. **There is no analysis unit where the hazard is.** The AGEB (§2.1) is urban and today
+     only covers Saltillo. Fire hazard is in the sierra and in Arteaga, where there are no
+     AGEBs: the layer would paint territory the app analyzes nothing about. Compare with the
+     current risk layers, which fall 100% inside AGEB coverage (1095/1095 and 195/195
+     verified representative points).
+  3. **It would not discriminate in the Investment Index.** The penalty is computed by area
+     intersection with each AGEB; if the hazard barely grazes the urban footprint, the
+     result would be ≈0 for almost every sector. A variable that does not distinguish
+     between zones adds nothing to the scoring and does cost file size, UI and maintenance.
+  4. **The only source at hand is municipal.** CENAPRED's `GP_IF` field (§3.1) gives a
+     single value for all of Saltillo: the same lack of granularity that already discarded
+     that dataset.
+* **Reactivation criterion:** implement it once the AGEBs of **Arteaga** exist within the
+  project scope. There the risk is real — the wildland-urban interface at Los Lirios, San
+  Antonio de las Alazanas and the Sierra de Zapalinamé — and there would be sectors to
+  analyze. At that point a source must be sought again (CONAFOR/CONABIO, or Arteaga's risk
+  atlas if one exists), since Saltillo's IMPLAN atlas does not cover that municipality.
+
+### 3.4 Insecurity / crime incidence — investigated and deferred
+
+User's idea: highly relevant to a real-estate decision (it weighs more than a 2nd type of
+landslide). It was investigated thoroughly on **2026-07-17** and deferred for **lack of data
+at a useful granularity**. This is not a final discard: it has a reactivation criterion.
+
+* **No dataset was downloaded.** The problem is availability, not effort.
+* **Sources reviewed and their granularity:**
+  * **SESNSP** (national, official) — only **state and municipal**; nothing below the
+    municipality outside Mexico City. A single value for all of Saltillo.
+  * **Fiscalía General de Coahuila / Comisaría de Seguridad de Saltillo** — publish no
+    incidence dataset per colonia. The Comisaría only offers **citizen-report** apps
+    (Saltillo Seguro, a WhatsApp bot) and **perception** surveys.
+  * **Observatories** (ONC `delitosmexico`, Semáforo Delictivo Coahuila, the Consejo
+    Cívico's RID) — all municipal.
+  * **`mapa.ocl.org.mx`** — this is the Citizen Observatory of **León, Guanajuato**
+    (per-colonia data with .xlsx download), **not** Coahuila. It proves the per-colonia
+    model exists in other cities, but it does not cover Saltillo.
+  * **HoyoDeCrimen** — georeferenced per colonia but **exclusive to Mexico City**.
+  * **El Crimen (`elcri.men`), `lapanquecita/incidencia-delictiva` (GitHub)** — the best
+    community tool; it is fed by SESNSP, i.e. **municipal**.
+* **Reason for deferring:** the same **granularity trap** that discarded CENAPRED (§3.1). A
+  single municipal value does not discriminate between colonias → dead weight in the index.
+  The cause is structural: SESNSP does not publish sub-municipal data outside Mexico City,
+  which is why no community project has solved it for Saltillo.
+* **Ethical consideration (for when it is reactivated):** crime data is biased by reporting
+  rate, and a "dangerous colonias" choropleth in a real-estate scoring app affects the
+  value of real people's property and can become a self-fulfilling prophecy. If implemented,
+  it must use a verified official source, declare the bias in the detail card, and decide
+  explicitly whether it enters the index or stays informational.
+* **Reactivation criterion:** the only viable path is IMPLAN's **macrozone** — 12 polygons
+  grouping AGEBs (defined since ~2017); the Comisaría analyzes insecurity by macrozone
+  ("Oriente" is the least safe). It would integrate cleanly (same IMPLAN source, AGEB base),
+  but **it is not open data today**: it would require an institutional request to IMPLAN or
+  the Comisaría (a transparency request / municipal report with per-macrozone figures), not
+  a web search.
+
+---
+
+## 4. Traceability of the published layers
+
+For each file served to the browser, its origin:
+
+| Layer in `data/` | Size | Derived from |
 |---|---|---|
-| `servicios_basicos.geojson` | ~627 KB | AGEB (§2.1) + Censo 2020 (§2.2) |
-| `indice_inversion.geojson` | ~649 KB | §2.1 + §2.2 + DENUE (§2.3) + riesgo de inundación (§2.4) |
-| `riesgo_inundacion.geojson` | ~1.0 MB | IMPLAN inundación (§2.4) |
-| `riesgo_deslizamientos.geojson` | ~164 KB | IMPLAN deslizamientos (§2.5) |
-| `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN químico-tecnológico (§2.6) |
+| `servicios_basicos.geojson` | ~627 KB | AGEB (§2.1) + Census 2020 (§2.2) |
+| `indice_inversion.geojson` | ~649 KB | §2.1 + §2.2 + DENUE (§2.3) + flood risk (§2.4) |
+| `riesgo_inundacion.geojson` | ~1.0 MB | IMPLAN flooding (§2.4) |
+| `riesgo_deslizamientos.geojson` | ~164 KB | IMPLAN landslides (§2.5) |
+| `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN chemical-technological (§2.6) |
 | `riesgo_inundacion.png` + `_meta.json` | ~174 KB | CONAGUA ANRI (§2.7) |
 
-Las capas de riesgo llevan la procedencia embebida en los campos `FUENTE` y `FECHA` de
-cada feature, y la app la muestra en la ficha de detalle al hacer clic (SPEC §1.2).
+The risk layers carry provenance embedded in each feature's `FUENTE` and `FECHA` fields,
+and the app shows it in the detail card on click, satisfying the project's traceability
+requirement.
 
-**Ojo con la ficha de riesgo: combina dos fuentes.** El fenómeno y el nivel de intensidad
-vienen del IMPLAN (§2.4, §2.5 y §2.6), pero el nombre de colonia y el municipio vienen de los
-AGEB de INEGI (§2.1), ubicando el punto clicado por point-in-polygon. Las capas del
-IMPLAN no traen nombre de zona: son un modelo de intensidad y se disuelven por nivel. La
-colonia es, por tanto, una referencia de ubicación aproximada —el AGEB que contiene el
-punto—, no una unidad de análisis del IMPLAN: el riesgo se modela por zona, no por
-colonia, y una colonia puede contener varios niveles de intensidad.
+**Note on the risk card: it combines two sources.** The phenomenon and the intensity level
+come from IMPLAN (§2.4, §2.5 and §2.6), but the colonia name and the municipality come from
+INEGI's AGEBs (§2.1), locating the clicked point by point-in-polygon. The IMPLAN layers
+carry no zone name: they are an intensity model and are dissolved by level. The colonia is
+therefore an approximate location reference — the AGEB containing the point — not an IMPLAN
+analysis unit: risk is modeled by zone, not by colonia, and a colonia can contain several
+intensity levels.
 
-Las capas de riesgo **descartan el nivel "Muy bajo"**, que cubre el ~90-98% del área y
-solo agrandaría el archivo sin aportar señal. **La capa química descarta además "Bajo"**
-(ver §2.6: ahí ese nivel es el 93% de la malla y sin recortarlo la capa rebasaría sola el
-límite de 5 MB). Se disuelven por nivel de intensidad —esa es la geometría que alimenta la
-penalización del Índice de Inversión— y al exportarlas se separan en sus zonas individuales
-(1,358 en inundación, 197 en deslizamientos, 2,136 en la química) para que el mapa pueda
-resaltar una zona a la vez en vez de todo un nivel. La geometría es idéntica en ambos
-casos; separar solo repite las propiedades en cada feature.
+The risk layers **drop the "Muy bajo" level**, which covers ~90-98% of the area and would
+only bloat the file without adding signal. **The chemical layer additionally drops "Bajo"**
+(see §2.6: there that level is 93% of the grid and, without trimming it, the layer would
+exceed the 5 MB limit on its own). They are dissolved by intensity level — that is the
+geometry feeding the Investment Index penalty — and on export are split back into their
+individual zones (1,358 in flooding, 197 in landslides, 2,136 in the chemical one) so the
+map can highlight one zone at a time instead of an entire level. The geometry is identical
+either way; splitting only repeats the properties on each feature.
 
 ---
 
-## 5. Pendientes
+## 5. Pending
 
-* **~~Ramos Arizpe y Arteaga~~ — HECHO (2026-07-17).** Integrados: 431 AGEBs en 3
-  municipios (ver §2.1). El Censo y el DENUE ya cubrían todo Coahuila, así que los índices
-  de servicios e inversión se calcularon solos para los nuevos municipios (Ramos Arizpe
-  INVERSION_INDEX media 76.6, Arteaga 71.9; su RIESGO_INDEX es 0 porque no hay capa de
-  riesgo IMPLAN fuera de Saltillo). Verificado en navegador.
-* **Cobertura de las capas de riesgo:** las capas del IMPLAN son municipales (**solo
-  Saltillo**). Ramos Arizpe y Arteaga tienen AGEBs pero **no** datos de riesgo, y eso ya lo
-  comunica el **panel sensible a la zona visible** (deshabilita+explica esas capas al
-  navegar allá; ver `task.md`). Pendiente aún: verificar si el IMPLAN publica atlas de esos
-  municipios o si hace falta otra fuente. **San Antonio de las Alazanas** (sierra, ya con
-  AGEBs) es el disparador para retomar el **riesgo forestal** (§3.3).
-* **Riesgo forestal (SPEC Capa 2):** sin fuente evaluada todavía. Antes de implementarla
-  hay que verificar que existan datos granulares para Arteaga / la Sierra.
-* **Confirmar con el IMPLAN** la fecha exacta de edición de las capas de riesgo si llega a
-  importar la precisión al mes (ver nota en §2.5).
+* **~~Ramos Arizpe and Arteaga~~ — DONE (2026-07-17).** Integrated: 431 AGEBs across 3
+  municipalities (see §2.1). The Census and DENUE already covered all of Coahuila, so the
+  services and investment indices computed themselves for the new municipalities (Ramos
+  Arizpe mean INVERSION_INDEX 76.6, Arteaga 71.9; their RIESGO_INDEX is 0 because there is
+  no IMPLAN risk layer outside Saltillo). Verified in the browser.
+* **Coverage of the risk layers:** the IMPLAN layers are municipal (**Saltillo only**).
+  Ramos Arizpe and Arteaga have AGEBs but **no** risk data, and the **visible-area-aware
+  layer panel** already communicates this (it disables + explains those layers when
+  navigating there). Still pending: check whether IMPLAN publishes atlases for those
+  municipalities or whether another source is needed. **San Antonio de las Alazanas**
+  (sierra, already with AGEBs) is the trigger for revisiting **forest-fire risk** (§3.3).
+* **Forest-fire risk (Layer 2):** no source evaluated yet. Before implementing it, granular
+  data for Arteaga / the sierra must be confirmed to exist.
+* **Confirm with IMPLAN** the exact edition date of the risk layers if month-level precision
+  ever matters (see the note in §2.5).
