@@ -249,7 +249,7 @@ body {
     color: var(--tz-text-3);
 }
 
-/* Source/date in the sidebar detail card (traceability, §1.2) */
+/* Source/date in the sidebar detail card (traceability) */
 .detail-source {
     margin-top: 14px;
     padding-top: 10px;

@@ -408,7 +408,7 @@
         }
 
         // Detail card when clicking a risk zone: colonia (if the point falls
-        // in an AGEB), intensity + source and cutoff date (SPEC §1.2).
+        // in an AGEB), intensity + source and cutoff date (for traceability).
         function mostrarDetalleRiesgo(props, latlng) {
             const ageb = buscarAgebEnPunto(latlng);
             document.getElementById('sector-title').textContent = ageb ? ageb.colonia : props.TITULO;
