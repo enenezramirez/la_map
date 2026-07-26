@@ -858,7 +858,7 @@
                 <ul class="sector-list">
                     ${sectores.map((s, i) => `
                         <li>
-                            <button type="button" class="sector-btn" data-cvegeo="${esc(s.props.CVEGEO)}">
+                            <button type="button" class="sector-btn">
                                 <span class="sector-btn-name">Sector ${i + 1}</span>
                                 <span class="sector-btn-meta">${formatoEntero(s.props.POBTOT)} hab · servicios ${formatoIndice(s.props.SERVICIOS_INDEX)}</span>
                             </button>
@@ -866,12 +866,13 @@
                     `).join('')}
                 </ul>
             `;
-            document.getElementById('sector-info').querySelectorAll('.sector-btn').forEach(btn => {
+            // Paired by position, not by a key round-tripped through the DOM:
+            // a lookup that misses would quietly show another sector's figures,
+            // and a plausible wrong number is the worst failure this app has.
+            document.getElementById('sector-info').querySelectorAll('.sector-btn').forEach((btn, i) => {
                 btn.addEventListener('click', () => {
-                    const s = sectores.find(x => String(x.props.CVEGEO) === btn.dataset.cvegeo);
-                    if (!s) return;
-                    resaltarGeometrias([s.geometria]);
-                    mostrarDetalleSector(s.props);
+                    resaltarGeometrias([sectores[i].geometria]);
+                    mostrarDetalleSector(sectores[i].props);
                 });
             });
             detailsSidebar.classList.remove('sidebar-collapsed');
@@ -929,6 +930,10 @@
             if (e.key === 'ArrowDown') { e.preventDefault(); moverSugerencia(1); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); moverSugerencia(-1); }
             else if (e.key === 'Enter') {
+                // Only commits while the list is open. Enter used to fall back
+                // to the first suggestion even after Escape had dismissed it,
+                // so a keyboard user's cancel was not honoured.
+                if (buscadorSugerencias.hidden) return;
                 e.preventDefault();
                 const idx = sugerenciaActiva >= 0 ? sugerenciaActiva : 0;
                 if (coloniasFiltradas[idx]) seleccionarColonia(coloniasFiltradas[idx]);
