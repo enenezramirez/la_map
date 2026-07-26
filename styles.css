@@ -249,6 +249,66 @@ body {
     color: var(--tz-text-3);
 }
 
+/* Legend help. Sits at the end of every legend, layer after layer, so help is
+   found the same way everywhere (WCAG 2.2 SC 3.2.6 Consistent Help).
+   A native <details> is used on purpose: it is keyboard-operable and announced
+   as expandable without a line of ARIA. */
+.legend-help {
+    margin-top: 10px;
+    border-top: 1px solid var(--tz-border);
+    padding-top: 8px;
+}
+
+.legend-help summary {
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 2px 0;
+    cursor: pointer;
+    font-family: var(--tz-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    color: var(--tz-accent);
+    list-style-position: inside;
+}
+
+.legend-help summary:hover {
+    color: var(--tz-text);
+}
+
+.legend-help summary:focus-visible {
+    outline: 2px solid var(--tz-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.legend-help-body {
+    padding-top: 8px;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--tz-text-2);
+}
+
+.legend-help-body p + p {
+    margin-top: 8px;
+}
+
+.legend-help-body strong {
+    color: var(--tz-text);
+    font-weight: 500;
+}
+
+.help-levels {
+    list-style: none;
+    margin: 6px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-family: var(--tz-mono);
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Source/date in the sidebar detail card (traceability) */
 .detail-source {
     margin-top: 14px;
