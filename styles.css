@@ -18,10 +18,20 @@
     --tz-surface: #131519;
     --tz-border: #24272d;
     --tz-border-strong: #2b2f36;
+    /* Boundaries of interactive controls (switch track, search field, legend
+       swatches): 3.01:1 against the panel, the minimum for non-text contrast
+       (WCAG 2.2 SC 1.4.11, AA). --tz-border above stays for decorative rules
+       and separators, which the criterion exempts. */
+    --tz-border-ui: #5a6371;
 
     --tz-text: #f2efe9;
     --tz-text-2: #8a8f98;
-    --tz-text-3: #6f747c;
+    /* 4.78:1 on --tz-surface and 5.12:1 on --tz-bg, clearing the 4.5:1 minimum
+       for body text (WCAG 2.2 SC 1.4.3, AA). The previous #6f747c sat at
+       3.89:1 and carried most of the quiet text in the app: section headings,
+       layer descriptions, legend provenance, the source credits in the footer
+       and the search placeholder. */
+    --tz-text-3: #7d838b;
 
     --tz-accent: #c8912f;
     --tz-danger: #d97757;
@@ -156,6 +166,10 @@ body {
     height: 20px;
     background-color: var(--tz-border-strong);
     border-radius: 20px;
+    /* The off-state fill alone is 1.36:1 against the panel, so the control was
+       imperceptible when off. The inset ring restores the boundary at 3:1
+       without touching the geometry the knob translation depends on. */
+    box-shadow: inset 0 0 0 1px var(--tz-border-ui);
     transition: background-color 0.3s;
     margin-right: 12px;
     flex-shrink: 0;
@@ -178,6 +192,9 @@ body {
    with it. */
 .switch-container input:checked + .slider {
     background-color: var(--tz-accent);
+    /* On, the amber fill carries 6.57:1 on its own; the ring would only muddy
+       the accent. */
+    box-shadow: none;
 }
 
 .switch-container input:checked + .slider:before {
@@ -227,10 +244,17 @@ body {
     padding: 3px 0;
 }
 
+/* The swatch carries a border rather than an adjusted fill: its color IS the
+   map's color, so changing it to clear 3:1 would misreport the data. WCAG
+   exempts a graphic whose particular presentation is essential; the border
+   makes the boundary perceivable without touching what the swatch claims.
+   Without it the dark end of both ramps (#1d3a3c, #4a3a24), "Muy alto" risk
+   and the no-data gray sat at 1.5-2.2:1 and read as empty space. */
 .legend-swatch {
     display: inline-block;
     width: 14px;
     height: 14px;
+    border: 1px solid var(--tz-border-ui);
     border-radius: 4px;
     flex-shrink: 0;
 }
@@ -442,7 +466,7 @@ body {
 #colonia-search {
     width: 100%;
     background: var(--tz-bg);
-    border: 1px solid var(--tz-border-strong);
+    border: 1px solid var(--tz-border-ui);
     border-radius: 8px;
     padding: 10px 32px 10px 12px;
     color: var(--tz-text);
@@ -491,7 +515,9 @@ body {
     z-index: 1100;
     list-style: none;
     background: var(--tz-surface);
-    border: 1px solid var(--tz-border-strong);
+    /* Same surface as the panel it floats over, so the boundary is the only
+       thing telling the list apart. */
+    border: 1px solid var(--tz-border-ui);
     border-radius: 8px;
     max-height: 260px;
     overflow-y: auto;
@@ -512,9 +538,19 @@ body {
     border-bottom: none;
 }
 
+/* Hover and keyboard selection darken the row instead of lightening it: the
+   old lighter fill (--tz-border) dropped the municipality label to 3.18:1,
+   below the 4.5:1 minimum. Darkening lifts it to 5.12:1 instead.
+   The keyboard-selected row additionally carries the amber marker — the
+   identity's signal for "active state" — so selection is not conveyed by
+   background color alone. */
 .search-suggestion:hover,
 .search-suggestion.active {
-    background: var(--tz-border);
+    background: var(--tz-bg);
+}
+
+.search-suggestion.active {
+    box-shadow: inset 3px 0 0 var(--tz-accent);
 }
 
 .suggestion-name {
