@@ -42,11 +42,21 @@
         </header>
 
         <section class="panel-section" id="search-section">
-            <h2>Buscar Colonia</h2>
+            <h2 id="search-heading">Buscar Colonia</h2>
             <div class="search-box">
-                <input type="text" id="colonia-search" placeholder="Buscar colonia por nombre…" autocomplete="off" disabled>
+                <!-- Combobox per the ARIA authoring practices: the placeholder
+                     disappears as soon as the user types, so it cannot be the
+                     accessible name; the heading above provides it. -->
+                <input type="text" id="colonia-search" placeholder="Buscar colonia por nombre…" autocomplete="off"
+                       role="combobox" aria-labelledby="search-heading" aria-controls="colonia-suggestions"
+                       aria-autocomplete="list" aria-expanded="false" disabled>
                 <button type="button" id="colonia-search-clear" class="search-clear" aria-label="Limpiar búsqueda" hidden>&times;</button>
-                <ul id="colonia-suggestions" class="search-suggestions" role="listbox" hidden></ul>
+                <!-- tabindex="-1" keeps the list out of the tab sequence: the
+                     browser makes any scrollable box focusable, and landing on
+                     it was a dead stop because the arrow keys are handled on
+                     the input. Selection is exposed via aria-activedescendant. -->
+                <ul id="colonia-suggestions" class="search-suggestions" role="listbox"
+                    aria-labelledby="search-heading" tabindex="-1" hidden></ul>
             </div>
         </section>
 
@@ -116,7 +126,7 @@
 
     <!-- Detail info panel (right sidebar) -->
     <div id="details-sidebar" class="sidebar-collapsed">
-        <button id="close-sidebar" class="close-btn">&times;</button>
+        <button id="close-sidebar" class="close-btn" aria-label="Cerrar panel de detalles">&times;</button>
         <div class="sidebar-content">
             <h2 id="sector-title">Detalles del Sector</h2>
             <div id="sector-info">
@@ -532,18 +542,32 @@
             const control = checkbox.closest('.layer-control');
             const statusEl = document.createElement('p');
             statusEl.className = 'layer-status';
+            statusEl.id = `layer-status-${checkbox.id}`;
             statusEl.textContent = 'Sin datos en la zona visible del mapa.';
             control.appendChild(statusEl);
-            capasEnVista.push({ checkbox, control, capa });
+            // The native disabled attribute would take the switch out of the tab
+            // order entirely, which contradicts the rule this feature was built
+            // on — disable and explain, never hide. aria-disabled keeps it
+            // reachable and announced; this guard is what actually stops the
+            // toggle, for pointer and for the space bar alike.
+            checkbox.closest('.switch-container').addEventListener('click', e => {
+                if (checkbox.getAttribute('aria-disabled') === 'true') e.preventDefault();
+            });
+            capasEnVista.push({ checkbox, control, capa, statusEl });
             actualizarDisponibilidadCapas();
         }
 
         function actualizarDisponibilidadCapas() {
             const vista = map.getBounds();
-            for (const { checkbox, control, capa } of capasEnVista) {
+            for (const { checkbox, control, capa, statusEl } of capasEnVista) {
                 const bounds = capa.getBounds();
                 const hayDatos = bounds.isValid() && vista.intersects(bounds);
-                checkbox.disabled = !hayDatos;
+                checkbox.setAttribute('aria-disabled', hayDatos ? 'false' : 'true');
+                // Only point at the note while it is actually shown: a hidden
+                // description is still read by most screen readers, and it would
+                // claim "no data here" over the whole city.
+                if (hayDatos) checkbox.removeAttribute('aria-describedby');
+                else checkbox.setAttribute('aria-describedby', statusEl.id);
                 control.classList.toggle('sin-datos-vista', !hayDatos);
             }
         }
@@ -729,10 +753,13 @@
                 const clave = `${colonia}|${municipio}`;
                 let g = grupos.get(clave);
                 if (!g) {
-                    g = { colonia, municipio, geometrias: [], bbox: [Infinity, Infinity, -Infinity, -Infinity] };
+                    g = { colonia, municipio, sectores: [], bbox: [Infinity, Infinity, -Infinity, -Infinity] };
                     grupos.set(clave, g);
                 }
-                g.geometrias.push(f.geometry);
+                // Keep each AGEB's own geometry and properties: a colonia can
+                // span several of them (27% do, up to 15 in ZONA CENTRO), and
+                // the detail card reports one AGEB, never a fabricated average.
+                g.sectores.push({ geometria: f.geometry, props: f.properties });
                 const [minLng, minLat, maxLng, maxLat] = calcularBbox(f.geometry);
                 if (minLng < g.bbox[0]) g.bbox[0] = minLng;
                 if (minLat < g.bbox[1]) g.bbox[1] = minLat;
@@ -766,29 +793,44 @@
             return encontrados.slice(0, 8).map(r => r.g);
         }
 
+        // Opening and closing the list is a state of the combobox, not just a
+        // visual effect, so it is announced through aria-expanded.
+        function cerrarSugerencias() {
+            buscadorSugerencias.hidden = true;
+            buscadorInput.setAttribute('aria-expanded', 'false');
+            buscadorInput.removeAttribute('aria-activedescendant');
+            sugerenciaActiva = -1;
+        }
+
         function renderSugerencias(lista) {
             coloniasFiltradas = lista;
             sugerenciaActiva = -1;
+            buscadorInput.removeAttribute('aria-activedescendant');
             if (lista.length === 0) {
-                buscadorSugerencias.hidden = true;
                 buscadorSugerencias.innerHTML = '';
+                cerrarSugerencias();
                 return;
             }
+            // Each option needs an id so aria-activedescendant can point at it:
+            // that is what tells a screen reader which suggestion the arrow keys
+            // landed on, since focus itself never leaves the input.
             buscadorSugerencias.innerHTML = lista.map((g, i) => `
-                <li class="search-suggestion" role="option" data-i="${i}">
+                <li class="search-suggestion" role="option" id="colonia-opcion-${i}"
+                    aria-selected="false" data-i="${i}">
                     <span class="suggestion-name">${esc(g.colonia)}</span>
                     <span class="suggestion-mun">${esc(g.municipio)}</span>
                 </li>
             `).join('');
             buscadorSugerencias.hidden = false;
+            buscadorInput.setAttribute('aria-expanded', 'true');
         }
 
-        function resaltarColonia(g) {
+        function resaltarGeometrias(geometrias) {
             if (capaColoniaResaltada) {
                 map.removeLayer(capaColoniaResaltada);
                 capaColoniaResaltada = null;
             }
-            const features = g.geometrias.map(geom => ({ type: 'Feature', geometry: geom, properties: {} }));
+            const features = geometrias.map(geom => ({ type: 'Feature', geometry: geom, properties: {} }));
             // Amber outline = the identity's "active/selection" color; no fill so
             // the choropleth underneath stays readable, and non-interactive so it
             // doesn't intercept clicks meant for the layers below.
@@ -799,23 +841,64 @@
             capaColoniaResaltada.bringToFront();
         }
 
+        // A colonia can cover several AGEBs, and an AGEB is the unit every
+        // figure in this app is measured on. Rather than average them into a
+        // number no source backs, the card lists the sectors and lets one be
+        // chosen. 212 of the 290 searchable colonias are a single AGEB, so most
+        // searches go straight to the data.
+        function mostrarSectoresDeColonia(g) {
+            const sectores = g.sectores.slice()
+                .sort((a, b) => String(a.props.CVEGEO).localeCompare(String(b.props.CVEGEO)));
+            document.getElementById('sector-title').textContent = g.colonia;
+            document.getElementById('sector-info').innerHTML = `
+                <p class="detail-row"><span>Municipio</span><strong>${esc(g.municipio)}</strong></p>
+                <p class="detail-row"><span>Sectores (AGEB)</span><strong>${sectores.length}</strong></p>
+                <h3>Elige un sector</h3>
+                <p class="sector-hint">Los datos del Censo se publican por sector, no por colonia.</p>
+                <ul class="sector-list">
+                    ${sectores.map((s, i) => `
+                        <li>
+                            <button type="button" class="sector-btn" data-cvegeo="${esc(s.props.CVEGEO)}">
+                                <span class="sector-btn-name">Sector ${i + 1}</span>
+                                <span class="sector-btn-meta">${formatoEntero(s.props.POBTOT)} hab · servicios ${formatoIndice(s.props.SERVICIOS_INDEX)}</span>
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+            document.getElementById('sector-info').querySelectorAll('.sector-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const s = sectores.find(x => String(x.props.CVEGEO) === btn.dataset.cvegeo);
+                    if (!s) return;
+                    resaltarGeometrias([s.geometria]);
+                    mostrarDetalleSector(s.props);
+                });
+            });
+            detailsSidebar.classList.remove('sidebar-collapsed');
+        }
+
         function seleccionarColonia(g) {
             if (!g) return;
             const bounds = L.latLngBounds([[g.bbox[1], g.bbox[0]], [g.bbox[3], g.bbox[2]]]);
             // maxZoom keeps a tiny colonia from snapping to street level.
             map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
-            resaltarColonia(g);
+            resaltarGeometrias(g.sectores.map(s => s.geometria));
             buscadorInput.value = g.colonia;
-            buscadorSugerencias.hidden = true;
+            cerrarSugerencias();
             buscadorLimpiar.hidden = false;
+            // Opening the card is what gives a keyboard user a route to the
+            // data at all: the layers are drawn on a canvas, so the polygons
+            // have no DOM node to focus and the map's figures were reachable
+            // by mouse only.
+            if (g.sectores.length === 1) mostrarDetalleSector(g.sectores[0].props);
+            else mostrarSectoresDeColonia(g);
         }
 
         function limpiarBusqueda() {
             buscadorInput.value = '';
-            buscadorSugerencias.hidden = true;
             buscadorLimpiar.hidden = true;
             coloniasFiltradas = [];
-            sugerenciaActiva = -1;
+            cerrarSugerencias();
             if (capaColoniaResaltada) {
                 map.removeLayer(capaColoniaResaltada);
                 capaColoniaResaltada = null;
@@ -826,7 +909,14 @@
             const items = buscadorSugerencias.querySelectorAll('.search-suggestion');
             if (!items.length) return;
             sugerenciaActiva = (sugerenciaActiva + delta + items.length) % items.length;
-            items.forEach((el, i) => el.classList.toggle('active', i === sugerenciaActiva));
+            items.forEach((el, i) => {
+                const activo = i === sugerenciaActiva;
+                el.classList.toggle('active', activo);
+                // The class is only paint; aria-selected and the pointer below
+                // are what a screen reader actually reads.
+                el.setAttribute('aria-selected', activo ? 'true' : 'false');
+            });
+            buscadorInput.setAttribute('aria-activedescendant', items[sugerenciaActiva].id);
             items[sugerenciaActiva].scrollIntoView({ block: 'nearest' });
         }
 
@@ -843,9 +933,16 @@
                 const idx = sugerenciaActiva >= 0 ? sugerenciaActiva : 0;
                 if (coloniasFiltradas[idx]) seleccionarColonia(coloniasFiltradas[idx]);
             } else if (e.key === 'Escape') {
-                buscadorSugerencias.hidden = true;
-                sugerenciaActiva = -1;
+                cerrarSugerencias();
             }
+        });
+
+        // WCAG 2.2 SC 2.4.11 (Focus Not Obscured): the list only closed on an
+        // outside click, so tabbing out of the search left it open on top of
+        // the layer switches — the next control received focus completely
+        // hidden behind it. Closing on focus-out fixes it at the source.
+        document.getElementById('search-section').addEventListener('focusout', e => {
+            if (!e.relatedTarget || !e.relatedTarget.closest('#search-section')) cerrarSugerencias();
         });
 
         buscadorSugerencias.addEventListener('click', e => {
@@ -857,7 +954,7 @@
 
         // Close the dropdown when clicking anywhere outside the search box.
         document.addEventListener('click', e => {
-            if (!e.target.closest('#search-section')) buscadorSugerencias.hidden = true;
+            if (!e.target.closest('#search-section')) cerrarSugerencias();
         });
 
         cargarCapaChoropleth({

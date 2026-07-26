@@ -284,8 +284,11 @@ body {
     color: var(--tz-text-3);
 }
 
-/* Disabled switch (layers with no data yet) */
-.switch-container:has(input:disabled) {
+/* Unavailable switch (layer with no data in the visible area). Keyed on
+   aria-disabled, not on the native attribute: a disabled input leaves the tab
+   order, which would hide the layer from keyboard and screen-reader users —
+   the opposite of what this feature is for. */
+.switch-container:has(input[aria-disabled="true"]) {
     opacity: 0.45;
     cursor: not-allowed;
 }
@@ -344,10 +347,19 @@ body {
     position: absolute;
     top: 16px;
     right: 16px;
+    /* Was 14px wide: the glyph's own advance. Squared off to clear the 24px
+       target minimum without moving the icon. */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
     background: none;
     border: none;
     color: var(--tz-text-3);
     font-size: 1.5rem;
+    line-height: 1;
     cursor: pointer;
     transition: color 0.2s;
 }
@@ -402,6 +414,59 @@ body {
 
 .detail-index strong {
     color: var(--tz-accent);
+}
+
+/* Sector chooser: shown when a searched colonia spans several AGEBs. These
+   buttons are also the keyboard route into the map's figures, since the layers
+   are drawn on a canvas and their polygons cannot be focused. */
+.sector-hint {
+    font-size: 0.75rem;
+    color: var(--tz-text-3);
+    line-height: 1.4;
+    margin-bottom: 10px;
+}
+
+.sector-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sector-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--tz-bg);
+    border: 1px solid var(--tz-border-ui);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s;
+}
+
+.sector-btn:hover {
+    border-color: var(--tz-accent);
+}
+
+.sector-btn:focus-visible {
+    outline: 2px solid var(--tz-accent);
+    outline-offset: 2px;
+}
+
+.sector-btn-name {
+    font-size: 0.82rem;
+    color: var(--tz-text);
+}
+
+.sector-btn-meta {
+    font-family: var(--tz-mono);
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--tz-text-3);
 }
 
 .placeholder-text {
@@ -468,7 +533,8 @@ body {
     background: var(--tz-bg);
     border: 1px solid var(--tz-border-ui);
     border-radius: 8px;
-    padding: 10px 32px 10px 12px;
+    /* Right padding clears the 24x24 clear button that sits inside the field. */
+    padding: 10px 38px 10px 12px;
     color: var(--tz-text);
     font-family: var(--tz-sans);
     font-size: 0.85rem;
@@ -489,22 +555,41 @@ body {
     cursor: not-allowed;
 }
 
+/* 24x24 is the minimum target size (WCAG 2.2 SC 2.5.8, AA). The spacing
+   exception does not rescue this one: the button sits inside the search
+   field's own bounds, so a 24px circle centred on it always overlaps another
+   target. It was 18.3x21.6. */
 .search-clear {
     position: absolute;
     top: 50%;
-    right: 8px;
+    right: 7px;
     transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
     background: none;
     border: none;
+    border-radius: 6px;
     color: var(--tz-text-3);
     font-size: 1.1rem;
     line-height: 1;
     cursor: pointer;
-    padding: 2px 4px;
+    padding: 0;
 }
 
 .search-clear:hover {
     color: var(--tz-text);
+}
+
+/* The icon-only buttons had no focus style of their own and fell back to the
+   user agent ring; give them the same amber indicator as the rest. */
+.search-clear:focus-visible,
+.close-btn:focus-visible {
+    outline: 2px solid var(--tz-accent);
+    outline-offset: 2px;
+    border-radius: 6px;
 }
 
 .search-suggestions {
