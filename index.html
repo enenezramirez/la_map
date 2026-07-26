@@ -281,7 +281,11 @@
                 // would be empty; skip it instead of showing a dead color
                 // in the legend.
                 if (escalones.length && minimo >= escalones[escalones.length - 1].minimo) continue;
-                escalones.push({ minimo, color: rampa[i], etiqueta: `${fmt(minimo)} - ${fmt(maximo)}` });
+                // How many sectors actually landed in the class, so the legend
+                // help can state the real figure instead of promising an even
+                // split that repeated values can break.
+                const conteo = datos.filter(v => v >= minimo && v <= maximo).length;
+                escalones.push({ minimo, color: rampa[i], conteo, etiqueta: `${fmt(minimo)} - ${fmt(maximo)}` });
             }
             return escalones;
         }
@@ -312,10 +316,64 @@
             });
         }
 
+        // What each risk layer measures and which levels it leaves out. Only
+        // the part that cannot be read off the data lives here; the levels and
+        // their counts are computed from the GeoJSON at load.
+        const AYUDA_RIESGO = {
+            inundacion: {
+                mide: 'Acumulación de agua de lluvia en zona urbana.',
+                omite: 'Se omite el nivel «Muy bajo», que es el fondo del modelo y cubre casi toda la mancha urbana.',
+                indice: 'Es la única capa de riesgo que penaliza el Índice de Inversión.'
+            },
+            deslizamientos: {
+                mide: 'Movimiento de material ladera abajo sobre una superficie de falla (traslacional).',
+                omite: 'Se omite el nivel «Muy bajo», que es el fondo del modelo.',
+                indice: 'Capa informativa: no modifica ningún índice.'
+            },
+            quimico: {
+                mide: 'Exposición al almacenamiento de sustancias químicas peligrosas.',
+                omite: 'Se omiten «Muy bajo» y también «Bajo»: este último cubre el 93% de la malla del modelo, así que no distingue unas zonas de otras.',
+                indice: 'Capa informativa: no modifica ningún índice.'
+            }
+        };
+
+        // Help sits at the end of every legend, always in the same place, so it
+        // can be found the same way for any layer.
+        function htmlAyudaRiesgo(clave, conteos) {
+            const a = AYUDA_RIESGO[clave];
+            if (!a) return '';
+            const presentes = ORDEN_RIESGO.filter(n => conteos.has(n));
+            const listaNiveles = presentes.map(n =>
+                `<li><strong>${esc(n)}</strong> — ${conteos.get(n).toLocaleString('es-MX')} zonas</li>`).join('');
+            // The scales are not comparable between layers, and saying so is the
+            // whole point: "Medio" is the worst level mapped for landslides but
+            // the mildest one shown for chemical risk.
+            const peor = presentes[0];
+            return `
+                <details class="legend-help">
+                    <summary>¿Qué significan estos niveles?</summary>
+                    <div class="legend-help-body">
+                        <p><strong>Qué mide:</strong> ${esc(a.mide)}</p>
+                        <p><strong>Niveles en esta capa:</strong></p>
+                        <ul class="help-levels">${listaNiveles}</ul>
+                        <p>En esta capa el nivel más severo que aparece es <strong>${esc(peor)}</strong>.
+                           Los niveles son la clasificación del propio IMPLAN; este proyecto no la recalcula,
+                           y los umbrales que separan un nivel del siguiente no vienen en los archivos publicados.
+                           <strong>No son comparables entre capas:</strong> un «Medio» de una capa no equivale
+                           al «Medio» de otra.</p>
+                        <p>${esc(a.omite)}</p>
+                        <p>${esc(a.indice)}</p>
+                        <p>Es un modelo a escala urbana para comparar zonas, <strong>no un estudio de sitio</strong>:
+                           no sustituye un dictamen para un predio concreto. Cubre solo el municipio de Saltillo.</p>
+                    </div>
+                </details>
+            `;
+        }
+
         // Legend for a risk layer: only the levels present + the source/cutoff
         // date (for data traceability), taken from the loaded GeoJSON.
-        function htmlLeyendaRiesgo(titulo, nivelesPresentes, fuente, fecha) {
-            const filas = ORDEN_RIESGO.filter(n => nivelesPresentes.has(n)).map(n => `
+        function htmlLeyendaRiesgo(titulo, clave, conteos, fuente, fecha) {
+            const filas = ORDEN_RIESGO.filter(n => conteos.has(n)).map(n => `
                 <div class="legend-row">
                     <span class="legend-swatch" style="background:${COLORES_RIESGO[n]}"></span>
                     <span>${esc(n)}</span>
@@ -324,7 +382,7 @@
             const src = fuente
                 ? `<p class="legend-source">Fuente: ${esc(fuente)}${fecha ? ' · ' + esc(fecha) : ''}.</p>`
                 : '';
-            return `<p class="legend-title">${esc(titulo)}</p>${filas}${src}`;
+            return `<p class="legend-title">${esc(titulo)}</p>${filas}${src}${htmlAyudaRiesgo(clave, conteos)}`;
         }
 
         // Pre-built legend HTML per risk layer (filled on load).
@@ -477,7 +535,49 @@
             };
         }
 
-        function htmlLeyenda(titulo, escalones, nSinDato = 0) {
+        // The synthetic indices are the opposite case to the risk layers: the
+        // number is absolute, the colour is relative. Saying which is which is
+        // the point of this help, because the two are read off the same map.
+        const AYUDA_INDICE = {
+            servicios: {
+                mide: 'Promedio de cuatro coberturas del Censo 2020 en cada sector: electricidad, agua entubada, drenaje e internet.',
+                unidad: 'El número es un porcentaje: 90 significa 90% de cobertura promedio, y eso no cambia nunca.'
+            },
+            inversion: {
+                mide: 'Combina el Índice de Servicios (peso 0.4) con la cercanía a escuelas, salud y supermercados (peso 0.3), y le resta una penalización por exposición a inundación (hasta 30 puntos).',
+                unidad: 'El número va de 0 a 100 y es absoluto: no depende de cómo estén los demás sectores.'
+            }
+        };
+
+        function htmlAyudaIndice(clave, escalones, nSinDato) {
+            const a = AYUDA_INDICE[clave];
+            if (!a) return '';
+            const porClase = escalones.length ? Math.round(
+                escalones.reduce((n, e) => n + (e.conteo || 0), 0) / escalones.length) : 0;
+            const reparto = porClase
+                ? `Cada clase agrupa aproximadamente el mismo número de sectores (~${porClase}).`
+                : 'Cada clase agrupa aproximadamente el mismo número de sectores.';
+            return `
+                <details class="legend-help">
+                    <summary>¿Qué significa este color?</summary>
+                    <div class="legend-help-body">
+                        <p><strong>Qué mide:</strong> ${esc(a.mide)}</p>
+                        <p><strong>El número:</strong> ${esc(a.unidad)}</p>
+                        <p><strong>El color, en cambio, es relativo.</strong> Los cortes se calculan por
+                           cuantiles sobre los sectores de la ciudad, así que el color dice
+                           <em>en qué lugar queda este sector frente a los demás</em>, no si está bien o mal
+                           en términos absolutos. ${esc(reparto)}</p>
+                        <p>Dos consecuencias que conviene tener presentes: los cortes cambian si cambian los
+                           datos, y dos sectores con valores casi idénticos pueden caer en clases distintas
+                           si el corte pasa justo entre ellos.</p>
+                        ${nSinDato > 0 ? `<p><strong>Gris:</strong> ${nSinDato} ${nSinDato === 1 ? 'sector' : 'sectores'} sin dato publicado.
+                           No es un cero: al hacer clic, la ficha dice el motivo.</p>` : ''}
+                    </div>
+                </details>
+            `;
+        }
+
+        function htmlLeyenda(titulo, escalones, nSinDato = 0, clave = null) {
             if (escalones.length === 0) return `<p class="empty-legend">Cargando…</p>`;
             const filas = escalones.map(e => `
                 <div class="legend-row">
@@ -492,7 +592,7 @@
                 </div>
             ` : '';
             const nota = '<p class="legend-source">Cortes por cuantiles: el color indica posición relativa dentro de la ciudad, no una calificación absoluta.</p>';
-            return `<p class="legend-title">${esc(titulo)}</p>${filas}${filaSinDato}${nota}`;
+            return `<p class="legend-title">${esc(titulo)}</p>${filas}${filaSinDato}${nota}${htmlAyudaIndice(clave, escalones, nSinDato)}`;
         }
 
         // Legend registry per layer: when several layers are active at once,
@@ -500,8 +600,8 @@
         const SIN_DATO_CONTEO = { servicios: 0, inversion: 0 };
 
         const LEYENDAS = {
-            servicios: () => htmlLeyenda('Índice de Servicios Básicos', ESCALONES_SERVICIOS, SIN_DATO_CONTEO.servicios),
-            inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION, SIN_DATO_CONTEO.inversion),
+            servicios: () => htmlLeyenda('Índice de Servicios Básicos', ESCALONES_SERVICIOS, SIN_DATO_CONTEO.servicios, 'servicios'),
+            inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION, SIN_DATO_CONTEO.inversion, 'inversion'),
             inundacion: () => leyendasRiesgo.inundacion || '<p class="empty-legend">Cargando…</p>',
             deslizamientos: () => leyendasRiesgo.deslizamientos || '<p class="empty-legend">Cargando…</p>',
             quimico: () => leyendasRiesgo.quimico || '<p class="empty-legend">Cargando…</p>'
@@ -685,9 +785,16 @@
             fetch(archivo, { cache: 'no-cache' })
                 .then(respuesta => respuesta.json())
                 .then(geojson => {
-                    const niveles = new Set(geojson.features.map(f => f.properties.INTENSIDAD));
+                    // Counted, not just listed: how many zones each level covers
+                    // is what tells the reader whether a level is the exception
+                    // or the rule in this layer.
+                    const conteos = new Map();
+                    for (const f of geojson.features) {
+                        const n = f.properties.INTENSIDAD;
+                        conteos.set(n, (conteos.get(n) || 0) + 1);
+                    }
                     const props0 = geojson.features.length ? geojson.features[0].properties : {};
-                    leyendasRiesgo[clave] = htmlLeyendaRiesgo(titulo, niveles, props0.FUENTE, props0.FECHA);
+                    leyendasRiesgo[clave] = htmlLeyendaRiesgo(titulo, clave, conteos, props0.FUENTE, props0.FECHA);
 
                     capa = L.geoJSON(geojson, {
                         style: crearEstiloRiesgo(),
