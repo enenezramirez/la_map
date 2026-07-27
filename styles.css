@@ -223,6 +223,30 @@ body {
     padding: 12px 0;
 }
 
+/* One block per active layer. The separator is deliberately heavier than the
+   hairlines inside a block (source line, help disclosure): those divide parts
+   of one legend, this divides one layer from the next, and with up to five
+   stacked the reader needs to see which rule is which. */
+.legend-block + .legend-block {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--tz-border-strong);
+}
+
+/* Shown only when more than one risk layer is on. Labelling each block is not
+   enough there: the brick ramp is keyed to the LEVEL, not to the layer, so the
+   very same swatch appears in two legends meaning two different things. Amber
+   is the identity's notice color, and the inset mark is the same device the
+   search list uses for the active row. */
+.legend-note {
+    margin-bottom: 14px;
+    padding: 8px 0 8px 10px;
+    box-shadow: inset 3px 0 0 var(--tz-accent);
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: var(--tz-text-2);
+}
+
 .legend-title {
     font-family: var(--tz-mono);
     font-size: 0.7rem;
