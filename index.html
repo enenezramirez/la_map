@@ -630,6 +630,12 @@
 
         function marcarCapaInactiva(clave) {
             ordenCapasActivas = ordenCapasActivas.filter(k => k !== clave);
+            // With nothing left on the map the outline marks nothing: no
+            // choropleth, no risk zones, just basemap. While ANY layer is still
+            // on it keeps doing its job — it says where the zone the card
+            // describes was, which is half the reason to turn a noisy layer off
+            // in the first place — so this only fires on the empty map.
+            if (ordenCapasActivas.length === 0) limpiarSeleccion();
             actualizarLeyenda();
         }
 
