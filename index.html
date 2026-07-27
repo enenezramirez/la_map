@@ -320,6 +320,20 @@
             });
         }
 
+        // Short layer name for the help disclosure. Several legends can be on
+        // screen at once, so "what do these levels mean?" repeated three times
+        // named nothing: it read as one help for the whole map. Naming the layer
+        // in the summary is also what a screen reader announces when tabbing
+        // between the disclosures, where the surrounding legend title is not
+        // part of the accessible name.
+        const NOMBRE_CORTO_CAPA = {
+            servicios: 'Servicios',
+            inversion: 'Inversión',
+            inundacion: 'Inundación',
+            deslizamientos: 'Deslizamientos',
+            quimico: 'Riesgo Químico'
+        };
+
         // What each risk layer measures and which levels it leaves out. Only
         // the part that cannot be read off the data lives here; the levels and
         // their counts are computed from the GeoJSON at load.
@@ -355,7 +369,7 @@
             const peor = presentes[0];
             return `
                 <details class="legend-help">
-                    <summary>¿Qué significan estos niveles?</summary>
+                    <summary>¿Qué significan los niveles de ${esc(NOMBRE_CORTO_CAPA[clave] || '')}?</summary>
                     <div class="legend-help-body">
                         <p><strong>Qué mide:</strong> ${esc(a.mide)}</p>
                         <p><strong>Niveles en esta capa:</strong></p>
@@ -563,7 +577,7 @@
                 : 'Cada clase agrupa aproximadamente el mismo número de sectores.';
             return `
                 <details class="legend-help">
-                    <summary>¿Qué significa este color?</summary>
+                    <summary>¿Qué significa el color de ${esc(NOMBRE_CORTO_CAPA[clave] || '')}?</summary>
                     <div class="legend-help-body">
                         <p><strong>Qué mide:</strong> ${esc(a.mide)}</p>
                         <p><strong>El número:</strong> ${esc(a.unidad)}</p>
@@ -599,8 +613,11 @@
             return `<p class="legend-title">${esc(titulo)}</p>${filas}${filaSinDato}${nota}${htmlAyudaIndice(clave, escalones, nSinDato)}`;
         }
 
-        // Legend registry per layer: when several layers are active at once,
-        // the one from the most recently activated layer is shown.
+        // Legend registry per layer. EVERY active layer gets its own block:
+        // showing only the most recently activated one meant the reader had
+        // several layers painted on the map and a legend describing just one of
+        // them, with no sign of which — and the help below it reported counts
+        // and levels belonging to that one layer only.
         const SIN_DATO_CONTEO = { servicios: 0, inversion: 0 };
 
         const LEYENDAS = {
@@ -610,32 +627,86 @@
             deslizamientos: () => leyendasRiesgo.deslizamientos || '<p class="empty-legend">Cargando…</p>',
             quimico: () => leyendasRiesgo.quimico || '<p class="empty-legend">Cargando…</p>'
         };
-        let ordenCapasActivas = [];
+
+        // Which risk layers share the single-hue brick ramp: their swatches are
+        // colored by LEVEL, not by layer, so two risk legends on screen show the
+        // same color meaning two different things.
+        const CLAVES_RIESGO = new Set(['inundacion', 'deslizamientos', 'quimico']);
+
+        const capasActivas = new Set();
+
+        // Panel order, read off the DOM, is the legend order. Activation order
+        // would reshuffle the blocks on every toggle, moving the help away from
+        // where it was found last time (WCAG 2.2 SC 3.2.6 Consistent Help), and
+        // reading the legend against the switches above would mean hunting. The
+        // sequence is derived rather than hardcoded so it still holds if the
+        // panel is regrouped into sections.
+        const checkboxPorClave = new Map();
+
+        function registrarClaveDeCapa(clave, checkbox) {
+            checkboxPorClave.set(clave, checkbox);
+        }
+
+        function ordenDePanel(claves) {
+            const enPanel = Array.from(document.querySelectorAll('.layer-control input[type="checkbox"]'));
+            return claves.slice().sort((a, b) =>
+                enPanel.indexOf(checkboxPorClave.get(a)) - enPanel.indexOf(checkboxPorClave.get(b)));
+        }
+
+        // The help panes are re-rendered along with the legend, so an open one
+        // would snap shut just because another layer was toggled — irrelevant
+        // when a single legend existed, annoying now that reading one layer's
+        // help while turning another on is the normal case. The state is read
+        // back off the DOM, which needs no bookkeeping of its own.
+        function ayudasAbiertas() {
+            return new Set(Array.from(document.querySelectorAll('#legend-container .legend-block'))
+                .filter(bloque => {
+                    const ayuda = bloque.querySelector('details');
+                    return ayuda && ayuda.open;
+                })
+                .map(bloque => bloque.dataset.capa));
+        }
 
         function actualizarLeyenda() {
             const contenedor = document.getElementById('legend-container');
-            if (ordenCapasActivas.length === 0) {
+            if (capasActivas.size === 0) {
                 contenedor.innerHTML = '<p class="empty-legend">Activa o haz clic en una zona para ver los detalles.</p>';
                 return;
             }
-            const claveActiva = ordenCapasActivas[ordenCapasActivas.length - 1];
-            contenedor.innerHTML = LEYENDAS[claveActiva]();
+            const abiertas = ayudasAbiertas();
+            const claves = ordenDePanel(Array.from(capasActivas));
+
+            // Named up front, because labelling each block is not enough here:
+            // the brick ramp is shared, so "Medio" is literally the same swatch
+            // in two legends while meaning a different thing in each.
+            const nRiesgo = claves.filter(k => CLAVES_RIESGO.has(k)).length;
+            const aviso = nRiesgo > 1
+                ? `<p class="legend-note">${nRiesgo} capas de riesgo activas. Cada bloque explica la suya:
+                   los colores se repiten entre capas, y un «Medio» de una no equivale al «Medio» de otra.</p>`
+                : '';
+
+            contenedor.innerHTML = aviso + claves.map(clave =>
+                `<div class="legend-block" data-capa="${esc(clave)}">${LEYENDAS[clave]()}</div>`).join('');
+
+            for (const bloque of contenedor.querySelectorAll('.legend-block')) {
+                const ayuda = bloque.querySelector('details');
+                if (ayuda && abiertas.has(bloque.dataset.capa)) ayuda.open = true;
+            }
         }
 
         function marcarCapaActiva(clave) {
-            ordenCapasActivas = ordenCapasActivas.filter(k => k !== clave);
-            ordenCapasActivas.push(clave);
+            capasActivas.add(clave);
             actualizarLeyenda();
         }
 
         function marcarCapaInactiva(clave) {
-            ordenCapasActivas = ordenCapasActivas.filter(k => k !== clave);
+            capasActivas.delete(clave);
             // With nothing left on the map the outline marks nothing: no
             // choropleth, no risk zones, just basemap. While ANY layer is still
             // on it keeps doing its job — it says where the zone the card
             // describes was, which is half the reason to turn a noisy layer off
             // in the first place — so this only fires on the empty map.
-            if (ordenCapasActivas.length === 0) limpiarSeleccion();
+            if (capasActivas.size === 0) limpiarSeleccion();
             actualizarLeyenda();
         }
 
@@ -735,6 +806,9 @@
 
         function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, configEscala, funcionEstilo, funcionDetalle, alCargarGeojson }) {
             let capa = null;
+            // Registered before the fetch, so the legend order is settled from
+            // the start and does not depend on which GeoJSON arrives first.
+            registrarClaveDeCapa(clave, checkbox);
 
             // `no-cache` revalidates the GeoJSON with the server (avoids serving
             // a stale version after regenerating the data with process_data.py).
@@ -794,6 +868,7 @@
         // GeoJSON itself.
         function cargarCapaRiesgo({ archivo, checkbox, clave, titulo }) {
             let capa = null;
+            registrarClaveDeCapa(clave, checkbox);
 
             fetch(archivo, { cache: 'no-cache' })
                 .then(respuesta => respuesta.json())
