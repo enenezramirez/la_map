@@ -187,6 +187,10 @@
         const detailsSidebar = document.getElementById('details-sidebar');
         document.getElementById('close-sidebar').addEventListener('click', () => {
             detailsSidebar.classList.add('sidebar-collapsed');
+            // The outline marks whatever the card is describing, so closing the
+            // card is what says "I am done with this zone". Leaving it behind
+            // would mark a selection with nothing left to explain it.
+            limpiarSeleccion();
         });
 
         // --- Shared choropleth and legend utilities (Phase 4/5) ---
@@ -697,6 +701,12 @@
 
         function marcarCapaInactiva(clave) {
             capasActivas.delete(clave);
+            // With nothing left on the map the outline marks nothing: no
+            // choropleth, no risk zones, just basemap. While ANY layer is still
+            // on it keeps doing its job — it says where the zone the card
+            // describes was, which is half the reason to turn a noisy layer off
+            // in the first place — so this only fires on the empty map.
+            if (capasActivas.size === 0) limpiarSeleccion();
             actualizarLeyenda();
         }
 
@@ -823,7 +833,10 @@
                             layer.on({
                                 mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
                                 mouseout: e => capa.resetStyle(e.target),
-                                click: e => funcionDetalle(e.target.feature.properties)
+                                click: e => {
+                                    resaltarGeometrias([e.target.feature.geometry]);
+                                    funcionDetalle(e.target.feature.properties);
+                                }
                             });
                         }
                     });
@@ -877,7 +890,10 @@
                             layer.on({
                                 mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.75 }),
                                 mouseout: e => capa.resetStyle(e.target),
-                                click: e => mostrarDetalleRiesgo(e.target.feature.properties, e.latlng)
+                                click: e => {
+                                    resaltarGeometrias([e.target.feature.geometry]);
+                                    mostrarDetalleRiesgo(e.target.feature.properties, e.latlng);
+                                }
                             });
                         }
                     });
@@ -918,7 +934,9 @@
         let indiceColonias = [];
         let coloniasFiltradas = [];
         let sugerenciaActiva = -1;
-        let capaColoniaResaltada = null;
+        // One selection at a time, whether it came from the search or from a
+        // click on the map.
+        let capaSeleccion = null;
 
         // Placeholder labels are not real places; keep them out of the search.
         const COLONIAS_NO_BUSCABLES = new Set(['SIN NOMBRE REGISTRADO', 'Sin nombre de colonia']);
@@ -1007,20 +1025,44 @@
             buscadorInput.setAttribute('aria-expanded', 'true');
         }
 
+        // The selection is drawn as a SEPARATE overlay rather than by restyling
+        // the clicked feature. That is what makes it work on the risk layers,
+        // which render to a canvas and reset their style on mouseout, and it
+        // keeps one selection alive across layer toggles: nothing here depends
+        // on the feature's own style surviving.
+        //
+        // A cased line — dark casing under an amber core — because a single
+        // color cannot stay visible over this map. Amber alone vanishes against
+        // the SECOND CLASS OF EVERY RAMP (investment #d29b33 at 1.12:1, services
+        // #35a396 at 1.10:1, risk #d9743f at 1.16:1) and white alone vanishes
+        // against the light ones (1.22-1.51:1). Casing puts the contrast inside
+        // the line: core against casing is 7.16:1 whatever it is drawn over, and
+        // no fill can hide both at once since the two are 7.16:1 apart.
         function resaltarGeometrias(geometrias) {
-            if (capaColoniaResaltada) {
-                map.removeLayer(capaColoniaResaltada);
-                capaColoniaResaltada = null;
+            limpiarSeleccion();
+            const coleccion = {
+                type: 'FeatureCollection',
+                features: geometrias.map(geom => ({ type: 'Feature', geometry: geom, properties: {} }))
+            };
+            // No fill, so the choropleth underneath stays readable, and
+            // non-interactive so it never intercepts a click meant for a layer.
+            const contorno = (color, weight) => L.geoJSON(coleccion, {
+                interactive: false,
+                style: { color, weight, fill: false }
+            });
+            capaSeleccion = L.layerGroup([
+                contorno('#0b0c0e', 6),   // casing (identity background)
+                contorno('#c8912f', 2.5)  // core: the identity's selection amber
+            ]).addTo(map);
+            // In insertion order, so the core ends up above its own casing.
+            capaSeleccion.eachLayer(capa => capa.bringToFront());
+        }
+
+        function limpiarSeleccion() {
+            if (capaSeleccion) {
+                map.removeLayer(capaSeleccion);
+                capaSeleccion = null;
             }
-            const features = geometrias.map(geom => ({ type: 'Feature', geometry: geom, properties: {} }));
-            // Amber outline = the identity's "active/selection" color; no fill so
-            // the choropleth underneath stays readable, and non-interactive so it
-            // doesn't intercept clicks meant for the layers below.
-            capaColoniaResaltada = L.geoJSON(
-                { type: 'FeatureCollection', features },
-                { interactive: false, style: { color: '#c8912f', weight: 3, fill: false } }
-            ).addTo(map);
-            capaColoniaResaltada.bringToFront();
         }
 
         // A colonia can cover several AGEBs, and an AGEB is the unit every
@@ -1082,10 +1124,7 @@
             buscadorLimpiar.hidden = true;
             coloniasFiltradas = [];
             cerrarSugerencias();
-            if (capaColoniaResaltada) {
-                map.removeLayer(capaColoniaResaltada);
-                capaColoniaResaltada = null;
-            }
+            limpiarSeleccion();
         }
 
         function moverSugerencia(delta) {
