@@ -243,6 +243,15 @@
         // official SHP files (INEGI/IMPLAN) and served from the same origin, so
         // there is no third-party input; this hardens the cards in case a layer
         // ever comes from a remote URL or a user upload.
+        //
+        // **Contract: HTML text nodes and QUOTED attribute values only.** These
+        // five entities are enough for both, and that is every context this file
+        // uses it in. They are NOT enough for an unquoted attribute, a URL
+        // (`href`/`src`, where `javascript:` survives escaping) or a CSS context
+        // (`style="..."`, where `url(...)` does). The three `style="background:
+        // ${...}"` interpolations further down are safe only because they take
+        // hardcoded palette constants — do not reach for esc() to make a
+        // computed value safe there.
         function esc(valor) {
             return String(valor)
                 .replace(/&/g, '&amp;')

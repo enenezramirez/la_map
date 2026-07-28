@@ -56,6 +56,7 @@ source for being local, vector and from 2024.
 """
 
 import json
+import re
 import urllib.parse
 import urllib.request
 from datetime import date
@@ -439,18 +440,75 @@ def construir_indice_calles() -> dict:
     }
 
 
+# Characters the published names are allowed to contain: capitals (accented
+# included), digits, spaces and the punctuation INEGI actually uses. This is a
+# guard on what reaches a public page, not a data-cleaning step — the index is
+# generated from shapefiles that live outside the repo (`raw_data/` is
+# gitignored), so a reviewer looking at a diff of the generated file cannot
+# check the input that produced it. Anything outside this set means the source
+# changed in a way nobody has looked at, and the pipeline should stop rather
+# than publish it.
+CARACTERES_PERMITIDOS = re.compile(r"^[0-9A-ZÁÉÍÓÚÜÑ '(),./-]+$")
+
+
+def validar_nombres_publicados(indice: dict) -> None:
+    """
+    Fail loudly if any name headed for the public page contains an unexpected
+    character.
+
+    Raises:
+        ValueError: listing the offending values, at most a handful.
+    """
+    sospechosos = []
+    for campo in ["tipos", "asentamientos", "municipios", "cps"]:
+        sospechosos += [(campo, v) for v in indice[campo]
+                        if not CARACTERES_PERMITIDOS.match(v.upper())]
+    sospechosos += [("calles", nombre) for nombre, _ in indice["calles"]
+                    if not CARACTERES_PERMITIDOS.match(nombre.upper())]
+    if sospechosos:
+        muestra = ", ".join(f"{campo}: {valor!r}" for campo, valor in sospechosos[:5])
+        raise ValueError(
+            f"{len(sospechosos)} name(s) with unexpected characters, refusing to "
+            f"publish the street index. First few — {muestra}"
+        )
+
+
 def exportar_indice_calles(indice: dict) -> None:
-    """Write the street index to data/ as compact JSON (no spaces between tokens)."""
+    """
+    Write the street index to data/: compact JSON, but **one line per street**.
+
+    The line breaks are the point. As a single line the file was 429 KB with no
+    newline in it, so every future change rendered in `git diff` as one deleted
+    line and one added line — unreviewable. One street per line costs ~0.1% in
+    size and makes the diff say which streets actually moved.
+    """
     if not indice:
         print("  No street index generated (no Frente de manzana layer found).")
         return
 
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    CALLES_JSON.write_text(
-        json.dumps(indice, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    validar_nombres_publicados(indice)
+
+    compacto = {"ensure_ascii": False, "separators": (",", ":")}
+    cabecera = {clave: valor for clave, valor in indice.items() if clave != "calles"}
+    # Splice the streets in by hand so each gets its own line; json.dumps has no
+    # option for "compact except at this one nesting level".
+    texto = (
+        json.dumps(cabecera, **compacto)[:-1]
+        + ',"calles":[\n'
+        + ",\n".join(json.dumps(calle, **compacto) for calle in indice["calles"])
+        + "\n]}"
     )
+    # Hand-spliced JSON gets parsed back and compared before it is written: a
+    # malformed or reordered file would break the search at runtime, far from
+    # here.
+    if json.loads(texto) != indice:
+        raise ValueError("The serialized street index does not match the source data.")
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CALLES_JSON.write_text(texto, encoding="utf-8")
     tamano_kb = CALLES_JSON.stat().st_size / 1024
-    print(f"  Street index exported: {CALLES_JSON} ({tamano_kb:.1f} KB)")
+    print(f"  Street index exported: {CALLES_JSON} ({tamano_kb:.1f} KB, "
+          f"{len(indice['calles'])} lines)")
 
 
 def cargar_censo_servicios() -> pd.DataFrame:
