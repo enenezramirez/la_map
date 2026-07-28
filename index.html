@@ -813,9 +813,27 @@
                 : '';
         }
 
-        function mostrarDetalleSector(props) {
+        // When the card is opened from a street search, the searched street is
+        // stated on it, and so is a mismatch between the settlement INEGI
+        // records for that block front and the colonia the map assigns to the
+        // sector. They disagree for 42.1% of street fronts, because an AGEB
+        // routinely spans several settlements and the map keeps the dominant
+        // one. Saying it is better than a card that silently contradicts the
+        // result the user just clicked.
+        function htmlContextoCalle(contexto, colonia) {
+            if (!contexto) return '';
+            const distinto = contexto.asentamiento && contexto.asentamiento !== colonia;
+            return `
+                <p class="detail-row"><span>Vialidad</span><strong>${esc(contexto.tipoVia)} ${esc(contexto.calle)}</strong></p>
+                ${contexto.cp ? `<p class="detail-row"><span>Código postal</span><strong>${esc(contexto.cp)}</strong></p>` : ''}
+                ${distinto ? `<p class="detail-note">Ese tramo está en el asentamiento <strong>${esc(contexto.asentamiento)}</strong>. El sector se publica bajo <strong>${esc(colonia)}</strong>, el asentamiento predominante del AGEB.</p>` : ''}
+            `;
+        }
+
+        function mostrarDetalleSector(props, contextoCalle) {
             document.getElementById('sector-title').textContent = props.COLONIA;
             document.getElementById('sector-info').innerHTML = `
+                ${htmlContextoCalle(contextoCalle, props.COLONIA)}
                 <p class="detail-row"><span>Municipio</span><strong>${esc(props.NOM_MUN)}</strong></p>
                 <p class="detail-row"><span>Población total</span><strong>${formatoEntero(props.POBTOT)}</strong></p>
                 <p class="detail-row"><span>Viviendas habitadas</span><strong>${formatoEntero(props.TVIVHAB)}</strong></p>
@@ -975,7 +993,8 @@
         // One entry per real colonia: its combined bbox (a colonia spans several
         // AGEBs) and the AGEB geometries used to draw the selection highlight.
         let indiceColonias = [];
-        let coloniasFiltradas = [];
+        // Mixed: colonia and street results share one list and one keyboard path.
+        let resultadosFiltrados = [];
         let sugerenciaActiva = -1;
         // One selection at a time, whether it came from the search or from a
         // click on the map.
@@ -984,8 +1003,14 @@
         // Placeholder labels are not real places; keep them out of the search.
         const COLONIAS_NO_BUSCABLES = new Set(['SIN NOMBRE REGISTRADO', 'Sin nombre de colonia']);
 
-        // Fold accents and case so "peñas" matches "penas" and "Centro" "centro".
-        const normalizarTexto = t => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+        // Fold accents and case so "peñas" matches "penas" and "Centro" "centro",
+        // and fold punctuation to a single space, because nobody types the
+        // period in "FRANCISCO I. MADERO" or "ALFREDO V. BONFIL" — 76 street
+        // names carry one, and a plain substring match made every one of them
+        // unreachable unless the punctuation was typed exactly.
+        const normalizarTexto = t => t
+            .normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ').trim();
 
         function construirIndiceColonias(geojson) {
             const grupos = new Map();
@@ -1014,26 +1039,118 @@
             for (const g of indiceColonias) g.normalizado = normalizarTexto(g.colonia);
         }
 
+        // AGEB by CVEGEO. The street index stores only these keys, never
+        // geometry, and resolves position through the polygons already loaded.
+        const agebsPorClave = new Map();
+
         // The services layer is the source of colonia names; when it loads we
         // both index the AGEBs (for risk-click lookups) and build the search.
         function alCargarAgebs(geojson) {
             indexarAgebs(geojson);
             construirIndiceColonias(geojson);
+            agebsPorClave.clear();
+            for (const f of geojson.features) {
+                if (f.geometry) agebsPorClave.set(f.properties.CVEGEO, { geometria: f.geometry, props: f.properties });
+            }
             buscadorInput.disabled = false;
         }
 
-        function filtrarColonias(consulta) {
-            const q = normalizarTexto(consulta.trim());
-            if (!q) return [];
+        // --- Street index (INEGI Frente de manzana) -------------------------
+        // INEGI already pairs street and settlement in the same record, so the
+        // index needs no geometry: each zone lists the AGEBs it touches and the
+        // browser resolves position from the polygons it already has.
+        //
+        // It is fetched lazily, on the first search, for two reasons: it is
+        // useless until someone types, and keeping it off the initial load means
+        // it never competes with the layer budget SPEC §2 sets for the map.
+        let indiceCalles = null;
+        let cargaCalles = null;
+
+        function cargarIndiceCalles() {
+            if (cargaCalles) return cargaCalles;
+            cargaCalles = fetch('data/calles.json')
+                .then(r => {
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    return r.json();
+                })
+                .then(json => {
+                    indiceCalles = {
+                        meta: { fuente: json.fuente, fecha: json.fecha_corte },
+                        calles: json.calles.map(([nombre, zonas]) => ({
+                            nombre,
+                            normalizado: normalizarTexto(nombre),
+                            zonas: zonas.map(([t, a, m, cp, agebs]) => ({
+                                tipoVia: json.tipos[t],
+                                asentamiento: json.asentamientos[a],
+                                municipio: json.municipios[m],
+                                cp: json.cps[cp],
+                                claves: agebs.map(i => json.agebs[i])
+                            }))
+                        }))
+                    };
+                    return indiceCalles;
+                })
+                .catch(err => {
+                    // A failed street index must not take the colonia search
+                    // down with it: null means "streets unavailable", and the
+                    // next keystroke retries.
+                    console.error('No se pudo cargar el índice de calles:', err);
+                    cargaCalles = null;
+                    return null;
+                });
+            return cargaCalles;
+        }
+
+        function filtrarColonias(q) {
             const encontrados = [];
             for (const g of indiceColonias) {
                 const pos = g.normalizado.indexOf(q);
-                if (pos !== -1) encontrados.push({ g, pos });
+                if (pos !== -1) {
+                    encontrados.push({
+                        pos, clase: 'colonia', orden: 0,
+                        titulo: g.colonia, subtitulo: g.municipio, etiqueta: 'COLONIA',
+                        datos: g
+                    });
+                }
             }
-            // Prefix matches first, then alphabetical; cap the list so the
-            // dropdown stays scannable.
-            encontrados.sort((a, b) => (a.pos - b.pos) || a.g.colonia.localeCompare(b.g.colonia, 'es'));
-            return encontrados.slice(0, 8).map(r => r.g);
+            return encontrados;
+        }
+
+        function filtrarCalles(q) {
+            if (!indiceCalles) return [];
+            const encontrados = [];
+            for (const calle of indiceCalles.calles) {
+                const pos = calle.normalizado.indexOf(q);
+                if (pos === -1) continue;
+                // One row per street, never per zone: "LUIS ECHEVERRÍA" runs
+                // through 64 settlements, and 64 rows would bury everything
+                // else. Where it goes is what the card answers.
+                const tipos = new Set(calle.zonas.map(z => z.tipoVia));
+                const unica = calle.zonas.length === 1 ? calle.zonas[0] : null;
+                encontrados.push({
+                    pos, clase: 'calle', orden: 1,
+                    titulo: calle.nombre,
+                    subtitulo: unica
+                        ? `${unica.asentamiento} · ${unica.municipio}`
+                        : `${calle.zonas.length} asentamientos`,
+                    // A street name can carry more than one road type across the
+                    // city (778 do), and then no single one is true.
+                    etiqueta: tipos.size === 1 ? [...tipos][0] : 'VIALIDAD',
+                    datos: calle
+                });
+            }
+            return encontrados;
+        }
+
+        function filtrarTodo(consulta) {
+            const q = normalizarTexto(consulta.trim());
+            if (!q) return [];
+            const encontrados = filtrarColonias(q).concat(filtrarCalles(q));
+            // Prefix matches first, then colonias before streets at equal
+            // footing, then alphabetical; cap the list so it stays scannable.
+            encontrados.sort((a, b) =>
+                (a.pos - b.pos) || (a.orden - b.orden) || a.titulo.localeCompare(b.titulo, 'es'));
+            return encontrados.slice(0, 8);
         }
 
         // Opening and closing the list is a state of the combobox, not just a
@@ -1046,7 +1163,7 @@
         }
 
         function renderSugerencias(lista) {
-            coloniasFiltradas = lista;
+            resultadosFiltrados = lista;
             sugerenciaActiva = -1;
             buscadorInput.removeAttribute('aria-activedescendant');
             if (lista.length === 0) {
@@ -1057,11 +1174,16 @@
             // Each option needs an id so aria-activedescendant can point at it:
             // that is what tells a screen reader which suggestion the arrow keys
             // landed on, since focus itself never leaves the input.
-            buscadorSugerencias.innerHTML = lista.map((g, i) => `
+            //
+            // The kind tag is inside the option, so it is part of the name a
+            // screen reader announces: with colonias and streets in one list,
+            // the name alone would not say which is which.
+            buscadorSugerencias.innerHTML = lista.map((r, i) => `
                 <li class="search-suggestion" role="option" id="colonia-opcion-${i}"
                     aria-selected="false" data-i="${i}">
-                    <span class="suggestion-name">${esc(g.colonia)}</span>
-                    <span class="suggestion-mun">${esc(g.municipio)}</span>
+                    <span class="suggestion-kind">${esc(r.etiqueta)}</span>
+                    <span class="suggestion-name">${esc(r.titulo)}</span>
+                    <span class="suggestion-mun">${esc(r.subtitulo)}</span>
                 </li>
             `).join('');
             buscadorSugerencias.hidden = false;
@@ -1113,11 +1235,12 @@
         // number no source backs, the card lists the sectors and lets one be
         // chosen. 212 of the 290 searchable colonias are a single AGEB, so most
         // searches go straight to the data.
-        function mostrarSectoresDeColonia(g) {
+        function mostrarSectoresDeColonia(g, contextoCalle) {
             const sectores = g.sectores.slice()
                 .sort((a, b) => String(a.props.CVEGEO).localeCompare(String(b.props.CVEGEO)));
             document.getElementById('sector-title').textContent = g.colonia;
             document.getElementById('sector-info').innerHTML = `
+                ${htmlContextoCalle(contextoCalle, g.colonia)}
                 <p class="detail-row"><span>Municipio</span><strong>${esc(g.municipio)}</strong></p>
                 <p class="detail-row"><span>Sectores (AGEB)</span><strong>${sectores.length}</strong></p>
                 <h3>Elige un sector</h3>
@@ -1139,7 +1262,9 @@
             document.getElementById('sector-info').querySelectorAll('.sector-btn').forEach((btn, i) => {
                 btn.addEventListener('click', () => {
                     resaltarGeometrias([sectores[i].geometria]);
-                    mostrarDetalleSector(sectores[i].props);
+                    // Carry the street context down: narrowing to one sector
+                    // must not drop which street brought the user here.
+                    mostrarDetalleSector(sectores[i].props, contextoCalle);
                 });
             });
             abrirFicha();
@@ -1162,10 +1287,101 @@
             else mostrarSectoresDeColonia(g);
         }
 
+        // --- Selecting a street ---------------------------------------------
+        // A zone is one (street, settlement) pair. Its AGEBs are looked up in
+        // the layer already loaded; any key with no polygon is dropped rather
+        // than drawn as an empty selection.
+        function sectoresDeZona(zona) {
+            return zona.claves
+                .map(clave => agebsPorClave.get(clave))
+                .filter(Boolean);
+        }
+
+        function encuadrarYResaltar(sectores) {
+            if (!sectores.length) return;
+            const caja = [Infinity, Infinity, -Infinity, -Infinity];
+            for (const s of sectores) {
+                const [minLng, minLat, maxLng, maxLat] = calcularBbox(s.geometria);
+                if (minLng < caja[0]) caja[0] = minLng;
+                if (minLat < caja[1]) caja[1] = minLat;
+                if (maxLng > caja[2]) caja[2] = maxLng;
+                if (maxLat > caja[3]) caja[3] = maxLat;
+            }
+            map.fitBounds(L.latLngBounds([[caja[1], caja[0]], [caja[3], caja[2]]]),
+                          { padding: [40, 40], maxZoom: 16 });
+            resaltarGeometrias(sectores.map(s => s.geometria));
+        }
+
+        // Opening a zone reuses the colonia machinery: one AGEB goes straight to
+        // its figures, several show the sector chooser, because every number in
+        // this app is published per AGEB and averaging them would invent data.
+        function abrirZonaDeCalle(calle, zona) {
+            const sectores = sectoresDeZona(zona);
+            encuadrarYResaltar(sectores);
+            const contexto = { calle: calle.nombre, tipoVia: zona.tipoVia, asentamiento: zona.asentamiento, cp: zona.cp };
+            if (sectores.length === 1) mostrarDetalleSector(sectores[0].props, contexto);
+            else if (sectores.length > 1) {
+                mostrarSectoresDeColonia({
+                    colonia: zona.asentamiento, municipio: zona.municipio, sectores
+                }, contexto);
+            }
+        }
+
+        function mostrarTramosDeCalle(calle) {
+            const zonas = calle.zonas.slice().sort((a, b) =>
+                a.asentamiento.localeCompare(b.asentamiento, 'es'));
+            const municipios = [...new Set(zonas.map(z => z.municipio))];
+            document.getElementById('sector-title').textContent = calle.nombre;
+            document.getElementById('sector-info').innerHTML = `
+                <p class="detail-row"><span>Municipio</span><strong>${esc(municipios.join(', '))}</strong></p>
+                <p class="detail-row"><span>Asentamientos</span><strong>${zonas.length}</strong></p>
+                <h3>Elige un tramo</h3>
+                <p class="sector-hint">Una vialidad puede cruzar varios asentamientos; los datos del Censo se publican por sector.</p>
+                <ul class="sector-list">
+                    ${zonas.map(z => `
+                        <li>
+                            <button type="button" class="sector-btn">
+                                <span class="sector-btn-name">${esc(z.tipoVia)} · ${esc(z.asentamiento)}</span>
+                                <span class="sector-btn-meta">${esc(z.municipio)} · CP ${esc(z.cp)} · ${z.claves.length} sector${z.claves.length === 1 ? '' : 'es'}</span>
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+                <p class="detail-source">Fuente: ${esc(indiceCalles.meta.fuente)}. Corte: ${esc(indiceCalles.meta.fecha)}.</p>
+            `;
+            // Paired by position, like the sector list: a key round-tripped
+            // through the DOM could miss and quietly open another zone.
+            document.getElementById('sector-info').querySelectorAll('.sector-btn').forEach((btn, i) => {
+                btn.addEventListener('click', () => abrirZonaDeCalle(calle, zonas[i]));
+            });
+            abrirFicha();
+        }
+
+        function seleccionarCalle(calle) {
+            buscadorInput.value = calle.nombre;
+            cerrarSugerencias();
+            buscadorLimpiar.hidden = false;
+            if (calle.zonas.length === 1) {
+                abrirZonaDeCalle(calle, calle.zonas[0]);
+                return;
+            }
+            // Frame the whole street first, so the card's list of settlements
+            // is read against the extent it actually covers.
+            const todos = calle.zonas.flatMap(sectoresDeZona);
+            encuadrarYResaltar(todos);
+            mostrarTramosDeCalle(calle);
+        }
+
+        function seleccionarResultado(r) {
+            if (!r) return;
+            if (r.clase === 'calle') seleccionarCalle(r.datos);
+            else seleccionarColonia(r.datos);
+        }
+
         function limpiarBusqueda() {
             buscadorInput.value = '';
             buscadorLimpiar.hidden = true;
-            coloniasFiltradas = [];
+            resultadosFiltrados = [];
             cerrarSugerencias();
             limpiarSeleccion();
         }
@@ -1186,8 +1402,20 @@
         }
 
         buscadorInput.addEventListener('input', () => {
-            renderSugerencias(filtrarColonias(buscadorInput.value));
-            buscadorLimpiar.hidden = buscadorInput.value.length === 0;
+            const consulta = buscadorInput.value;
+            renderSugerencias(filtrarTodo(consulta));
+            buscadorLimpiar.hidden = consulta.length === 0;
+            // Colonias answer from memory; streets need the lazy index. Re-run
+            // the query when it lands, but only if the box still holds the same
+            // text — otherwise a slow response would overwrite what the user
+            // has typed since.
+            if (!indiceCalles && consulta.trim()) {
+                cargarIndiceCalles().then(indice => {
+                    if (indice && buscadorInput.value === consulta) {
+                        renderSugerencias(filtrarTodo(consulta));
+                    }
+                });
+            }
         });
 
         buscadorInput.addEventListener('keydown', e => {
@@ -1200,7 +1428,7 @@
                 if (buscadorSugerencias.hidden) return;
                 e.preventDefault();
                 const idx = sugerenciaActiva >= 0 ? sugerenciaActiva : 0;
-                if (coloniasFiltradas[idx]) seleccionarColonia(coloniasFiltradas[idx]);
+                seleccionarResultado(resultadosFiltrados[idx]);
             } else if (e.key === 'Escape') {
                 cerrarSugerencias();
             }
@@ -1216,7 +1444,7 @@
 
         buscadorSugerencias.addEventListener('click', e => {
             const li = e.target.closest('.search-suggestion');
-            if (li) seleccionarColonia(coloniasFiltradas[Number(li.dataset.i)]);
+            if (li) seleccionarResultado(resultadosFiltrados[Number(li.dataset.i)]);
         });
 
         buscadorLimpiar.addEventListener('click', limpiarBusqueda);

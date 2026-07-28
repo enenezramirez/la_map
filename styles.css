@@ -562,6 +562,25 @@ body {
     margin-bottom: 10px;
 }
 
+/* Stated, not hidden: the settlement INEGI records for a street front and the
+   colonia the map publishes the sector under disagree 42% of the time. Amber is
+   the identity's "pay attention" signal, and the left rule keeps the note from
+   reading as one more data row. */
+.detail-note {
+    margin: 10px 0;
+    padding: 8px 10px;
+    border-left: 2px solid var(--tz-accent);
+    background: var(--tz-bg);
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--tz-text-2);
+}
+
+.detail-note strong {
+    color: var(--tz-text);
+    font-weight: 500;
+}
+
 .sector-list {
     list-style: none;
     display: flex;
@@ -774,9 +793,32 @@ body {
     box-shadow: inset 3px 0 0 var(--tz-accent);
 }
 
+/* Colonias and streets share one list, so each row states which it is. The tag
+   sits inside the option element on purpose: that makes it part of the name a
+   screen reader announces, where the street name alone would not say whether
+   the result is a place or a road. */
+.suggestion-kind {
+    flex: 0 0 auto;
+    font-family: var(--tz-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+    color: var(--tz-text-3);
+    border: 1px solid var(--tz-border-ui);
+    border-radius: 3px;
+    padding: 1px 4px;
+    align-self: center;
+}
+
 .suggestion-name {
     font-size: 0.82rem;
     color: var(--tz-text);
+    /* Takes the slack so the tag and the municipality keep their own edges,
+       and long street names shorten instead of pushing them out of the box. */
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .suggestion-mun {

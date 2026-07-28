@@ -120,6 +120,25 @@ VALORES_SIN_ASENTAMIENTO = frozenset({"ND", "NINGUNO"})
 # raw filler value in the map card.
 SIN_COLONIA = "SIN NOMBRE REGISTRADO"
 
+# Filler values of NOMVIAL in the same layer. Unlike NOMASEN's, these are not
+# only "unknown" markers: "OTRO" and "MANZANA O EDIFICACIÓN CONTIGUA" describe
+# what the front faces when it is not a street at all. None is a street name,
+# and left in they dominate the index — "OTRO" alone would appear in 401
+# settlements, more than any real street in the city.
+VALORES_SIN_VIALIDAD = frozenset({"NINGUNO", "OTRO", "MANZANA O EDIFICACIÓN CONTIGUA", "N/A", "ND"})
+
+# TIPOVIAL values that do not denote a street: "RASGO" is a physical feature
+# (an arroyo, a railway — this is where names like "MALEZA" come from) and
+# "SIN REFERENCIA" has nothing to point at.
+TIPOS_NO_VIALIDAD = frozenset({"RASGO", "SIN REFERENCIA"})
+
+# Street -> settlement index consumed by the frontend search. Not a GeoJSON and
+# not part of the map layers: it carries no geometry at all (see
+# construir_indice_calles) and the browser fetches it lazily, only once the user
+# actually searches, so it does not compete with the 5 MB budget SPEC §2 sets
+# for the layers.
+CALLES_JSON = DATA_DIR / "calles.json"
+
 # Metric CRS (the same as INEGI's vector cartography) used only to compute
 # distances in meters; the final output is reprojected to EPSG:4326.
 CRS_METRICO = "EPSG:6372"
@@ -164,6 +183,14 @@ IMPLAN_QUIMICO_SHP = (
 )
 IMPLAN_FUENTE = "IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024"
 IMPLAN_FECHA_CORTE = "2024"
+
+# Source of the AGEB polygons and of the Frente de manzana layer behind both the
+# colonia names and the street index (see DATOS.md §2.1).
+INEGI_VECTORIAL_FUENTE = (
+    "INEGI — Información vectorial de localidades amanzanadas y números "
+    "exteriores 2023"
+)
+INEGI_VECTORIAL_FECHA_CORTE = "2023"
 
 # Traffic-light order of intensity and its 0-100 score for the penalty.
 NIVELES_INTENSIDAD = ["Muy bajo", "Bajo", "Medio", "Alto", "Muy alto"]
@@ -259,6 +286,42 @@ def filtrar_agebs_por_municipio() -> gpd.GeoDataFrame:
     return gdf_final
 
 
+def cargar_frentes_de_manzana(columnas: list[str]) -> pd.DataFrame:
+    """
+    Load the "Frente de manzana" (fm) layer of every locality configured in
+    MUNICIPIOS_AGEB, without geometry.
+
+    Each record is one side of a block: it names the street it faces (NOMVIAL,
+    TIPOVIAL), the settlement it belongs to (NOMASEN) and its postal code (CP),
+    which is why the same layer feeds both the colonia name per AGEB and the
+    street index.
+
+    Args:
+        columnas: attribute columns to read. CVEGEO is always added, since it is
+            what ties a front to its AGEB.
+
+    Returns:
+        A DataFrame with the requested columns plus CVEGEO (truncated to the
+        13-character AGEB key) and NOM_MUN. Empty if no locality is downloaded.
+    """
+    pedidas = ["CVEGEO"] + [c for c in columnas if c != "CVEGEO"]
+    registros = []
+    for nombre_municipio, carpetas in MUNICIPIOS_AGEB.items():
+        for carpeta in carpetas:
+            clave_localidad = carpeta.name
+            shp_path = carpeta / "conjunto_de_datos" / f"{clave_localidad}fm.shp"
+            if not shp_path.exists():
+                continue
+            df_fm = gpd.read_file(shp_path, columns=pedidas, ignore_geometry=True)
+            df_fm["CVEGEO"] = df_fm["CVEGEO"].str[:13]
+            df_fm["NOM_MUN"] = nombre_municipio
+            registros.append(df_fm)
+
+    if not registros:
+        return pd.DataFrame(columns=pedidas + ["NOM_MUN"])
+    return pd.concat(registros, ignore_index=True)
+
+
 def cargar_nombres_colonias() -> pd.DataFrame:
     """
     Derive each AGEB's dominant colonia/settlement name from the "Frente de
@@ -268,21 +331,9 @@ def cargar_nombres_colonias() -> pd.DataFrame:
     AGEB has no real name, it is labeled SIN_COLONIA instead of propagating the
     filler to the map.
     """
-    registros = []
-    for carpetas in MUNICIPIOS_AGEB.values():
-        for carpeta in carpetas:
-            clave_localidad = carpeta.name
-            shp_path = carpeta / "conjunto_de_datos" / f"{clave_localidad}fm.shp"
-            if not shp_path.exists():
-                continue
-            df_fm = gpd.read_file(shp_path, columns=["CVEGEO", "NOMASEN"], ignore_geometry=True)
-            df_fm["CVEGEO"] = df_fm["CVEGEO"].str[:13]
-            registros.append(df_fm)
-
-    if not registros:
+    df_fm = cargar_frentes_de_manzana(["NOMASEN"])
+    if df_fm.empty:
         return pd.DataFrame(columns=["CVEGEO", "COLONIA"])
-
-    df_fm = pd.concat(registros, ignore_index=True)
 
     def _colonia_dominante(grupo: pd.DataFrame) -> str:
         nombres = grupo["NOMASEN"].astype(str).str.strip()
@@ -293,6 +344,113 @@ def cargar_nombres_colonias() -> pd.DataFrame:
 
     colonias = df_fm.groupby("CVEGEO").apply(_colonia_dominante, include_groups=False)
     return colonias.rename("COLONIA").reset_index()
+
+
+def construir_indice_calles() -> dict:
+    """
+    Build the street -> settlement index the frontend search consumes, from the
+    same "Frente de manzana" layer that gives each AGEB its colonia name.
+
+    INEGI already pairs street and settlement in a single record, so no spatial
+    work is needed: grouping the fronts by (street, type, settlement,
+    municipality) yields, for each street, every settlement it runs through.
+
+    Two decisions worth stating, because both were measured:
+
+    - **No geometry is stored.** Each zone carries the AGEBs it touches instead,
+      and the browser resolves position from the AGEB polygons it has already
+      loaded. Storing per-street bounding boxes would roughly triple the file to
+      buy precision finer than the AGEB, which is the unit every figure in this
+      app is published at.
+    - **Zones are grouped by the front's own NOMASEN, not by the colonia the map
+      assigns to its AGEB.** Those disagree for 42.1% of street fronts, because
+      an AGEB routinely spans several settlements and the map keeps the dominant
+      one. Grouping by the map's name would be self-consistent but would answer
+      "which colonia is this street in?" with a name the street may have nothing
+      to do with. The frontend shows the settlement found here and, when the
+      sector is published under a different colonia, says so on the card rather
+      than hiding the discrepancy.
+
+    Returns:
+        A JSON-ready dict. The bulky part is `calles`, one entry per street name
+        holding its zones as index tuples into the small lookup lists, which is
+        what keeps repeated settlement and municipality names from being spelled
+        out ~13,000 times.
+    """
+    df = cargar_frentes_de_manzana(["TIPOVIAL", "NOMVIAL", "NOMASEN", "CP"])
+    if df.empty:
+        return {}
+
+    for columna in ["TIPOVIAL", "NOMVIAL", "NOMASEN", "CP"]:
+        df[columna] = df[columna].astype(str).str.strip()
+
+    total_frentes = len(df)
+    df = df[~df["TIPOVIAL"].str.upper().isin(TIPOS_NO_VIALIDAD)]
+    df = df[~df["NOMVIAL"].str.upper().isin(VALORES_SIN_VIALIDAD)]
+    df = df[~df["NOMASEN"].str.upper().isin(VALORES_SIN_ASENTAMIENTO)]
+    print(f"  {total_frentes} block fronts, {len(df)} with a real street and settlement.")
+
+    zonas = (
+        df.groupby(["NOMVIAL", "TIPOVIAL", "NOMASEN", "NOM_MUN"])
+        .agg(
+            agebs=("CVEGEO", lambda s: sorted(set(s))),
+            # A zone can straddle two postal codes; the dominant one is the
+            # useful hint, and it is only ever shown as a hint.
+            cp=("CP", lambda s: s.value_counts().idxmax()),
+        )
+        .reset_index()
+    )
+
+    tipos = sorted(zonas["TIPOVIAL"].unique())
+    asentamientos = sorted(zonas["NOMASEN"].unique())
+    municipios = sorted(zonas["NOM_MUN"].unique())
+    cps = sorted(zonas["cp"].unique())
+    agebs = sorted({a for lista in zonas["agebs"] for a in lista})
+
+    idx_tipo = {v: i for i, v in enumerate(tipos)}
+    idx_asen = {v: i for i, v in enumerate(asentamientos)}
+    idx_muni = {v: i for i, v in enumerate(municipios)}
+    idx_cp = {v: i for i, v in enumerate(cps)}
+    idx_ageb = {v: i for i, v in enumerate(agebs)}
+
+    calles: dict[str, list] = {}
+    for zona in zonas.itertuples(index=False):
+        calles.setdefault(zona.NOMVIAL, []).append([
+            idx_tipo[zona.TIPOVIAL],
+            idx_asen[zona.NOMASEN],
+            idx_muni[zona.NOM_MUN],
+            idx_cp[zona.cp],
+            [idx_ageb[a] for a in zona.agebs],
+        ])
+
+    print(
+        f"  {len(calles)} street names, {len(zonas)} street-settlement zones, "
+        f"{len(agebs)} AGEBs referenced."
+    )
+    return {
+        "fuente": INEGI_VECTORIAL_FUENTE,
+        "fecha_corte": INEGI_VECTORIAL_FECHA_CORTE,
+        "tipos": tipos,
+        "asentamientos": asentamientos,
+        "municipios": municipios,
+        "cps": cps,
+        "agebs": agebs,
+        "calles": [[nombre, zs] for nombre, zs in sorted(calles.items())],
+    }
+
+
+def exportar_indice_calles(indice: dict) -> None:
+    """Write the street index to data/ as compact JSON (no spaces between tokens)."""
+    if not indice:
+        print("  No street index generated (no Frente de manzana layer found).")
+        return
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CALLES_JSON.write_text(
+        json.dumps(indice, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    )
+    tamano_kb = CALLES_JSON.stat().st_size / 1024
+    print(f"  Street index exported: {CALLES_JSON} ({tamano_kb:.1f} KB)")
 
 
 def cargar_censo_servicios() -> pd.DataFrame:
@@ -778,6 +936,9 @@ if __name__ == "__main__":
 
     print("Deriving colonia name per AGEB (Frente de manzana layer)...")
     df_colonias = cargar_nombres_colonias()
+
+    print("\nBuilding the street index (Frente de manzana layer)...")
+    exportar_indice_calles(construir_indice_calles())
 
     gdf_ageb_servicios = integrar_censo_a_ageb(gdf_agebs, df_servicios, df_colonias)
 

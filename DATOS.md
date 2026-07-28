@@ -53,9 +53,35 @@ colonia name of each one.
   (<https://www.inegi.org.mx/app/mapas/>), one downloadable record per locality.
 * **License:** INEGI Free Use of Information terms
   (<https://www.inegi.org.mx/inegi/terminos.html>).
-* **Use in the project:** AGEB layer (`filtrar_agebs_por_municipio`) and colonia name
+* **Use in the project:** AGEB layer (`filtrar_agebs_por_municipio`); colonia name
   per AGEB, derived from the block-front layer (`fm`, field `NOMASEN`) by taking the most
-  frequent settlement in each AGEB (`cargar_nombres_colonias`).
+  frequent settlement in each AGEB (`cargar_nombres_colonias`); and the street index
+  behind the search (`construir_indice_calles`, see below).
+* **Street index — the `fm` layer, and why the `v` layer is not used.** Each `fm` record
+  is one side of a block and already carries the street it faces (`NOMVIAL`, `TIPOVIAL`),
+  the settlement it belongs to (`NOMASEN`) and its postal code (`CP`) **in the same row**,
+  so pairing a street with its settlement needs no spatial work at all. The package also
+  ships a `v` (vialidades) layer with 11,202 street *lines*; it is deliberately left
+  unused, because the geometry it would add buys nothing the AGEB polygons already on the
+  map do not already give, and it would cost file weight the map layers need more (SPEC §2).
+  The exported index therefore carries **no geometry**: each zone lists the AGEB keys it
+  touches, and the browser resolves position from the polygons it has already loaded.
+  Output: `data/calles.json`, 6,597 street names, 13,877 street-settlement zones, ~429 KB,
+  fetched lazily on the first search.
+* **Filler values in `NOMVIAL` and `TIPOVIAL`.** As with `NOMASEN`, these fields carry
+  markers that are not names: `NOMVIAL` uses **`NINGUNO`** (6,578 fronts), **`OTRO`**
+  (2,377) and **`MANZANA O EDIFICACIÓN CONTIGUA`** (938) to describe what a front faces
+  when it is not a street, and `TIPOVIAL` uses **`RASGO`** (3,810 — a physical feature such
+  as an arroyo or a railway, which is where names like "MALEZA" come from) and
+  **`SIN REFERENCIA`** (143). Left in, they dominate the index: `OTRO` alone would appear
+  in 401 settlements, more than any real street in the city. See `VALORES_SIN_VIALIDAD` and
+  `TIPOS_NO_VIALIDAD` in `scripts/process_data.py`.
+* **Measured: a front's own `NOMASEN` and its AGEB's published colonia disagree 42.1% of
+  the time** (27,044 of 64,234 street fronts). This is the same 1:1 limitation noted below,
+  quantified: an AGEB routinely spans several settlements and the map keeps the dominant
+  one. The street index groups by the front's own settlement — the precise answer to "where
+  is this street?" — and the app's card states the difference when the sector is published
+  under another colonia, rather than hiding it.
 * **Known limitation:** the AGEB is a statistical unit and does not match a colonia 1:1.
   The name is the *dominant* settlement among the AGEB's block fronts, not an official
   colonia boundary: a single AGEB can span several.
@@ -354,6 +380,12 @@ For each file served to the browser, its origin:
 | `riesgo_deslizamientos.geojson` | ~164 KB | IMPLAN landslides (§2.5) |
 | `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN chemical-technological (§2.6) |
 | `riesgo_inundacion.png` + `_meta.json` | ~174 KB | CONAGUA ANRI (§2.7) |
+| `calles.json` | ~429 KB | AGEB block fronts, `fm` layer (§2.1) |
+
+`calles.json` is the only entry that is not a map layer: it carries no geometry, it is
+fetched **lazily on the first search** rather than on page load, and it exists to answer
+"which settlement is this street in?". It is therefore outside the 5 MB budget SPEC §2 sets
+for the GeoJSON layers, whose purpose is initial load time.
 
 The risk layers carry provenance embedded in each feature's `FUENTE` and `FECHA` fields,
 and the app shows it in the detail card on click, satisfying the project's traceability
