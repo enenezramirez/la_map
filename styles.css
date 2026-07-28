@@ -1,3 +1,51 @@
+/* Self-hosted typefaces (SIL OFL 1.1 — license texts in assets/fonts/).
+   Served from this origin rather than Google Fonts for three reasons that a
+   <link> to fonts.googleapis.com cannot solve: the stylesheet it returns varies
+   by User-Agent, so it cannot carry a Subresource Integrity hash; every visitor
+   makes a request to a third party, handing over an IP and a User-Agent just to
+   read a map; and two extra DNS lookups plus TLS handshakes sit in front of the
+   first paint.
+
+   Only the `latin` subset ships. Audited, not assumed: neither the interface nor
+   the 431 AGEB colonia and municipio names contain a single character outside
+   that range.
+
+   Inter is a variable font, so one file covers the whole weight axis. IBM Plex
+   Mono is not, so its two weights are two files. The app declares only 400 and
+   500 — every heading and <strong> sets its weight explicitly, so nothing falls
+   back to the browser's default bold — which is why the 300, 600 and 700 Inter
+   files that used to be requested were downloaded and never drawn.
+
+   The two italic runs in the legend glossary were already synthesized by the
+   browser (the Google request carried no italic axis), and still are: shipping
+   no italic file keeps rendering identical to before. */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('assets/fonts/inter-latin-variable.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('assets/fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('assets/fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* Style reset */
 * {
     margin: 0;
