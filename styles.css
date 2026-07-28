@@ -421,6 +421,10 @@ body {
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
 }
 
+/* This class only takes the panel off the screen. Taking it off the keyboard is
+   the `inert` attribute's job, set alongside the class in JS: `opacity: 0` hides
+   the panel from the eye but not from the tab order, and tying that to a CSS
+   transition would make keyboard reachability depend on an animation finishing. */
 .sidebar-collapsed {
     transform: translateX(380px);
     opacity: 0;
