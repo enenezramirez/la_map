@@ -12,12 +12,22 @@
 set -u
 fail=0
 
+# Scratch files go in a fresh directory rather than fixed /tmp paths. With
+# fixed names, anyone else on the machine could pre-create /tmp/gr.out as a
+# symlink and have this hook overwrite whatever it points at — and gitleaks
+# output can carry fragments of the very secrets it just found. mktemp -d gives
+# an unguessable name (0700 on POSIX; on Git Bash for Windows the mode is
+# emulated, so the random name is what does the work), and the trap removes it
+# however the hook exits.
+tmpdir=$(mktemp -d) || { echo "❌ Could not create a temporary directory."; exit 1; }
+trap 'rm -rf "$tmpdir"' EXIT
+
 # --- 1) Secrets (BLOCKING) ------------------------------------------------
 if command -v gitleaks >/dev/null 2>&1; then
-    if ! gitleaks git --staged --no-banner --redact -v . >/tmp/gr.out 2>&1; then
+    if ! gitleaks git --staged --no-banner --redact -v . >"$tmpdir/gitleaks.out" 2>&1; then
         echo ""
         echo "❌ gitleaks detected a possible SECRET in the staged changes — COMMIT BLOCKED:"
-        grep -E "Finding:|Secret:|RuleID:|File:|Line:|Fingerprint:" /tmp/gr.out | sed 's/^/   /' | head -30
+        grep -E "Finding:|Secret:|RuleID:|File:|Line:|Fingerprint:" "$tmpdir/gitleaks.out" | sed 's/^/   /' | head -30
         echo "   If it is a false positive: review, and if appropriate ignore it with .gitleaks.toml or --baseline-path."
         fail=1
     fi
@@ -28,10 +38,10 @@ fi
 # --- 2) Python SAST (WARNING only) ----------------------------------------
 staged_py=$(git diff --cached --name-only --diff-filter=d -- '*.py' 2>/dev/null)
 if [ -n "$staged_py" ] && [ -x venv/Scripts/bandit.exe ]; then
-    if ! printf '%s\n' "$staged_py" | tr '\n' '\0' | xargs -0 -r venv/Scripts/bandit.exe -ll -q >/tmp/bd.out 2>&1; then
+    if ! printf '%s\n' "$staged_py" | tr '\n' '\0' | xargs -0 -r venv/Scripts/bandit.exe -ll -q >"$tmpdir/bandit.out" 2>&1; then
         echo ""
         echo "⚠️  bandit found possible Python security issues (review them; does NOT block):"
-        grep -iE "Issue:|Severity:|Location:" /tmp/bd.out | sed 's/^/   /' | head -30
+        grep -iE "Issue:|Severity:|Location:" "$tmpdir/bandit.out" | sed 's/^/   /' | head -30
     fi
 fi
 
