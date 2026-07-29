@@ -22,8 +22,11 @@
 </head>
 <body>
 
-    <!-- Map container -->
-    <div id="map"></div>
+    <!-- Map container. It is the page's main content, and Leaflet already makes
+         it focusable (tabindex="0") so the arrow keys can pan it, so the label
+         is what a screen reader announces on arrival — without it the main
+         landmark is a nameless box. -->
+    <main id="map" aria-label="Mapa de riesgos y servicios de la Zona Metropolitana de Saltillo"></main>
 
     <!-- Floating control panel (glassmorphism) -->
     <div class="control-panel">
@@ -41,7 +44,9 @@
             </div>
         </header>
 
-        <section class="panel-section" id="search-section">
+        <!-- A <section> is only exposed as a navigable region once it has an
+             accessible name, so every one of them points at its own heading. -->
+        <section class="panel-section" id="search-section" aria-labelledby="search-heading">
             <h2 id="search-heading">Buscar Colonia</h2>
             <div class="search-box">
                 <!-- Combobox per the ARIA authoring practices: the placeholder
@@ -60,8 +65,8 @@
             </div>
         </section>
 
-        <section class="panel-section">
-            <h2>Capas de Riesgo y Servicios</h2>
+        <section class="panel-section" id="layers-section" aria-labelledby="layers-heading">
+            <h2 id="layers-heading">Capas de Riesgo y Servicios</h2>
             
             <div class="layer-control">
                 <label class="switch-container">
@@ -110,8 +115,8 @@
         </section>
 
         <!-- Dynamic legends section -->
-        <section class="panel-section" id="legend-section">
-            <h2>Leyenda</h2>
+        <section class="panel-section" id="legend-section" aria-labelledby="legend-heading">
+            <h2 id="legend-heading">Leyenda</h2>
             <div id="legend-container">
                 <p class="empty-legend">Activa o haz clic en una zona para ver los detalles.</p>
             </div>
@@ -124,8 +129,11 @@
         </footer>
     </div>
 
-    <!-- Detail info panel (right sidebar) -->
-    <div id="details-sidebar" class="sidebar-collapsed">
+    <!-- Detail info panel (right sidebar). Complementary landmark: it supports
+         whatever zone is selected on the map. The name is deliberately static —
+         the <h2> inside already carries the colonia, and a landmark that renames
+         itself on every click is not one a user can learn to jump to. -->
+    <aside id="details-sidebar" class="sidebar-collapsed" inert aria-label="Detalles de la zona seleccionada">
         <button id="close-sidebar" class="close-btn" aria-label="Cerrar panel de detalles">&times;</button>
         <div class="sidebar-content">
             <h2 id="sector-title">Detalles del Sector</h2>
@@ -133,7 +141,7 @@
                 <p class="placeholder-text">Haz clic en cualquier sector del mapa para analizar sus detalles socio-económicos y de riesgos.</p>
             </div>
         </div>
-    </div>
+    </aside>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
@@ -177,16 +185,52 @@
         });
 
         // Base layer control (dark / light), bottom-left
-        L.control.layers(
+        const controlMapaBase = L.control.layers(
             { 'Oscuro': darkBaseLayer, 'Claro': lightBaseLayer },
             null,
             { position: 'bottomleft', collapsed: true }
         ).addTo(map);
 
-        // Detail sidebar: close button
+        // Leaflet builds this control as a bare <section>, which shows up in the
+        // landmark list as an unnamed region sitting inside the map, and names
+        // its toggle "Layers" in English on a page declared lang="es". Neither
+        // exists until the control is on the map, so it is patched here.
+        const contenedorMapaBase = controlMapaBase.getContainer();
+        contenedorMapaBase.querySelector('.leaflet-control-layers-list')
+            .setAttribute('aria-label', 'Mapa base');
+        contenedorMapaBase.querySelector('.leaflet-control-layers-toggle')
+            .setAttribute('title', 'Mapa base');
+
+        // Detail sidebar: open/close
         const detailsSidebar = document.getElementById('details-sidebar');
-        document.getElementById('close-sidebar').addEventListener('click', () => {
+
+        // The card never leaves the DOM — it slides out and fades to
+        // `opacity: 0` — so hiding it from the eye does not hide it from the
+        // keyboard. Closed, it still held up to 16 focusable controls (the close
+        // button plus one per sector of the last colonia opened; ZONA CENTRO has
+        // 15), every one of them accepting focus with nothing on screen.
+        // `inert` is set with the class instead of after the slide-out, so
+        // keyboard reachability never depends on an animation finishing.
+        function abrirFicha() {
+            detailsSidebar.classList.remove('sidebar-collapsed');
+            detailsSidebar.inert = false;
+        }
+
+        function cerrarFicha() {
+            // Read this before going inert, or the browser has already dropped
+            // the focus we are trying to hand back.
+            const teniaFoco = detailsSidebar.contains(document.activeElement);
             detailsSidebar.classList.add('sidebar-collapsed');
+            detailsSidebar.inert = true;
+            // Focus inside an inert subtree is dropped to <body>, which restarts
+            // the tab sequence from the top of the page. Hand it to the map: it
+            // is what the card was describing, and tabbing on from there reaches
+            // the panel in its normal order.
+            if (teniaFoco) document.getElementById('map').focus();
+        }
+
+        document.getElementById('close-sidebar').addEventListener('click', () => {
+            cerrarFicha();
             // The outline marks whatever the card is describing, so closing the
             // card is what says "I am done with this zone". Leaving it behind
             // would mark a selection with nothing left to explain it.
@@ -516,7 +560,7 @@
                 <p class="detail-row detail-index"><span>Nivel de riesgo</span><strong>${esc(props.INTENSIDAD)}</strong></p>
                 <p class="detail-source">Fuente: ${esc(props.FUENTE)}. Corte: ${esc(props.FECHA)}.</p>
             `;
-            detailsSidebar.classList.remove('sidebar-collapsed');
+            abrirFicha();
         }
 
         function sinDato(valor) {
@@ -784,7 +828,7 @@
                 <p class="detail-row detail-index"><span>Índice de Servicios</span><strong>${formatoIndice(props.SERVICIOS_INDEX)}</strong></p>
                 ${htmlMotivoSinDato(props)}
             `;
-            detailsSidebar.classList.remove('sidebar-collapsed');
+            abrirFicha();
         }
 
         function mostrarDetalleInversion(props) {
@@ -801,7 +845,7 @@
                 <p class="detail-row detail-index"><span>Índice de Inversión</span><strong>${formatoIndice(props.INVERSION_INDEX)}</strong></p>
                 ${htmlMotivoSinDato(props)}
             `;
-            detailsSidebar.classList.remove('sidebar-collapsed');
+            abrirFicha();
         }
 
         function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, configEscala, funcionEstilo, funcionDetalle, alCargarGeojson }) {
@@ -1099,7 +1143,7 @@
                     mostrarDetalleSector(sectores[i].props);
                 });
             });
-            detailsSidebar.classList.remove('sidebar-collapsed');
+            abrirFicha();
         }
 
         function seleccionarColonia(g) {
