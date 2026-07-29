@@ -16,8 +16,14 @@
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
           crossorigin=""/>
 
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="styles.css">
+    <!-- Custom CSS. The ?v= is a cache buster and it earns its keep: the
+         markup and the stylesheet have to move together (the suggestion rows
+         are two-line markup styled by two-line rules), and a browser holding a
+         stale styles.css renders the new markup with the old layout. The dev
+         server sends no Cache-Control or ETag at all, only Last-Modified, so
+         browsers cache it heuristically and never revalidate. Bump this
+         whenever a stylesheet change is one the markup depends on. -->
+    <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
 
@@ -1094,6 +1100,19 @@
         let indiceCalles = null;
         let cargaCalles = null;
 
+        // Shape of the zone tuples this parser understands. Must match
+        // FORMATO_INDICE_CALLES in scripts/process_data.py.
+        //
+        // It exists because the failure it prevents was observed for real: the
+        // index is fetched with `no-cache`, so a regenerated file reaches the
+        // page immediately — including a page that is itself a cached older
+        // version. An older parser reading a newer shape did not throw, it
+        // resolved lookups to `undefined` and printed "undefined · SALTILLO"
+        // into the suggestion list. Refusing an unknown version turns that into
+        // an honest, visible failure: the street search goes unavailable and
+        // says why, and the colonia search carries on.
+        const FORMATO_INDICE_CALLES = 2;
+
         function cargarIndiceCalles() {
             if (cargaCalles) return cargaCalles;
             // `cache: 'no-cache'` for the same reason as the map layers: it
@@ -1108,6 +1127,11 @@
                     return r.json();
                 })
                 .then(json => {
+                    if (json.formato !== FORMATO_INDICE_CALLES) {
+                        throw new Error(
+                            `formato ${json.formato} no reconocido (esta página entiende ` +
+                            `${FORMATO_INDICE_CALLES}); recarga forzada para actualizarla`);
+                    }
                     indiceCalles = {
                         meta: { fuente: json.fuente, fecha: json.fecha_corte },
                         calles: json.calles.map(([nombre, zonas]) => ({

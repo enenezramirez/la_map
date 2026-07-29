@@ -140,6 +140,12 @@ TIPOS_NO_VIALIDAD = frozenset({"RASGO", "SIN REFERENCIA"})
 # for the layers.
 CALLES_JSON = DATA_DIR / "calles.json"
 
+# Shape of each zone tuple in calles.json. Version 1 was
+# [tipo, asentamiento, municipio, cp, agebs]; version 2 turned the settlement
+# and the postal code into lists when zones resolving to the same sectors were
+# merged. Must match FORMATO_INDICE_CALLES in index.html.
+FORMATO_INDICE_CALLES = 2
+
 # Metric CRS (the same as INEGI's vector cartography) used only to compute
 # distances in meters; the final output is reprojected to EPSG:4326.
 CRS_METRICO = "EPSG:6372"
@@ -458,6 +464,13 @@ def construir_indice_calles() -> dict:
         f"(merged down from {len(zonas)}), {len(agebs)} AGEBs referenced."
     )
     return {
+        # Shape version. The page fetches this file with `no-cache`, so a fresh
+        # index reliably reaches a page that may itself be a cached older
+        # version — and an older parser reading a newer shape does not fail, it
+        # renders "undefined" into the interface, which is worse than failing.
+        # Bump this whenever the zone tuple changes; the frontend refuses a
+        # version it does not know and says so instead of showing garbage.
+        "formato": FORMATO_INDICE_CALLES,
         "fuente": INEGI_VECTORIAL_FUENTE,
         "fecha_corte": INEGI_VECTORIAL_FECHA_CORTE,
         "tipos": tipos,
