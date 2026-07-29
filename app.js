@@ -601,8 +601,12 @@ function actualizarLeyenda() {
     // The color still comes from the JS palette, which is the point: the map
     // polygons read the same constants, and a second copy in the stylesheet
     // would be a second source of truth for the color law, free to drift.
+    // The hex test is the invariant stated mechanically instead of trusted to a
+    // comment: only a palette-shaped literal is ever assigned, so this fails
+    // closed (an uncolored swatch) if a computed value ever reaches data-swatch.
     for (const muestra of contenedor.querySelectorAll('.legend-swatch[data-swatch]')) {
-        muestra.style.background = muestra.dataset.swatch;
+        const color = muestra.dataset.swatch;
+        if (/^#[0-9a-f]{3,8}$/i.test(color)) muestra.style.background = color;
     }
 
     for (const bloque of contenedor.querySelectorAll('.legend-block')) {

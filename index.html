@@ -17,6 +17,19 @@
          styles.css, the woff2 fonts, the SVG favicon, and the fetches for the
          GeoJSON layers and data/calles.json.
 
+         The unpkg sources are pinned down to the FILE, not the host, and that
+         distinction carries most of the weight here: unpkg is a mirror of all
+         of npm, so a bare `https://unpkg.com` in script-src would match every
+         path on it and amount to a script-execution wildcard. The <script> tag
+         pins its path and checks an integrity hash, but a CSP host-source does
+         neither, so an injected <script src="https://unpkg.com/anything.js">
+         would have sailed through the very policy meant to contain it. A
+         source with a path is matched as written (the trailing `/` on the
+         img-src entry makes it a directory prefix, covering layers.png and
+         layers-2x.png). The stronger move is to vendor Leaflet into the repo
+         and drop unpkg entirely, the way the fonts already were — that is a
+         separate decision, noted in task.md.
+
          `data:` under img-src is Leaflet's, and it is not optional: to cancel a
          tile request still in flight, Leaflet points that <img> at a 1x1
          transparent GIF it keeps as a data: URI (L.Util.emptyImageUrl). Without
@@ -42,9 +55,9 @@
          not let us set. -->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
-        script-src 'self' https://unpkg.com;
-        style-src 'self' https://unpkg.com;
-        img-src 'self' data: https://*.basemaps.cartocdn.com https://unpkg.com;
+        script-src 'self' https://unpkg.com/leaflet@1.9.4/dist/leaflet.js;
+        style-src 'self' https://unpkg.com/leaflet@1.9.4/dist/leaflet.css;
+        img-src 'self' data: https://*.basemaps.cartocdn.com https://unpkg.com/leaflet@1.9.4/dist/images/;
         font-src 'self';
         connect-src 'self';
         object-src 'none';
