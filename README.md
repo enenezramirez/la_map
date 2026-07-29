@@ -50,7 +50,8 @@ Open `http://localhost:8000` in your browser.
 ## Structure
 
 ```
-index.html           Map (Leaflet) and interface logic
+index.html           Markup, Content-Security-Policy, asset loading
+app.js               Application logic: map, layers, legends, search, cards
 styles.css           Styles (dark theme, design tokens in :root)
 assets/
   logo-traza.svg     Vertex mark; also the favicon
@@ -63,6 +64,7 @@ data/
   riesgo_deslizamientos.geojson  Landslide-risk layer (IMPLAN)
   riesgo_quimico.geojson         Chemical-technological risk layer (IMPLAN)
   riesgo_inundacion.png          ANRI severity raster (backup) + its _meta.json
+  calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
 DATOS.md             Data log: provenance of each dataset
 ```
 
