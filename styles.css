@@ -1,3 +1,51 @@
+/* Self-hosted typefaces (SIL OFL 1.1 — license texts in assets/fonts/).
+   Served from this origin rather than Google Fonts for three reasons that a
+   <link> to fonts.googleapis.com cannot solve: the stylesheet it returns varies
+   by User-Agent, so it cannot carry a Subresource Integrity hash; every visitor
+   makes a request to a third party, handing over an IP and a User-Agent just to
+   read a map; and two extra DNS lookups plus TLS handshakes sit in front of the
+   first paint.
+
+   Only the `latin` subset ships. Audited, not assumed: neither the interface nor
+   the 431 AGEB colonia and municipio names contain a single character outside
+   that range.
+
+   Inter is a variable font, so one file covers the whole weight axis. IBM Plex
+   Mono is not, so its two weights are two files. The app declares only 400 and
+   500 — every heading and <strong> sets its weight explicitly, so nothing falls
+   back to the browser's default bold — which is why the 300, 600 and 700 Inter
+   files that used to be requested were downloaded and never drawn.
+
+   The two italic runs in the legend glossary were already synthesized by the
+   browser (the Google request carried no italic axis), and still are: shipping
+   no italic file keeps rendering identical to before. */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('assets/fonts/inter-latin-variable.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('assets/fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('assets/fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* Style reset */
 * {
     margin: 0;
@@ -514,6 +562,25 @@ body {
     margin-bottom: 10px;
 }
 
+/* Stated, not hidden: the settlement INEGI records for a street front and the
+   colonia the map publishes the sector under disagree 42% of the time. Amber is
+   the identity's "pay attention" signal, and the left rule keeps the note from
+   reading as one more data row. */
+.detail-note {
+    margin: 10px 0;
+    padding: 8px 10px;
+    border-left: 2px solid var(--tz-accent);
+    background: var(--tz-bg);
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--tz-text-2);
+}
+
+.detail-note strong {
+    color: var(--tz-text);
+    font-weight: 500;
+}
+
 .sector-list {
     list-style: none;
     display: flex;
@@ -697,14 +764,27 @@ body {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
+/* Two lines: the name on its own, the kind tag and settlement below it. Sharing
+   one line made the settlement label — which never wraps — push the street name
+   down to 0px on the longest rows, and overflowed the list sideways
+   (512px of content in a 278px box). Stacking gives each the full width and
+   makes horizontal overflow impossible. */
 .search-suggestion {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
     padding: 8px 12px;
     cursor: pointer;
     border-bottom: 1px solid var(--tz-border);
+    min-width: 0;
+}
+
+.suggestion-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
 .search-suggestion:last-child {
@@ -726,9 +806,30 @@ body {
     box-shadow: inset 3px 0 0 var(--tz-accent);
 }
 
+/* Colonias and streets share one list, so each row states which it is. The tag
+   sits inside the option element on purpose: that makes it part of the name a
+   screen reader announces, where the street name alone would not say whether
+   the result is a place or a road. */
+.suggestion-kind {
+    flex: 0 0 auto;
+    font-family: var(--tz-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+    color: var(--tz-text-3);
+    border: 1px solid var(--tz-border-ui);
+    border-radius: 3px;
+    padding: 1px 4px;
+    align-self: center;
+}
+
 .suggestion-name {
     font-size: 0.82rem;
     color: var(--tz-text);
+    /* Full width of the row; only a name longer than the whole list gets cut. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .suggestion-mun {
@@ -737,5 +838,10 @@ body {
     color: var(--tz-text-3);
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    /* It shrinks now instead of pushing the row wider: it is the context line,
+       and a settlement name can be far longer than the box. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
