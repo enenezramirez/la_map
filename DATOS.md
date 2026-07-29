@@ -76,6 +76,21 @@ colonia name of each one.
   **`SIN REFERENCIA`** (143). Left in, they dominate the index: `OTRO` alone would appear
   in 401 settlements, more than any real street in the city. See `VALORES_SIN_VIALIDAD` and
   `TIPOS_NO_VIALIDAD` in `scripts/process_data.py`.
+* **Several settlements per street inside one AGEB — merged, not dropped.** INEGI records
+  different `NOMASEN` values on different fronts of the *same* street inside the *same*
+  AGEB, so the index would offer two or more "tramos" that resolve to identical sectors:
+  1,553 groups, 14.5% of zones (worst case `CAMINO ANTIGUO A LOS RAMONES`, **seven**
+  settlement names in one sector). Since the AGEB is the unit every figure is published
+  at, those are one answer and not several, so they are merged into a single zone that
+  carries **all** the names; the app states them on the card. The road type stays out of
+  the merge — a `CALLE` and a `PRIVADA` of the same name in the same sector are two
+  different roads (519 groups). The municipality cannot differ within a group (verified:
+  0), because the sectors determine it.
+* **Typos in `NOMVIAL` produce near-duplicate street names, and are left alone.** Example:
+  `NICOLÁS BRAVO` and `NICÓLAS BRAVO` (accent on the wrong vowel) both exist and stay as
+  two separate entries, because the raw strings differ. The search folds accents, so both
+  are reachable from the same query. **They are deliberately not "corrected":** rewriting a
+  source value would be inventing data, the same rule applied to `NOMASEN` fillers.
 * **Measured: a front's own `NOMASEN` and its AGEB's published colonia disagree 42.1% of
   the time** (27,044 of 64,234 street fronts). This is the same 1:1 limitation noted below,
   quantified: an AGEB routinely spans several settlements and the map keeps the dominant
