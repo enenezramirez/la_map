@@ -383,6 +383,64 @@ at a useful granularity**. This is not a final discard: it has a reactivation cr
 
 ---
 
+### 3.5 Cadastral land value (Tablas de Valores de Suelo y Construcción) — viable, blocked on the current edition
+
+User's idea: land value is the single most relevant figure for the investor audience the
+product is aimed at. Investigated **2026-07-27** (sources located) and **2026-07-29** (format
+and join measured). **The verdict is the opposite of the other deferred datasets: this one is
+not a granularity trap.** It is deferred only because the *current* edition has not been read.
+
+* **IMPLAN / CARTO SALTILLO does not publish it.** 21 layers reviewed (boundaries, demography,
+  public space, risk atlas, transport, heritage, mobility) — none cadastral. This rules out the
+  route that would have been easiest, since that portal is already a source for this project.
+* **The document exists and is municipal:** *«Tablas de Valores de Suelo y Construcción»*,
+  Tesorería Municipal, on Saltillo's transparency portal (Article 28 §XIII), as PDF. The
+  Congreso de Coahuila publishes an equivalent edition per year, which is where the value
+  tables are attached to the approving decree.
+* **Granularity: BY COLONIA / FRACCIONAMIENTO, by name.** Verified by extracting the text of
+  the Congreso's Saltillo edition. The header reads *«TABLAS DE VALORES CATASTRALES POR
+  COLONIAS Y FRACCIONAMIENTOS APLICABLE A LOS PREDIOS URBANOS DEL MUNICIPIO DE SALTILLO»*, with
+  columns `COLONIA O FRACCIONAMIENTOS` and `TIPO DE TERRENO`. **This is the same unit the app
+  already works in**, so no geometry, no spatial join and no new dependency is needed — the
+  key is the colonia name the AGEB layer already carries.
+* **The value is a two-step lookup**, both tables in the same document: colonia → a class
+  (`POPULAR (1)`, `INTERES SOCIAL (2)`, `MEDIO ALTO`, `RESIDENCIAL 1a.`, `ZONA TIPICA`,
+  `INDUSTRIAL (1)`…) → pesos per m². The class distribution over 660 rows is itself informative:
+  `POPULAR (1)` 151, `INTERES SOCIAL (2)` 114, `POPULAR (2)` 112, `RESIDENCIAL 1a.` 66,
+  `MEDIO BAJO` 63, `MEDIO MEDIO` 55, `MEDIO ALTO` 52, `INTERES SOCIAL (1)` 34,
+  `INDUSTRIAL` 10, `ZONA TIPICA` 3.
+* **It discriminates, which is exactly what CENAPRED and crime incidence failed to do.** In the
+  edition read, the class values span **$149.50/m² (`POPULAR (1)`) to $1,685.51/m²
+  (`RESIDENCIAL DE LUJO`) — an 11× spread across the city**. `ZONA CENTRO` is handled by a
+  separate table with min/max ranges per terrain type rather than a single figure.
+* **The name join was measured, not assumed.** Against the 226 Saltillo colonias the app
+  publishes: **145 exact matches (64.2%)** after folding accents, case, punctuation and
+  zero-padding (`5 DE MAYO` = `05 DE MAYO`). Of the 81 misses, **49 would match on token-subset**
+  (word order, e.g. app `AMPLIACIÓN 26 DE MARZO` vs cadastre `26 DE MARZO II SECTOR AMPLIACION`)
+  and **32 have no counterpart at all** — and those are dominated by developments that postdate
+  the edition read (`HABITA`, `REAL ANKARA`, `ARBOREA`, `ANALCO II`). So 64% is a **floor
+  measured on an old edition with naive matching**, not the achievable rate.
+* **What is still missing, and it is the only blocker:** the **format** was verified on an older
+  edition, because both the 2026 municipal PDF and the 2022 Congreso PDF **exceed the 10 MB
+  download limit of the available fetch tool**. Reading the current values requires downloading
+  one of those files deliberately. The extraction itself needs no new dependency — the PDFs carry
+  real embedded text (not scans), and a stdlib `zlib` pass over the FlateDecode streams recovers
+  the tables. Note that a fetch tool reporting "unreadable" is **not** evidence of a scan: it
+  simply does not inflate compressed streams.
+* **Honesty requirement if this is ever published, and it is not optional for this audience:**
+  a cadastral value is a **tax base, not a market price**. In Mexico it is set deliberately
+  below market value, and here it is a *class* assigned to a whole colonia, not an appraisal of
+  a property. Presenting it as "what land is worth here" would mislead exactly the user the
+  product is for. It should be labelled as the official cadastral reference value, with its
+  edition year, and the two-step derivation (colonia → class → $/m²) stated in the detail card.
+* **Reactivation criterion:** none needed — this is ready to implement as soon as the current
+  edition is downloaded and parsed. The remaining design decision is whether it enters the
+  Investment Index as a component or stays informational; note that a *low* land value is
+  ambiguous for an investor (cheap entry vs weak area), so it is not obviously a positive or a
+  negative term, unlike services or risk.
+
+---
+
 ## 4. Traceability of the published layers
 
 For each file served to the browser, its origin:
