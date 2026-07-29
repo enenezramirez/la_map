@@ -2,6 +2,55 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+
+    <!-- Content-Security-Policy. Second layer, not a bug fix: every field that
+         reaches the DOM from the data files goes through esc() first, and both
+         Leaflet files carry an integrity hash. This is what limits the damage
+         if either of those ever fails.
+         It has to sit here, above every <link> and <script>: a meta policy only
+         governs what the parser meets after it.
+
+         Each source is here because something on the page needs it — Leaflet
+         from unpkg (js + css), CARTO tiles (a-d.basemaps.cartocdn.com), and
+         unpkg again under img-src for the layers-control icon that leaflet.css
+         loads by relative URL. Everything else is same-origin: app.js,
+         styles.css, the woff2 fonts, the SVG favicon, and the fetches for the
+         GeoJSON layers and data/calles.json.
+
+         `data:` under img-src is Leaflet's, and it is not optional: to cancel a
+         tile request still in flight, Leaflet points that <img> at a 1x1
+         transparent GIF it keeps as a data: URI (L.Util.emptyImageUrl). Without
+         this, two zoom clicks logged 16 img-src violations — measured. Nothing
+         breaks (the handlers are detached and the tile removed before the src
+         is reassigned, so the map still draws), but panning would flood the
+         console permanently and drown out any real error. It is a cheap source
+         to allow: the dangerous places for `data:` are script-src, object-src
+         and frame-src, where such a URI can execute or navigate, and none of
+         them admit it here.
+
+         The three 'none' at the end close doors the page never uses: no
+         plugins, no <base> to repoint every relative URL, no form target.
+
+         Deliberately absent: 'unsafe-inline'. Neither script-src nor style-src
+         needs it — the app logic moved to app.js, and the legend swatches are
+         colored through the CSSOM instead of a style attribute. Admitting it
+         would forfeit most of the policy, since an injected inline block is
+         indistinguishable from one we wrote.
+         Also absent, and worth knowing: frame-ancestors, report-uri and
+         sandbox are IGNORED in a meta policy, so this does nothing against
+         framing. That needs a real response header, which GitHub Pages does
+         not let us set. -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' https://unpkg.com;
+        style-src 'self' https://unpkg.com;
+        img-src 'self' data: https://*.basemaps.cartocdn.com https://unpkg.com;
+        font-src 'self';
+        connect-src 'self';
+        object-src 'none';
+        base-uri 'none';
+        form-action 'none'">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Traza — Inteligencia territorial · Saltillo</title>
     <link rel="icon" type="image/svg+xml" href="assets/logo-traza.svg">

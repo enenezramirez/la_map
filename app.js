@@ -97,10 +97,14 @@ document.getElementById('close-sidebar').addEventListener('click', () => {
 // five entities are enough for both, and that is every context this file
 // uses it in. They are NOT enough for an unquoted attribute, a URL
 // (`href`/`src`, where `javascript:` survives escaping) or a CSS context
-// (`style="..."`, where `url(...)` does). The three `style="background:
-// ${...}"` interpolations further down are safe only because they take
-// hardcoded palette constants — do not reach for esc() to make a
-// computed value safe there.
+// (`style="..."`, where `url(...)` does).
+//
+// This file no longer writes a style attribute anywhere — the legend
+// swatches carry `data-swatch` and are colored through the CSSOM — but the
+// CSS caveat still holds on the far side of that hop: whatever lands in
+// data-swatch is assigned to `style.background`, so it must stay a
+// hardcoded palette constant. esc() would not make a computed value safe
+// there.
 function esc(valor) {
     return String(valor)
         .replace(/&/g, '&amp;')
@@ -294,7 +298,7 @@ function htmlAyudaRiesgo(clave, conteos) {
 function htmlLeyendaRiesgo(titulo, clave, conteos, fuente, fecha) {
     const filas = ORDEN_RIESGO.filter(n => conteos.has(n)).map(n => `
         <div class="legend-row">
-            <span class="legend-swatch" style="background:${COLORES_RIESGO[n]}"></span>
+            <span class="legend-swatch" data-swatch="${COLORES_RIESGO[n]}"></span>
             <span>${esc(n)}</span>
         </div>
     `).join('');
@@ -500,13 +504,13 @@ function htmlLeyenda(titulo, escalones, nSinDato = 0, clave = null) {
     if (escalones.length === 0) return `<p class="empty-legend">Cargando…</p>`;
     const filas = escalones.map(e => `
         <div class="legend-row">
-            <span class="legend-swatch" style="background:${e.color}"></span>
+            <span class="legend-swatch" data-swatch="${e.color}"></span>
             <span>${esc(e.etiqueta)}</span>
         </div>
     `).join('');
     const filaSinDato = nSinDato > 0 ? `
         <div class="legend-row">
-            <span class="legend-swatch" style="background:${COLOR_SIN_DATO}"></span>
+            <span class="legend-swatch" data-swatch="${COLOR_SIN_DATO}"></span>
             <span>Sin datos (${nSinDato})</span>
         </div>
     ` : '';
@@ -588,6 +592,18 @@ function actualizarLeyenda() {
 
     contenedor.innerHTML = aviso + claves.map(clave =>
         `<div class="legend-block" data-capa="${esc(clave)}">${LEYENDAS[clave]()}</div>`).join('');
+
+    // Each swatch carries its color in data-swatch and gets it applied here,
+    // rather than arriving as a `style="background:…"` attribute. A style
+    // attribute in markup is governed by the CSP (style-src-attr), so keeping
+    // one would have forced 'unsafe-inline' into style-src for three spans;
+    // assigning through the CSSOM is not subject to the policy at all.
+    // The color still comes from the JS palette, which is the point: the map
+    // polygons read the same constants, and a second copy in the stylesheet
+    // would be a second source of truth for the color law, free to drift.
+    for (const muestra of contenedor.querySelectorAll('.legend-swatch[data-swatch]')) {
+        muestra.style.background = muestra.dataset.swatch;
+    }
 
     for (const bloque of contenedor.querySelectorAll('.legend-block')) {
         const ayuda = bloque.querySelector('details');
