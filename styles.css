@@ -764,14 +764,27 @@ body {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
+/* Two lines: the name on its own, the kind tag and settlement below it. Sharing
+   one line made the settlement label — which never wraps — push the street name
+   down to 0px on the longest rows, and overflowed the list sideways
+   (512px of content in a 278px box). Stacking gives each the full width and
+   makes horizontal overflow impossible. */
 .search-suggestion {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
     padding: 8px 12px;
     cursor: pointer;
     border-bottom: 1px solid var(--tz-border);
+    min-width: 0;
+}
+
+.suggestion-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
 .search-suggestion:last-child {
@@ -812,9 +825,7 @@ body {
 .suggestion-name {
     font-size: 0.82rem;
     color: var(--tz-text);
-    /* Takes the slack so the tag and the municipality keep their own edges,
-       and long street names shorten instead of pushing them out of the box. */
-    flex: 1 1 auto;
+    /* Full width of the row; only a name longer than the whole list gets cut. */
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -827,5 +838,10 @@ body {
     color: var(--tz-text-3);
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    /* It shrinks now instead of pushing the row wider: it is the context line,
+       and a settlement name can be far longer than the box. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }

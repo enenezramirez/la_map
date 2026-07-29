@@ -395,12 +395,41 @@ def construir_indice_calles() -> dict:
         df.groupby(["NOMVIAL", "TIPOVIAL", "NOMASEN", "NOM_MUN"])
         .agg(
             agebs=("CVEGEO", lambda s: sorted(set(s))),
-            # A zone can straddle two postal codes; the dominant one is the
-            # useful hint, and it is only ever shown as a hint.
+            # A settlement can straddle two postal codes; the dominant one is
+            # the useful hint, and it is only ever shown as a hint.
             cp=("CP", lambda s: s.value_counts().idxmax()),
         )
         .reset_index()
     )
+
+    # Merge the zones that resolve to the SAME sectors under the same road type.
+    # Two such zones are one answer, not two: the card they open is built
+    # entirely from the AGEB, so offering them separately asks the user to
+    # choose between identical outcomes — a choice the data cannot back. It
+    # happens to 1,553 groups (14.5% of zones), because an AGEB routinely spans
+    # several settlements and INEGI records different NOMASEN on different
+    # fronts of the same street inside it. Every settlement name is kept, joined
+    # onto the one zone; none is dropped.
+    #
+    # The road type stays in the key on purpose: a CALLE and a PRIVADA of the
+    # same name in the same sector are two different roads, and merging them
+    # would erase a real distinction (519 groups). Municipality is not in the
+    # key because it cannot differ — the sectors determine it, verified: 0
+    # groups with more than one.
+    fusionadas: dict[tuple, dict] = {}
+    for zona in zonas.itertuples(index=False):
+        clave = (zona.NOMVIAL, zona.TIPOVIAL, tuple(zona.agebs))
+        grupo = fusionadas.setdefault(clave, {
+            "municipio": zona.NOM_MUN, "asentamientos": set(), "cps": set(),
+        })
+        grupo["asentamientos"].add(zona.NOMASEN)
+        grupo["cps"].add(zona.cp)
+
+    tipos = sorted({clave[1] for clave in fusionadas})
+    asentamientos = sorted({a for g in fusionadas.values() for a in g["asentamientos"]})
+    municipios = sorted({g["municipio"] for g in fusionadas.values()})
+    cps = sorted({c for g in fusionadas.values() for c in g["cps"]})
+    agebs = sorted({a for clave in fusionadas for a in clave[2]})
 
     tipos = sorted(zonas["TIPOVIAL"].unique())
     asentamientos = sorted(zonas["NOMASEN"].unique())
@@ -415,18 +444,18 @@ def construir_indice_calles() -> dict:
     idx_ageb = {v: i for i, v in enumerate(agebs)}
 
     calles: dict[str, list] = {}
-    for zona in zonas.itertuples(index=False):
-        calles.setdefault(zona.NOMVIAL, []).append([
-            idx_tipo[zona.TIPOVIAL],
-            idx_asen[zona.NOMASEN],
-            idx_muni[zona.NOM_MUN],
-            idx_cp[zona.cp],
-            [idx_ageb[a] for a in zona.agebs],
+    for (nombre, tipo, claves_ageb), grupo in sorted(fusionadas.items()):
+        calles.setdefault(nombre, []).append([
+            idx_tipo[tipo],
+            [idx_asen[a] for a in sorted(grupo["asentamientos"])],
+            idx_muni[grupo["municipio"]],
+            [idx_cp[c] for c in sorted(grupo["cps"])],
+            [idx_ageb[a] for a in claves_ageb],
         ])
 
     print(
-        f"  {len(calles)} street names, {len(zonas)} street-settlement zones, "
-        f"{len(agebs)} AGEBs referenced."
+        f"  {len(calles)} street names, {len(fusionadas)} zones "
+        f"(merged down from {len(zonas)}), {len(agebs)} AGEBs referenced."
     )
     return {
         "fuente": INEGI_VECTORIAL_FUENTE,

@@ -831,11 +831,23 @@
         // result the user just clicked.
         function htmlContextoCalle(contexto, colonia) {
             if (!contexto) return '';
-            const distinto = contexto.asentamiento && contexto.asentamiento !== colonia;
+            const asentamientos = contexto.asentamientos || [];
+            const otros = asentamientos.filter(a => a !== colonia);
+            let nota = '';
+            if (otros.length === asentamientos.length && otros.length) {
+                // None of the recorded settlements is the one the sector is
+                // published under.
+                nota = `<p class="detail-note">Ese tramo está en ${asentamientos.length === 1 ? 'el asentamiento' : 'los asentamientos'} <strong>${esc(listaEsp(asentamientos))}</strong>. El sector se publica bajo <strong>${esc(colonia)}</strong>, el asentamiento predominante del AGEB.</p>`;
+            } else if (otros.length) {
+                // The card's own title is one of them; the rest still deserve
+                // saying, or the merged zone would hide names it really carries.
+                nota = `<p class="detail-note">Esta vialidad también se registra en <strong>${esc(listaEsp(otros))}</strong>, dentro del mismo sector.</p>`;
+            }
+            const cps = contexto.cps || [];
             return `
                 <p class="detail-row"><span>Vialidad</span><strong>${esc(contexto.tipoVia)} ${esc(contexto.calle)}</strong></p>
-                ${contexto.cp ? `<p class="detail-row"><span>Código postal</span><strong>${esc(contexto.cp)}</strong></p>` : ''}
-                ${distinto ? `<p class="detail-note">Ese tramo está en el asentamiento <strong>${esc(contexto.asentamiento)}</strong>. El sector se publica bajo <strong>${esc(colonia)}</strong>, el asentamiento predominante del AGEB.</p>` : ''}
+                ${cps.length ? `<p class="detail-row"><span>Código postal</span><strong>${esc(cps.join(' · '))}</strong></p>` : ''}
+                ${nota}
             `;
         }
 
@@ -1012,6 +1024,13 @@
         // Placeholder labels are not real places; keep them out of the search.
         const COLONIAS_NO_BUSCABLES = new Set(['SIN NOMBRE REGISTRADO', 'Sin nombre de colonia']);
 
+        // "A", "A y B", "A, B y C" — a merged zone can carry up to 7 settlement
+        // names, and a bare join reads as a list of separate places.
+        function listaEsp(valores) {
+            if (valores.length <= 1) return valores[0] || '';
+            return valores.slice(0, -1).join(', ') + ' y ' + valores[valores.length - 1];
+        }
+
         // Fold accents and case so "peñas" matches "penas" and "Centro" "centro",
         // and fold punctuation to a single space, because nobody types the
         // period in "FRANCISCO I. MADERO" or "ALFREDO V. BONFIL" — 76 street
@@ -1077,7 +1096,13 @@
 
         function cargarIndiceCalles() {
             if (cargaCalles) return cargaCalles;
-            cargaCalles = fetch('data/calles.json')
+            // `cache: 'no-cache'` for the same reason as the map layers: it
+            // revalidates with the server instead of trusting a stale copy.
+            // It matters more here — this file's SHAPE changes between
+            // versions, so a returning visitor holding an old copy would not
+            // just see old streets, the parser would throw on it and the whole
+            // street search would go quiet. (Observed exactly that in testing.)
+            cargaCalles = fetch('data/calles.json', { cache: 'no-cache' })
                 .then(r => {
                     if (!r.ok) throw new Error(`HTTP ${r.status}`);
                     return r.json();
@@ -1088,11 +1113,15 @@
                         calles: json.calles.map(([nombre, zonas]) => ({
                             nombre,
                             normalizado: normalizarTexto(nombre),
-                            zonas: zonas.map(([t, a, m, cp, agebs]) => ({
+                            // A zone is one road type over one set of sectors.
+                            // Settlements and postal codes are lists because the
+                            // pipeline merges the zones that open the same
+                            // sectors: several names, one place.
+                            zonas: zonas.map(([t, asen, m, cps, agebs]) => ({
                                 tipoVia: json.tipos[t],
-                                asentamiento: json.asentamientos[a],
+                                asentamientos: asen.map(i => json.asentamientos[i]),
                                 municipio: json.municipios[m],
-                                cp: json.cps[cp],
+                                cps: cps.map(i => json.cps[i]),
                                 claves: agebs.map(i => json.agebs[i])
                             }))
                         }))
@@ -1139,9 +1168,17 @@
                 encontrados.push({
                     pos, clase: 'calle', orden: 1,
                     titulo: calle.nombre,
-                    subtitulo: unica
-                        ? `${unica.asentamiento} · ${unica.municipio}`
-                        : `${calle.zonas.length} asentamientos`,
+                    // "Tramos", not "asentamientos": after the merge a zone can
+                    // carry several settlement names, so counting zones is not
+                    // counting names. And a merged zone with many names is
+                    // counted rather than listed — spelling out seven of them
+                    // produces a truncated blob that labels nothing, which is
+                    // the very problem this row is meant to solve.
+                    subtitulo: !unica
+                        ? `${calle.zonas.length} tramos`
+                        : unica.asentamientos.length <= 2
+                            ? `${listaEsp(unica.asentamientos)} · ${unica.municipio}`
+                            : `${unica.asentamientos.length} asentamientos · ${unica.municipio}`,
                     // A street name can carry more than one road type across the
                     // city (778 do), and then no single one is true.
                     etiqueta: tipos.size === 1 ? [...tipos][0] : 'VIALIDAD',
@@ -1187,12 +1224,20 @@
             // The kind tag is inside the option, so it is part of the name a
             // screen reader announces: with colonias and streets in one list,
             // the name alone would not say which is which.
+            // Two lines, and the name gets the first one to itself. On one line
+            // the settlement label — up to 439px for "ZONA DE AMORTIGUAMIENTO DE
+            // LA SIERRA DE ZAPALINAMÉ III · Saltillo" — took all the room and
+            // left the street name 0px in 4 of 8 rows, so "COLA DE PESCADO"
+            // rendered as nothing and three different streets all read "NI…".
+            // The name is what was searched for; the settlement is context.
             buscadorSugerencias.innerHTML = lista.map((r, i) => `
                 <li class="search-suggestion" role="option" id="colonia-opcion-${i}"
                     aria-selected="false" data-i="${i}">
-                    <span class="suggestion-kind">${esc(r.etiqueta)}</span>
                     <span class="suggestion-name">${esc(r.titulo)}</span>
-                    <span class="suggestion-mun">${esc(r.subtitulo)}</span>
+                    <span class="suggestion-meta">
+                        <span class="suggestion-kind">${esc(r.etiqueta)}</span>
+                        <span class="suggestion-mun">${esc(r.subtitulo)}</span>
+                    </span>
                 </li>
             `).join('');
             buscadorSugerencias.hidden = false;
@@ -1327,31 +1372,32 @@
         function abrirZonaDeCalle(calle, zona) {
             const sectores = sectoresDeZona(zona);
             encuadrarYResaltar(sectores);
-            const contexto = { calle: calle.nombre, tipoVia: zona.tipoVia, asentamiento: zona.asentamiento, cp: zona.cp };
+            const contexto = { calle: calle.nombre, tipoVia: zona.tipoVia,
+                               asentamientos: zona.asentamientos, cps: zona.cps };
             if (sectores.length === 1) mostrarDetalleSector(sectores[0].props, contexto);
             else if (sectores.length > 1) {
                 mostrarSectoresDeColonia({
-                    colonia: zona.asentamiento, municipio: zona.municipio, sectores
+                    colonia: listaEsp(zona.asentamientos), municipio: zona.municipio, sectores
                 }, contexto);
             }
         }
 
         function mostrarTramosDeCalle(calle) {
             const zonas = calle.zonas.slice().sort((a, b) =>
-                a.asentamiento.localeCompare(b.asentamiento, 'es'));
+                a.asentamientos[0].localeCompare(b.asentamientos[0], 'es'));
             const municipios = [...new Set(zonas.map(z => z.municipio))];
             document.getElementById('sector-title').textContent = calle.nombre;
             document.getElementById('sector-info').innerHTML = `
                 <p class="detail-row"><span>Municipio</span><strong>${esc(municipios.join(', '))}</strong></p>
-                <p class="detail-row"><span>Asentamientos</span><strong>${zonas.length}</strong></p>
+                <p class="detail-row"><span>Tramos</span><strong>${zonas.length}</strong></p>
                 <h3>Elige un tramo</h3>
-                <p class="sector-hint">Una vialidad puede cruzar varios asentamientos; los datos del Censo se publican por sector.</p>
+                <p class="sector-hint">Una vialidad puede cruzar varios asentamientos; los datos del Censo se publican por sector. Los tramos que caen en el mismo sector aparecen juntos.</p>
                 <ul class="sector-list">
                     ${zonas.map(z => `
                         <li>
                             <button type="button" class="sector-btn">
-                                <span class="sector-btn-name">${esc(z.tipoVia)} · ${esc(z.asentamiento)}</span>
-                                <span class="sector-btn-meta">${esc(z.municipio)} · CP ${esc(z.cp)} · ${z.claves.length} sector${z.claves.length === 1 ? '' : 'es'}</span>
+                                <span class="sector-btn-name">${esc(z.tipoVia)} · ${esc(listaEsp(z.asentamientos))}</span>
+                                <span class="sector-btn-meta">${esc(z.municipio)} · CP ${esc(z.cps.join(' · '))} · ${z.claves.length} sector${z.claves.length === 1 ? '' : 'es'}</span>
                             </button>
                         </li>
                     `).join('')}
