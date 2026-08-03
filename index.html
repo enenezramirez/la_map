@@ -174,6 +174,15 @@
 
             <div class="layer-control">
                 <label class="switch-container">
+                    <input type="checkbox" id="layer-cadastral">
+                    <span class="slider"></span>
+                    <span class="layer-name">Valor Catastral del Suelo</span>
+                </label>
+                <p class="layer-desc">Valor de referencia por m² que el municipio usa para el predial (Tesorería · 2026). No es precio de mercado.</p>
+            </div>
+
+            <div class="layer-control">
+                <label class="switch-container">
                     <input type="checkbox" id="layer-investment">
                     <span class="slider"></span>
                     <span class="layer-name">Índice de Inversión Inmobiliaria</span>
@@ -224,6 +233,6 @@
          Leaflet and after the markup above, exactly as the inline block did.
          The ?v= is the same cache buster as styles.css and matters for the
          same reason: markup and script have to move together. -->
-    <script src="app.js?v=1"></script>
+    <script src="app.js?v=3"></script>
 </body>
 </html>

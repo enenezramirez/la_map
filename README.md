@@ -68,6 +68,7 @@ data/
   riesgo_quimico.geojson         Chemical-technological risk layer (IMPLAN)
   riesgo_inundacion.png          ANRI severity raster (backup) + its _meta.json
   calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
+  valor_catastral.json           Cadastral land value per AGEB (informational, not in the index)
 DATOS.md             Data log: provenance of each dataset
 ```
 

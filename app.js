@@ -153,6 +153,28 @@ function esc(valor) {
 const RAMPA_SERVICIOS = ['#7fd4c4', '#35a396', '#2a7d75', '#235a58', '#1d3a3c'];
 const RAMPA_INVERSION = ['#f2d79c', '#d29b33', '#a87c27', '#7d5c22', '#4a3a24'];
 
+// Cadastral value reuses the amber ramp on purpose. The color law is by
+// MEANING, not by layer: amber-cream is the "value" family, and land value
+// belongs to it as much as the investment index does. The legend already
+// renders one block per active layer and warns when a ramp is shared, so
+// the repetition is labelled rather than silent.
+const RAMPA_CATASTRO = RAMPA_INVERSION;
+
+// Fixed pesos/m2 breaks, NOT quantiles. The other two layers use quantiles
+// because their values are continuous and bunched; this one has just 14
+// distinct values (one per terrain class), so quantiles would cut between
+// identical figures and put the same class in two colors. Fixed breaks also
+// keep the legend meaningful across editions: the tables are reissued yearly
+// and the classes are reasonably stable, whereas a quantile cut would move
+// under the reader's feet.
+const ESCALONES_CATASTRO = [
+    { hasta: 500, color: '#f2d79c', etiqueta: 'Menos de $500' },
+    { hasta: 800, color: '#d29b33', etiqueta: '$500 – $800' },
+    { hasta: 1100, color: '#a87c27', etiqueta: '$800 – $1,100' },
+    { hasta: 1500, color: '#7d5c22', etiqueta: '$1,100 – $1,500' },
+    { hasta: Infinity, color: '#4a3a24', etiqueta: '$1,500 o más' }
+];
+
 // Neutral gray for "no data": neither good nor bad, and outside both
 // ramps so it isn't confused with a low value.
 const COLOR_SIN_DATO = '#3a3f47';
@@ -530,7 +552,10 @@ const LEYENDAS = {
     inversion: () => htmlLeyenda('Índice de Inversión Inmobiliaria', ESCALONES_INVERSION, SIN_DATO_CONTEO.inversion, 'inversion'),
     inundacion: () => leyendasRiesgo.inundacion || '<p class="empty-legend">Cargando…</p>',
     deslizamientos: () => leyendasRiesgo.deslizamientos || '<p class="empty-legend">Cargando…</p>',
-    quimico: () => leyendasRiesgo.quimico || '<p class="empty-legend">Cargando…</p>'
+    quimico: () => leyendasRiesgo.quimico || '<p class="empty-legend">Cargando…</p>',
+    // Replaced by cargarCapaCatastro once the lookup arrives, since its class
+    // counts are only known then.
+    catastro: () => '<p class="empty-legend">Cargando…</p>'
 };
 
 // Which risk layers share the single-hue brick ramp: their swatches are
@@ -872,6 +897,172 @@ function cargarCapaRiesgo({ archivo, checkbox, clave, titulo }) {
     });
 }
 
+// --- Cadastral land value (Tesorería Municipal) ---------------------
+// Informational layer: it does NOT feed the Investment Index. A low land
+// value is genuinely ambiguous for a buyer — cheap entry or weak area — so
+// giving it a sign in the score would bake in an undeclared thesis.
+//
+// It is the only layer with no geometry file of its own. The figures are
+// published per colonia, so data/valor_catastral.json is a lookup keyed by
+// AGEB and the polygons come from the ones the services layer already
+// fetched. A third copy of the AGEB geometry would have cost ~640 KB against
+// the 5 MB budget of SPEC §2, which data/ is already close to.
+let catastroMeta = null;
+
+function colorCatastro(valor) {
+    if (valor === null || valor === undefined) return COLOR_SIN_DATO;
+    return (ESCALONES_CATASTRO.find(e => valor < e.hasta) || ESCALONES_CATASTRO.at(-1)).color;
+}
+
+function htmlAyudaCatastro(conteos, sinDato) {
+    const presentes = Object.entries(conteos).sort((a, b) => b[1] - a[1]);
+    const lista = presentes.map(([clase, n]) => `${esc(clase)} (${n})`).join(', ');
+    return `
+        <details class="legend-help">
+            <summary>¿Qué significa este valor?</summary>
+            <div class="legend-help-body">
+                <p><strong>Es un valor catastral, no un precio de mercado.</strong> Es la base
+                   que el municipio usa para cobrar el impuesto predial, y en México se fija
+                   deliberadamente <em>por debajo</em> de lo que cuesta el suelo en realidad.
+                   No sirve para estimar en cuánto se vende un terreno.</p>
+                <p><strong>Es una clase de toda la colonia, no un avalúo del predio.</strong>
+                   El municipio asigna a cada colonia un <em>tipo de terreno</em> y a cada tipo
+                   un precio por m². Dos predios muy distintos de la misma colonia reciben la
+                   misma cifra.</p>
+                <p><strong>Clases presentes:</strong> ${lista}.</p>
+                <p><strong>Gris:</strong> ${sinDato} ${sinDato === 1 ? 'sector' : 'sectores'} sin
+                   valor publicado. No es un cero: al hacer clic, la ficha dice el motivo. Las
+                   tablas cubren <strong>solo el municipio de Saltillo</strong>.</p>
+            </div>
+        </details>
+    `;
+}
+
+function htmlLeyendaCatastro(conteos, sinDato) {
+    const filas = ESCALONES_CATASTRO.map(e => `
+        <div class="legend-row">
+            <span class="legend-swatch" data-swatch="${e.color}"></span>
+            <span>${esc(e.etiqueta)}</span>
+        </div>
+    `).join('');
+    const gris = sinDato > 0 ? `
+        <div class="legend-row">
+            <span class="legend-swatch" data-swatch="${COLOR_SIN_DATO}"></span>
+            <span>Sin valor publicado (${sinDato})</span>
+        </div>
+    ` : '';
+    const fuente = catastroMeta
+        ? `<p class="legend-source">Fuente: ${esc(catastroMeta.fuente)} · ${esc(catastroMeta.edicion)}. Pesos por m².</p>`
+        : '';
+    return `<p class="legend-title">Valor Catastral del Suelo</p>${filas}${gris}${fuente}`
+        + htmlAyudaCatastro(conteos, sinDato);
+}
+
+function mostrarDetalleCatastro(props) {
+    const dato = props.CATASTRO;
+    document.getElementById('sector-title').textContent = props.COLONIA || 'Sector sin colonia';
+
+    let cuerpo;
+    if (!dato) {
+        // Why there is no figure matters: "no row in the tables" and "this
+        // municipality is not covered" are different facts, and neither is a
+        // zero. Same principle as MOTIVO_SIN_DATO in the services card.
+        const motivo = String(props.NOM_MUN || '').toUpperCase() === 'SALTILLO'
+            ? `La colonia <strong>${esc(props.COLONIA || 'de este sector')}</strong> no aparece
+               en las tablas de valores del municipio. Puede ser un desarrollo posterior a la
+               edición vigente, un nombre registrado de otra forma, o suelo no residencial.`
+            : `Las tablas de valores son del <strong>municipio de Saltillo</strong>, y este
+               sector está en <strong>${esc(props.NOM_MUN || 'otro municipio')}</strong>.`;
+        cuerpo = `<p class="detail-note">Sin valor catastral publicado. ${motivo}</p>`;
+    } else {
+        // Say WHY the two names differ rather than lumping both cases into one
+        // phrase: "same words, different order" is simply false of a spacing
+        // difference, and the note exists to stop the card from quietly
+        // contradicting the name on the map.
+        const motivoAlias = dato.via === 'espacios'
+            ? 'escrito junto o separado distinto'
+            : 'mismas palabras, otro orden';
+        const alias = dato.nombre_catastro
+            ? `<p class="detail-note">El catastro registra esta colonia como
+               <strong>${esc(dato.nombre_catastro)}</strong> (${motivoAlias}).</p>`
+            : '';
+        cuerpo = `
+            <div class="detail-row"><span>Tipo de terreno</span><strong>${esc(dato.clase)}</strong></div>
+            <div class="detail-row"><span>Valor por m²</span><strong>$${dato.valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong></div>
+            ${alias}
+            <p class="detail-note"><strong>Valor catastral (base fiscal), no precio de mercado.</strong>
+               Es una clase asignada a toda la colonia, no un avalúo de este predio.</p>
+        `;
+    }
+
+    document.getElementById('sector-info').innerHTML = `
+        ${cuerpo}
+        <p class="detail-source">Fuente: ${esc(catastroMeta ? catastroMeta.fuente : 'Tesorería Municipal de Saltillo')}
+           · Edición ${esc(catastroMeta ? catastroMeta.edicion : '2026')}.</p>
+    `;
+    abrirFicha();
+}
+
+function cargarCapaCatastro(checkbox) {
+    let capa = null;
+    registrarClaveDeCapa('catastro', checkbox);
+
+    // Needs both the lookup and the AGEB polygons, which arrive from a
+    // different request; whichever lands second starts the work.
+    Promise.all([
+        fetch('data/valor_catastral.json', { cache: 'no-cache' }).then(r => r.json()),
+        agebsListos
+    ]).then(([catastro, geojson]) => {
+        catastroMeta = { fuente: catastro.fuente, edicion: catastro.edicion };
+
+        const conteos = {};
+        let sinDato = 0;
+        const features = geojson.features.map(f => {
+            const dato = catastro.sectores[f.properties.CVEGEO] || null;
+            if (dato) conteos[dato.clase] = (conteos[dato.clase] || 0) + 1;
+            else sinDato++;
+            return { ...f, properties: { ...f.properties, CATASTRO: dato } };
+        });
+
+        LEYENDAS.catastro = () => htmlLeyendaCatastro(conteos, sinDato);
+
+        capa = L.geoJSON({ type: 'FeatureCollection', features }, {
+            style: f => ({
+                fillColor: colorCatastro(f.properties.CATASTRO && f.properties.CATASTRO.valor),
+                weight: 1, opacity: 1, color: 'rgba(255,255,255,0.25)', fillOpacity: 0.65
+            }),
+            onEachFeature: (feature, layer) => {
+                layer.on({
+                    mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
+                    mouseout: e => capa.resetStyle(e.target),
+                    click: e => {
+                        resaltarGeometrias([e.target.feature.geometry]);
+                        mostrarDetalleCatastro(e.target.feature.properties);
+                    }
+                });
+            }
+        });
+
+        if (checkbox.checked) {
+            capa.addTo(map);
+            marcarCapaActiva('catastro');
+        }
+        registrarCapaEnVista(checkbox, capa);
+    }).catch(error => console.error('Error loading cadastral values:', error));
+
+    checkbox.addEventListener('change', () => {
+        if (!capa) return;
+        if (checkbox.checked) {
+            capa.addTo(map);
+            capa.bringToFront();
+            marcarCapaActiva('catastro');
+        } else {
+            map.removeLayer(capa);
+            marcarCapaInactiva('catastro');
+        }
+    });
+}
+
 // --- Colonia search ------------------------------------------------
 // Jump to a colonia by name. The colonia names and geometries already
 // live in the services GeoJSON (indexed as AGEBs on load), so the search
@@ -942,6 +1133,11 @@ const agebsPorClave = new Map();
 
 // The services layer is the source of colonia names; when it loads we
 // both index the AGEBs (for risk-click lookups) and build the search.
+// The cadastral layer has no geometry of its own and borrows these polygons,
+// so it waits on this instead of re-fetching them.
+let anunciarAgebs;
+const agebsListos = new Promise(resolver => { anunciarAgebs = resolver; });
+
 function alCargarAgebs(geojson) {
     indexarAgebs(geojson);
     construirIndiceColonias(geojson);
@@ -950,6 +1146,7 @@ function alCargarAgebs(geojson) {
         if (f.geometry) agebsPorClave.set(f.properties.CVEGEO, { geometria: f.geometry, props: f.properties });
     }
     buscadorInput.disabled = false;
+    anunciarAgebs(geojson);
 }
 
 // --- Street index (INEGI Frente de manzana) -------------------------
@@ -1452,6 +1649,11 @@ cargarCapaRiesgo({
     clave: 'quimico',
     titulo: 'Riesgo Químico-Tecnológico'
 });
+
+// Cadastral land value (Tesorería Municipal, 2026). Informational only:
+// it does not enter the Investment Index. Borrows the AGEB polygons from the
+// services layer, so it declares no file of its own.
+cargarCapaCatastro(document.getElementById('layer-cadastral'));
 
 // Backup (ANRI - CONAGUA): the flood layer by Tr=100 severity is kept
 // as a raster in data/riesgo_inundacion.png (+_meta.json). To reactivate

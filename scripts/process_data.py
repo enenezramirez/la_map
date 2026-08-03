@@ -57,8 +57,10 @@ source for being local, vector and from 2024.
 
 import json
 import re
+import unicodedata
 import urllib.parse
 import urllib.request
+import zlib
 from datetime import date
 from pathlib import Path
 
@@ -214,6 +216,35 @@ NIVELES_ELEVADOS_QUIMICO = ["Medio", "Alto", "Muy alto"]
 RIESGO_INUNDACION_GEOJSON = DATA_DIR / "riesgo_inundacion.geojson"
 RIESGO_DESLIZAMIENTOS_GEOJSON = DATA_DIR / "riesgo_deslizamientos.geojson"
 RIESGO_QUIMICO_GEOJSON = DATA_DIR / "riesgo_quimico.geojson"
+
+# --- Cadastral land value (Tesorería Municipal de Saltillo) -----------------
+# Published per colonia, which is the unit this project already works in, so
+# the join needs no geometry at all — see DATOS.md §3.5. Informational layer:
+# it does NOT enter the Investment Index. A low land value is genuinely
+# ambiguous for a buyer (cheap entry or weak area), so giving it a sign in the
+# score would bake in an undeclared thesis.
+CATASTRO_PDF = RAW_DATA / "catastro" / "TABLAS_VALORES_SUELO_CONSTRUCCION_2026.pdf"
+CATASTRO_JSON = DATA_DIR / "valor_catastral.json"
+CATASTRO_FUENTE = (
+    "Tesorería Municipal de Saltillo — Tablas de Valores de Suelo y "
+    "Construcción (aprobadas por el Congreso de Coahuila)"
+)
+CATASTRO_EDICION = "2026"
+# The cell separator inside the PDF content streams is the document's language
+# tag, and it CHANGES between editions (es-ES in older ones, es-MX in 2026).
+# Hardcoding either returns zero rows against the other, silently.
+CATASTRO_SEPARADOR = re.compile(r"es-[A-Z]{2}")
+# Terrain classes as printed, with the spelling drift the source actually
+# contains: "RESIDENCIAL 1a." vs "RESIDENCIAL 1a", "RESIDENCIAL LUJO" vs
+# "RESIDENCIAL DE LUJO", "MEDIO MEDIO" vs "MEDIA MEDIA". Left unnormalized,
+# a handful of colonias fall through the value lookup with no error at all.
+CATASTRO_CLASE = re.compile(
+    r"^(POPULAR(\s*\(\d\))?|INTERES SOCIAL(\s*\(\d\))?|MEDI[OA] (BAJ[OA]|MEDI[OA]|ALT[OA])"
+    r"|RESIDENCIAL(\s+(DE\s+)?LUJO|\s+1a\.?)?|ZONA TIPICA|INDUSTRIAL(\s*\(\d\))?"
+    r"|CAMPESTRE|MARGINADO|LOCALIDAD\s*\(SOLAR\))\s*$", re.I)
+CATASTRO_RUIDO = re.compile(
+    r"CONGRESO|SOBERANO|ZARAGOZA|PODER LEGISLATIVO|TABLA|COLONIA O FRACC"
+    r"|TIPO DE TERRENO|FRACCIONAMIENTOS \d{4}|^NO\.?$|^\d{1,3}$", re.I)
 
 # 2020 Census variables used for the basic-services coverage index. The
 # "positive" variants are used (dwellings that DO have the service):
@@ -551,6 +582,214 @@ def exportar_indice_calles(indice: dict) -> None:
     tamano_kb = CALLES_JSON.stat().st_size / 1024
     print(f"  Street index exported: {CALLES_JSON} ({tamano_kb:.1f} KB, "
           f"{len(indice['calles'])} lines)")
+
+
+def _normalizar_catastro(texto: str) -> str:
+    """Fold a colonia name for matching: accents, case, punctuation, and the
+    zero padding the cadastre uses on dates ("05 DE MAYO" vs "5 DE MAYO")."""
+    plano = unicodedata.normalize("NFD", texto)
+    plano = "".join(c for c in plano if unicodedata.category(c) != "Mn")
+    plano = re.sub(r"[^\w\s]", " ", plano.upper())
+    plano = re.sub(r"\s+", " ", plano).strip()
+    return re.sub(r"\b0(\d)\b", r"\1", plano)
+
+
+def _normalizar_clase(clase: str) -> str:
+    """Collapse the source's own spelling drift onto one label per class."""
+    c = re.sub(r"\s+", " ", clase.upper().replace(".", "")).strip()
+    c = c.replace("MEDIA MEDIA", "MEDIO MEDIO").replace("MEDIA ", "MEDIO ")
+    c = c.replace("RESIDENCIAL LUJO", "RESIDENCIAL DE LUJO")
+    return c
+
+
+def extraer_tablas_catastrales() -> tuple[dict[str, float], dict[str, str]]:
+    """
+    Read the cadastral PDF: the value per terrain class, and the class of each
+    colonia.
+
+    The PDF carries real embedded text, so no OCR and no PDF dependency is
+    needed — inflating its FlateDecode streams with the standard library and
+    reading the text-showing operators is enough. Note that a fetch tool
+    reporting the file as "unreadable" means only that it did not inflate the
+    streams; it is not evidence of a scan.
+
+    Returns:
+        (value per normalized class in pesos/m², class per normalized colonia).
+        Both empty if the PDF is not present, so the pipeline can continue.
+    """
+    if not CATASTRO_PDF.exists():
+        print(f"  Notice: {CATASTRO_PDF} not found; skipping cadastral values.")
+        return {}, {}
+
+    crudo = CATASTRO_PDF.read_bytes()
+    literal = re.compile(rb"\((?:\\.|[^()\\])*\)", re.S)
+    escape = re.compile(rb"\\([()\\])")
+    paginas: list[str] = []
+    for m in re.finditer(rb"stream\r?\n", crudo):
+        ini = m.end()
+        fin = crudo.find(b"endstream", ini)
+        if fin == -1:
+            continue
+        try:
+            flujo = zlib.decompress(crudo[ini:fin])
+        except zlib.error:
+            continue  # image or already-uncompressed stream
+        if b"Tj" in flujo or b"TJ" in flujo:
+            paginas.append("".join(
+                escape.sub(rb"\1", s.group(0)[1:-1]).decode("latin-1")
+                for s in literal.finditer(flujo)
+            ))
+
+    # Table 1: class -> $/m2. Printed as "0POPULAR (1)$263.18 1POPULAR (2)..."
+    valores: dict[str, float] = {}
+    for pagina in paginas:
+        if "VALOR APLICABLE POR M" not in pagina:
+            continue
+        # The label must START with a letter, which is what keeps the row index
+        # ("11INDUSTRIAL (2)") out of it, but digits have to be allowed INSIDE
+        # or every class written with a numeral — POPULAR (2), INTERES SOCIAL
+        # (2), INDUSTRIAL (2) — silently fails to match. Those three are among
+        # the most common classes in the tables.
+        for m in re.finditer(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s()\.\da]{3,40}?)\$([\d,]+\.\d{2})",
+                             pagina):
+            etiqueta = _normalizar_clase(re.sub(r"^\d+", "", m.group(1)).strip())
+            if CATASTRO_CLASE.match(etiqueta):
+                valores[etiqueta] = float(m.group(2).replace(",", ""))
+        break
+
+    # Table 2: colonia -> class. A class label always follows the colonia it
+    # classifies, so the nearest preceding non-class cell is the name.
+    colonias: dict[str, str] = {}
+    for pagina in paginas:
+        if not CATASTRO_SEPARADOR.search(pagina):
+            continue
+        pendiente = None
+        for celda in (c.strip() for c in CATASTRO_SEPARADOR.split(pagina)):
+            if not celda or CATASTRO_RUIDO.search(celda):
+                continue
+            if CATASTRO_CLASE.match(celda):
+                if pendiente:
+                    colonias.setdefault(_normalizar_catastro(pendiente),
+                                        _normalizar_clase(celda))
+                    pendiente = None
+            else:
+                pendiente = celda
+
+    print(f"  Cadastral tables read: {len(valores)} terrain classes, "
+          f"{len(colonias)} colonias (edition {CATASTRO_EDICION}).")
+    faltantes = {c for c in colonias.values() if c not in valores}
+    if faltantes:
+        # Loud rather than silent: a class with no value would publish a
+        # colonia with no figure and no explanation.
+        print(f"  Warning: {len(faltantes)} class(es) with no value in the "
+              f"table: {sorted(faltantes)}")
+    return valores, colonias
+
+
+def asignar_valor_catastral(
+    gdf_ageb_servicios: gpd.GeoDataFrame,
+    valores: dict[str, float],
+    colonias: dict[str, str],
+) -> dict:
+    """
+    Attach a cadastral class and value to each AGEB through its colonia name.
+
+    Matching is deliberately conservative: an exact fold first, then equality
+    of the *set* of words, which catches the real reordering in the data
+    ("AMPLIACIÓN 26 DE MARZO" vs "26 DE MARZO AMPLIACION"). Word-*subset*
+    matching was measured and rejected: it would pair the app's "AMISTAD" with
+    the cadastre's "AMISTAD III", and a land value bound to the wrong colonia
+    is worse than no value at all. Anything unmatched is published as having no
+    figure, the same way MOTIVO_SIN_DATO handles missing Census cells.
+    """
+    por_palabras: dict[frozenset, tuple[str, str]] = {}
+    # Spacing alone differs often enough to matter ("VISTA HERMOSA" on the map,
+    # "VISTAHERMOSA" in the tables). Collapsing it is a strict normalization,
+    # not a fuzzy guess: two distinct colonias separated only by a space are
+    # not a real case, whereas the miss is.
+    sin_espacios: dict[str, tuple[str, str]] = {}
+    for nombre, clase in colonias.items():
+        por_palabras.setdefault(frozenset(nombre.split()), (nombre, clase))
+        sin_espacios.setdefault(nombre.replace(" ", ""), (nombre, clase))
+
+    sectores: dict[str, dict] = {}
+    conteo = {"exacto": 0, "palabras": 0, "espacios": 0, "sin_dato": 0}
+    for _, fila in gdf_ageb_servicios.iterrows():
+        if str(fila.get("NOM_MUN", "")).upper() != "SALTILLO":
+            continue  # the tables cover the municipality of Saltillo only
+        colonia = fila.get("COLONIA")
+        if not colonia or colonia == "SIN_COLONIA":
+            continue
+        plano = _normalizar_catastro(colonia)
+        if plano in colonias:
+            nombre_catastro, clase, via = colonia, colonias[plano], "exacto"
+        elif frozenset(plano.split()) in por_palabras:
+            nombre_catastro, clase = por_palabras[frozenset(plano.split())]
+            via = "palabras"
+        elif plano.replace(" ", "") in sin_espacios:
+            nombre_catastro, clase = sin_espacios[plano.replace(" ", "")]
+            via = "espacios"
+        else:
+            conteo["sin_dato"] += 1
+            continue
+        conteo[via] += 1
+        sectores[fila["CVEGEO"]] = {
+            "clase": clase,
+            "valor": valores.get(clase),
+            # Recorded so the card can say how the figure was reached: on a
+            # word-set match the cadastre files the colonia under a differently
+            # ordered name, and hiding that would contradict the map's label.
+            "via": via,
+            **({"nombre_catastro": nombre_catastro} if via != "exacto" else {}),
+        }
+
+    total = sum(conteo.values())
+    if total:
+        print(f"  Cadastral value matched to {len(sectores)} of {total} Saltillo "
+              f"AGEBs ({len(sectores) / total:.1%}): {conteo['exacto']} exact, "
+              f"{conteo['palabras']} by word set, {conteo['espacios']} by spacing, "
+              f"{conteo['sin_dato']} with no published row.")
+    return sectores
+
+
+def exportar_valor_catastral(sectores: dict) -> None:
+    """
+    Write the cadastral lookup to data/: keyed by AGEB, one sector per line.
+
+    No geometry on purpose. The browser already holds the AGEB polygons from
+    the services layer, and a third copy of them would cost ~640 KB against
+    the 5 MB budget of SPEC §2 — which data/ is already close to. One line per
+    sector for the same reason as the street index: a single-line file renders
+    every future change as one deleted and one added line, unreviewable.
+    """
+    if not sectores:
+        print("  No cadastral values to export.")
+        return
+
+    compacto = {"ensure_ascii": False, "separators": (",", ":")}
+    cabecera = {
+        "fuente": CATASTRO_FUENTE,
+        "edicion": CATASTRO_EDICION,
+        # Carried in the file rather than the frontend so the warning travels
+        # with the data: this is a tax base, not a market price.
+        "nota": ("Valor catastral de referencia (base fiscal), no precio de "
+                 "mercado. Es una clase asignada a toda la colonia, no un "
+                 "avalúo del predio."),
+    }
+    texto = (
+        json.dumps(cabecera, **compacto)[:-1]
+        + ',"sectores":{\n'
+        + ",\n".join(f"{json.dumps(clave, **compacto)}:{json.dumps(valor, **compacto)}"
+                     for clave, valor in sorted(sectores.items()))
+        + "\n}}"
+    )
+    if json.loads(texto)["sectores"] != sectores:
+        raise ValueError("The serialized cadastral index does not match the source data.")
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CATASTRO_JSON.write_text(texto, encoding="utf-8")
+    print(f"  Cadastral values exported: {CATASTRO_JSON} "
+          f"({CATASTRO_JSON.stat().st_size / 1024:.1f} KB, {len(sectores)} sectors)")
 
 
 def cargar_censo_servicios() -> pd.DataFrame:
@@ -1047,6 +1286,11 @@ if __name__ == "__main__":
     print(f"Saved (intermediate, not the final layer): {salida_servicios}")
 
     exportar_capa_servicios_basicos(gdf_ageb_servicios)
+
+    print("\nReading cadastral land values (Tesorería Municipal, 2026)...")
+    catastro_valores, catastro_colonias = extraer_tablas_catastrales()
+    exportar_valor_catastral(asignar_valor_catastral(
+        gdf_ageb_servicios, catastro_valores, catastro_colonias))
 
     print("\nProcessing IMPLAN risk layers (CARTO SALTILLO, 2024 Atlas)...")
     gdf_inundacion = preparar_capa_riesgo(
