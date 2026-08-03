@@ -383,7 +383,7 @@ at a useful granularity**. This is not a final discard: it has a reactivation cr
 
 ---
 
-### 3.5 Cadastral land value (Tablas de Valores de Suelo y Construcción) — viable, blocked on the current edition
+### 3.5 Cadastral land value (Tablas de Valores de Suelo y Construcción) — viable, current edition read
 
 User's idea: land value is the single most relevant figure for the investor audience the
 product is aimed at. Investigated **2026-07-27** (sources located) and **2026-07-29** (format
@@ -420,24 +420,53 @@ not a granularity trap.** It is deferred only because the *current* edition has 
   and **32 have no counterpart at all** — and those are dominated by developments that postdate
   the edition read (`HABITA`, `REAL ANKARA`, `ARBOREA`, `ANALCO II`). So 64% is a **floor
   measured on an old edition with naive matching**, not the achievable rate.
-* **What is still missing, and it is the only blocker:** the **format** was verified on an older
-  edition, because both the 2026 municipal PDF and the 2022 Congreso PDF **exceed the 10 MB
-  download limit of the available fetch tool**. Reading the current values requires downloading
-  one of those files deliberately. The extraction itself needs no new dependency — the PDFs carry
-  real embedded text (not scans), and a stdlib `zlib` pass over the FlateDecode streams recovers
-  the tables. Note that a fetch tool reporting "unreadable" is **not** evidence of a scan: it
-  simply does not inflate compressed streams.
+* **The current edition has now been read (2026-08-03).** Downloaded from the municipal
+  transparency portal (13.96 MB, `raw_data/catastro/`, gitignored — over the 10 MB limit of the
+  fetch tool, which is why an older edition was used first). Same document family and same
+  two-table structure. **Fiscal year 2026 values, verbatim:**
+
+  | Tipo de terreno | $/m² | | Tipo de terreno | $/m² |
+  |---|---:|---|---|---:|
+  | LOCALIDAD (SOLAR) | 60.20 | | MEDIO MEDIO | 1,021.73 |
+  | POPULAR (1) | 263.18 | | MEDIO ALTO | 1,238.38 |
+  | INDUSTRIAL (1) | 309.71 | | RESIDENCIAL 1a | 2,225.34 |
+  | POPULAR (2) / INDUSTRIAL (2) | 464.45 | | RESIDENCIAL DE LUJO | 2,967.17 |
+  | CAMPESTRE | 483.52 | | ZONA TIPICA | 557.12 |
+  | INTERES SOCIAL (1) | 619.40 | | INTERES SOCIAL (2) | 712.05 |
+  | MEDIO BAJO | 866.99 | | | |
+
+  **880 colonia rows** (up from 660 in the older edition), plus a separate `FRACCIONAMIENTOS 2026`
+  table for newly registered developments. `ZONA CENTRO` keeps its own min/max table and is
+  **not** in the colonia list — which explains one of the unmatched names below.
+* **Join on the current edition: 161 of 226 Saltillo colonias exact (71.2%)**, up from 64.2% on
+  the older one — the gap was newer developments, as predicted. Of the 65 misses, **46 would
+  match on token-subset**, so **207 of 226 (91.6%) are reachable**. The 19 with no counterpart at
+  all are mostly not urban colonias in the first place: `ZONA CENTRO` (separate table),
+  `UAAAN (BUENAVISTA)` (university campus), `EJIDO ANGOSTURA` (rural), `LADRILLERA`,
+  `CENTRO METROPOLITANO`, `TOPOCHICO`.
+* **Data-quality caveat for whoever implements it:** the class labels are not internally
+  consistent in the source — `RESIDENCIAL 1a.` (107 rows) vs `RESIDENCIAL 1a` (3),
+  `RESIDENCIAL LUJO` (29) vs `RESIDENCIAL DE LUJO` (1), `MEDIO MEDIO` (68) vs `MEDIA MEDIA` (2).
+  They must be normalised before the class is looked up in the value table, or a handful of
+  colonias will silently fall through.
+* **Extraction needs no new dependency**, but it does need one trick per edition: the cell
+  separator inside the content streams is the document's language tag, and it **changes between
+  editions** — `es-ES` in the older one, `es-MX` in 2026. Splitting on `es-[A-Z]{2}` handles both.
+  A stdlib `zlib` pass over the FlateDecode streams recovers everything; no OCR, no `pypdf`.
+  Note that a fetch tool reporting "unreadable" is **not** evidence of a scan: it simply does not
+  inflate compressed streams.
 * **Honesty requirement if this is ever published, and it is not optional for this audience:**
   a cadastral value is a **tax base, not a market price**. In Mexico it is set deliberately
   below market value, and here it is a *class* assigned to a whole colonia, not an appraisal of
   a property. Presenting it as "what land is worth here" would mislead exactly the user the
   product is for. It should be labelled as the official cadastral reference value, with its
   edition year, and the two-step derivation (colonia → class → $/m²) stated in the detail card.
-* **Reactivation criterion:** none needed — this is ready to implement as soon as the current
-  edition is downloaded and parsed. The remaining design decision is whether it enters the
-  Investment Index as a component or stays informational; note that a *low* land value is
-  ambiguous for an investor (cheap entry vs weak area), so it is not obviously a positive or a
-  negative term, unlike services or risk.
+* **Status: ready to implement, pending one design decision.** The source is in hand and the
+  join is measured; nothing external is blocking. What is not decided is whether the value enters
+  the Investment Index as a component or stays an informational layer. Note that a *low* land
+  value is genuinely ambiguous for an investor — cheap entry versus weak area — so unlike
+  services (higher is better) and risk (higher is worse), it has no obvious sign, and picking one
+  arbitrarily would bake an unstated thesis into the score.
 
 ---
 
