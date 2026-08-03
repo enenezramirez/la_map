@@ -197,6 +197,48 @@ colonia name of each one.
   disclaims IMPLAN from liability for misuse of the data.
 * **Use in the project:** layer `data/riesgo_inundacion.geojson` and the risk penalty of
   the Investment Index (`RIESGO_INDEX`, via an AGEB↔risk overlay in EPSG:6372).
+* **Method behind it (established 2026-08-03):** the Atlas was produced with UNAM's Instituto
+  de Geografía and **does** use elevation — LiDAR, soil permeability and composition, riverbed
+  morphology, and hydrological scenarios by return period (5/25/50/100/500 years). This
+  settles a question that had been open in `task.md`: the model is not 2D exposure only, so
+  layering our own DEM on top would duplicate, less rigorously, work already done.
+
+#### Documented limitation: colonias that flooded are not classed as high risk
+
+**This is the most serious caveat attached to any layer in this project, and it is measured,
+not inferred.** *Vanguardia* reported (2025-07-24) that colonias flooded in July 2025 were
+classed low or very low by this same 2024 Atlas — Omega reaching 1.3 m of water, Terranova
+1 m, plus Nazario Ortiz Garza, Country Club, Lomas del Refugio and others.
+
+Checked against **the file this project publishes**, by overlaying those colonias' AGEBs on
+`data/riesgo_inundacion.geojson`:
+
+| Colonia (flooded, July 2025) | What our layer shows |
+|---|---|
+| **OMEGA** (1.3 m) | **no mapped flood zone at all — 0% of its area** |
+| TERRANOVA (1 m) | 13% of its area, `Bajo` only |
+| COUNTRY CLUB | 61%, all `Bajo` |
+| LOMAS DEL REFUGIO | 7%, mostly `Bajo` |
+| VALENCIA · LA AURORA | 39% / 54%, `Bajo` only |
+| ZONA CENTRO | 2% |
+
+**Not one of the 16 named colonias has a single square metre classed `Alto` or `Muy alto`.**
+The highest level reached anywhere among them is `Medio`, over 6–13% of the area. Note also
+that the export drops `Muy bajo`, so a colonia the Atlas placed in that class renders as
+completely clean — which is exactly what happens to Omega.
+
+**What this does and does not establish.** It establishes that the published classification
+under-represents flooding that actually occurred, in specific named places, one year after
+the Atlas edition. It does **not** establish why: the return period modelled, drainage works
+or construction after the study, and the difference between *pluvial* flooding and flooding
+from arroyos are all candidates, and nothing here distinguishes them. IMPLAN was integrating
+a separate *plan pluvial* as of Nov 2024.
+
+**Consequence for the product:** the existing glossary line — "a model at urban scale, not a
+site study" — is true but too soft for this. A reader comparing zones would take a blank map
+as evidence of safety, and in Omega's case that reading is contradicted by an event. Pending
+task: state in the flood layer's help that absence of a mapped zone is **not** evidence of
+absence of flooding, and cite this episode.
 
 ### 2.5 IMPLAN Saltillo — Riesgo por deslizamientos traslacionales (Atlas de Riesgos 2024)
 
