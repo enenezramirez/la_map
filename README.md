@@ -55,6 +55,9 @@ app.js               Application logic: map, layers, legends, search, cards
 styles.css           Styles (dark theme, design tokens in :root)
 assets/
   logo-traza.svg     Vertex mark; also the favicon
+  fonts/             Self-hosted Inter and IBM Plex Mono (.woff2) + licenses
+  vendor/
+    leaflet-1.9.4/   Leaflet, vendored so no CDN sits in the render path
 scripts/
   process_data.py    Data processing pipeline (GeoPandas)
 data/

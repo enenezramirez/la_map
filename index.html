@@ -4,31 +4,29 @@
     <meta charset="UTF-8">
 
     <!-- Content-Security-Policy. Second layer, not a bug fix: every field that
-         reaches the DOM from the data files goes through esc() first, and both
-         Leaflet files carry an integrity hash. This is what limits the damage
-         if either of those ever fails.
+         reaches the DOM from the data files goes through esc() first. This is
+         what limits the damage if that ever fails.
          It has to sit here, above every <link> and <script>: a meta policy only
          governs what the parser meets after it.
 
-         Each source is here because something on the page needs it — Leaflet
-         from unpkg (js + css), CARTO tiles (a-d.basemaps.cartocdn.com), and
-         unpkg again under img-src for the layers-control icon that leaflet.css
-         loads by relative URL. Everything else is same-origin: app.js,
-         styles.css, the woff2 fonts, the SVG favicon, and the fetches for the
-         GeoJSON layers and data/calles.json.
+         Only ONE source is not 'self', and it is the map tiles
+         (a-d.basemaps.cartocdn.com under img-src). Everything needed to RUN the
+         page is same-origin: Leaflet is vendored into assets/vendor, and so are
+         app.js, styles.css, the woff2 fonts and the SVG favicon; the GeoJSON
+         layers and data/calles.json are fetched from here too.
 
-         The unpkg sources are pinned down to the FILE, not the host, and that
-         distinction carries most of the weight here: unpkg is a mirror of all
-         of npm, so a bare `https://unpkg.com` in script-src would match every
-         path on it and amount to a script-execution wildcard. The <script> tag
-         pins its path and checks an integrity hash, but a CSP host-source does
-         neither, so an injected <script src="https://unpkg.com/anything.js">
-         would have sailed through the very policy meant to contain it. A
-         source with a path is matched as written (the trailing `/` on the
-         img-src entry makes it a directory prefix, covering layers.png and
-         layers-2x.png). The stronger move is to vendor Leaflet into the repo
-         and drop unpkg entirely, the way the fonts already were — that is a
-         separate decision, noted in task.md.
+         Vendoring Leaflet is what let script-src and style-src collapse to bare
+         'self'. They previously named unpkg, and pinning that source down to the
+         exact file mattered more than it looked: a CSP host-source matches every
+         path on the host, and unpkg mirrors all of npm, so `https://unpkg.com`
+         in script-src was effectively a script-execution wildcard — an injected
+         <script src="https://unpkg.com/anything.js"> would have sailed through
+         the very policy meant to contain it, with no integrity attribute of its
+         own to satisfy. Naming the file closed that; removing the host closes
+         the whole question, and takes the CDN out of the render path the way the
+         fonts already were. The cost is that a Leaflet security patch is now a
+         manual bump — assets/vendor/leaflet-1.9.4/ carries the version in its
+         path so the next one lands beside it rather than silently over it.
 
          `data:` under img-src is Leaflet's, and it is not optional: to cancel a
          tile request still in flight, Leaflet points that <img> at a 1x1
@@ -55,9 +53,9 @@
          not let us set. -->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
-        script-src 'self' https://unpkg.com/leaflet@1.9.4/dist/leaflet.js;
-        style-src 'self' https://unpkg.com/leaflet@1.9.4/dist/leaflet.css;
-        img-src 'self' data: https://*.basemaps.cartocdn.com https://unpkg.com/leaflet@1.9.4/dist/images/;
+        script-src 'self';
+        style-src 'self';
+        img-src 'self' data: https://*.basemaps.cartocdn.com;
         font-src 'self';
         connect-src 'self';
         object-src 'none';
@@ -73,10 +71,13 @@
          declared in styles.css, so no request leaves this origin to render the
          page — see the @font-face block there for why. -->
 
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
-          crossorigin=""/>
+    <!-- Leaflet CSS, vendored. No integrity/crossorigin here on purpose: SRI
+         answers "did the CDN send what I expected", a question a same-origin
+         file does not raise, and crossorigin="" on a same-origin request only
+         adds a needless CORS mode. The bytes were checked against the SRI
+         hashes this tag used to carry before they were committed, so what ships
+         is what the page has been running all along. -->
+    <link rel="stylesheet" href="assets/vendor/leaflet-1.9.4/leaflet.css"/>
 
     <!-- Custom CSS. The ?v= is a cache buster and it earns its keep: the
          markup and the stylesheet have to move together (the suggestion rows
@@ -210,10 +211,9 @@
         </div>
     </aside>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
-            crossorigin=""></script>
+    <!-- Leaflet JS, vendored. Needs no cache buster: the version lives in the
+         path, so an upgrade changes the URL by construction. -->
+    <script src="assets/vendor/leaflet-1.9.4/leaflet.js"></script>
 
     <!-- App Logic JS -->
     <!-- App logic. It lives in its own file, not inline, so the
