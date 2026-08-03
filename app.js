@@ -160,6 +160,10 @@ const RAMPA_INVERSION = ['#f2d79c', '#d29b33', '#a87c27', '#7d5c22', '#4a3a24'];
 // the repetition is labelled rather than silent.
 const RAMPA_CATASTRO = RAMPA_INVERSION;
 
+// Breaks below read their colors from that ramp by index rather than
+// repeating the hex codes, so the ramp really is the single source of truth
+// it claims to be instead of a constant nobody references.
+
 // Fixed pesos/m2 breaks, NOT quantiles. The other two layers use quantiles
 // because their values are continuous and bunched; this one has just 14
 // distinct values (one per terrain class), so quantiles would cut between
@@ -168,11 +172,11 @@ const RAMPA_CATASTRO = RAMPA_INVERSION;
 // and the classes are reasonably stable, whereas a quantile cut would move
 // under the reader's feet.
 const ESCALONES_CATASTRO = [
-    { hasta: 500, color: '#f2d79c', etiqueta: 'Menos de $500' },
-    { hasta: 800, color: '#d29b33', etiqueta: '$500 – $800' },
-    { hasta: 1100, color: '#a87c27', etiqueta: '$800 – $1,100' },
-    { hasta: 1500, color: '#7d5c22', etiqueta: '$1,100 – $1,500' },
-    { hasta: Infinity, color: '#4a3a24', etiqueta: '$1,500 o más' }
+    { hasta: 500, color: RAMPA_CATASTRO[0], etiqueta: 'Menos de $500' },
+    { hasta: 800, color: RAMPA_CATASTRO[1], etiqueta: '$500 – $800' },
+    { hasta: 1100, color: RAMPA_CATASTRO[2], etiqueta: '$800 – $1,100' },
+    { hasta: 1500, color: RAMPA_CATASTRO[3], etiqueta: '$1,100 – $1,500' },
+    { hasta: Infinity, color: RAMPA_CATASTRO[4], etiqueta: '$1,500 o más' }
 ];
 
 // Neutral gray for "no data": neither good nor bad, and outside both
@@ -986,9 +990,23 @@ function mostrarDetalleCatastro(props) {
             ? `<p class="detail-note">El catastro registra esta colonia como
                <strong>${esc(dato.nombre_catastro)}</strong> (${motivoAlias}).</p>`
             : '';
+        // `if (!dato)` above says nothing about `dato.valor`, and null is a
+        // state the pipeline can reach: a class present in the colonia table
+        // but missing from the value table exports as null. That happened
+        // during this layer's own development. Unguarded it is worse than a
+        // blank: the map still paints (grey), the legend still counts the
+        // sector under its class, and only the click throws — from inside a
+        // Leaflet handler, after the title was already replaced, leaving the
+        // new colonia's name sitting above the previous colonia's figures.
+        // Checking the type also keeps this the one interpolation that does
+        // not reach innerHTML through esc(): toLocaleString on a non-number
+        // is Object.prototype's, which returns the string unchanged.
+        const cifra = Number.isFinite(dato.valor)
+            ? `$${dato.valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+            : 'Sin cifra publicada';
         cuerpo = `
             <div class="detail-row"><span>Tipo de terreno</span><strong>${esc(dato.clase)}</strong></div>
-            <div class="detail-row"><span>Valor por m²</span><strong>$${dato.valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong></div>
+            <div class="detail-row"><span>Valor por m²</span><strong>${esc(cifra)}</strong></div>
             ${alias}
             <p class="detail-note"><strong>Valor catastral (base fiscal), no precio de mercado.</strong>
                Es una clase asignada a toda la colonia, no un avalúo de este predio.</p>
@@ -1018,7 +1036,12 @@ function cargarCapaCatastro(checkbox) {
         const conteos = {};
         let sinDato = 0;
         const features = geojson.features.map(f => {
-            const dato = catastro.sectores[f.properties.CVEGEO] || null;
+            // hasOwn, not a truthiness check: `sectores` comes from JSON.parse
+            // and carries Object.prototype, so a key like "constructor" would
+            // hand back an inherited function — truthy, and it would sail past
+            // the `if (!dato)` guard in the card.
+            const dato = Object.hasOwn(catastro.sectores, f.properties.CVEGEO)
+                ? catastro.sectores[f.properties.CVEGEO] : null;
             if (dato) conteos[dato.clase] = (conteos[dato.clase] || 0) + 1;
             else sinDato++;
             return { ...f, properties: { ...f.properties, CATASTRO: dato } };

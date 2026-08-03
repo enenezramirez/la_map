@@ -245,6 +245,20 @@ CATASTRO_CLASE = re.compile(
 CATASTRO_RUIDO = re.compile(
     r"CONGRESO|SOBERANO|ZARAGOZA|PODER LEGISLATIVO|TABLA|COLONIA O FRACC"
     r"|TIPO DE TERRENO|FRACCIONAMIENTOS \d{4}|^NO\.?$|^\d{1,3}$", re.I)
+# Alphabet allowed in anything published from the cadastral PDF, mirroring
+# CARACTERES_PERMITIDOS for the street index. Today the values cannot escape
+# this anyway — the classes come from an anchored whitelist and the colonia
+# names from a normalizer that strips every HTML metacharacter — but that
+# invariant is spread across three functions, and loosening any one of them
+# (a 2027 edition adding a class, or "stop destroying apostrophes in names")
+# would dissolve it silently. This is the second layer the project says it wants.
+CATASTRO_PERMITIDOS = re.compile(r"^[0-9A-ZÁÉÍÓÚÜÑ ().]+$")
+# Ceiling per inflated PDF stream. The file is downloaded by hand rather than
+# fetched by the pipeline, so this is not an exposed attack surface — but it is
+# the one hand-rolled parser here pointed at a third-party binary, and 200 MB of
+# zeros compresses to ~204 KB, so one crafted stream could take the machine out
+# mid-run, after some layers are written and before others.
+CATASTRO_MAX_FLUJO = 64 * 1024 * 1024
 
 # 2020 Census variables used for the basic-services coverage index. The
 # "positive" variants are used (dwellings that DO have the service):
@@ -631,7 +645,12 @@ def extraer_tablas_catastrales() -> tuple[dict[str, float], dict[str, str]]:
         if fin == -1:
             continue
         try:
-            flujo = zlib.decompress(crudo[ini:fin])
+            descompresor = zlib.decompressobj()
+            flujo = descompresor.decompress(crudo[ini:fin], CATASTRO_MAX_FLUJO)
+            if descompresor.unconsumed_tail:
+                print(f"  Warning: stream at byte {ini} inflates past "
+                      f"{CATASTRO_MAX_FLUJO // 1048576} MB; skipped.")
+                continue
         except zlib.error:
             continue  # image or already-uncompressed stream
         if b"Tj" in flujo or b"TJ" in flujo:
@@ -677,6 +696,18 @@ def extraer_tablas_catastrales() -> tuple[dict[str, float], dict[str, str]]:
 
     print(f"  Cadastral tables read: {len(valores)} terrain classes, "
           f"{len(colonias)} colonias (edition {CATASTRO_EDICION}).")
+    # A present-but-unparsable PDF is the dangerous case, not a missing one:
+    # the export would return early, leave the PREVIOUS valor_catastral.json in
+    # place, and the run would still report success — shipping last year's
+    # figures under this year's edition label. The tables are reissued yearly
+    # and their internals already drift, so this is a "when", not an "if".
+    if not colonias or not valores:
+        raise ValueError(
+            f"{CATASTRO_PDF} was read but yielded {len(valores)} classes and "
+            f"{len(colonias)} colonias. The layout probably changed (the cell "
+            f"separator is a language tag and varies by edition). Refusing to "
+            f"continue rather than silently republish the previous file."
+        )
     faltantes = {c for c in colonias.values() if c not in valores}
     if faltantes:
         # Loud rather than silent: a class with no value would publish a
@@ -752,6 +783,38 @@ def asignar_valor_catastral(
     return sectores
 
 
+def validar_registros_catastrales(sectores: dict) -> None:
+    """
+    Refuse to publish a cadastral record whose contents are not what the
+    frontend is built to receive.
+
+    Mirrors `validar_nombres_publicados` for the street index, and raises for
+    the same reason: the alternative is a browser discovering the problem in
+    front of a user, far from here. The value check is not cosmetic — a class
+    listed for a colonia but absent from the value table exports as `null`, the
+    map still paints it, and only the click reveals it.
+
+    Raises:
+        ValueError: listing the offending records, at most a handful.
+    """
+    malos = []
+    for clave, registro in sectores.items():
+        if not CATASTRO_PERMITIDOS.match(registro["clase"]):
+            malos.append((clave, "clase", registro["clase"]))
+        alias = registro.get("nombre_catastro")
+        if alias is not None and not CATASTRO_PERMITIDOS.match(alias):
+            malos.append((clave, "nombre_catastro", alias))
+        if not isinstance(registro["valor"], (int, float)):
+            malos.append((clave, "valor", registro["valor"]))
+
+    if malos:
+        muestra = ", ".join(f"{c} {campo}={v!r}" for c, campo, v in malos[:5])
+        raise ValueError(
+            f"{len(malos)} cadastral record(s) with unexpected content, refusing "
+            f"to publish the layer. First few — {muestra}"
+        )
+
+
 def exportar_valor_catastral(sectores: dict) -> None:
     """
     Write the cadastral lookup to data/: keyed by AGEB, one sector per line.
@@ -765,6 +828,8 @@ def exportar_valor_catastral(sectores: dict) -> None:
     if not sectores:
         print("  No cadastral values to export.")
         return
+
+    validar_registros_catastrales(sectores)
 
     compacto = {"ensure_ascii": False, "separators": (",", ":")}
     cabecera = {
