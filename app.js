@@ -197,30 +197,75 @@ const COLOR_SIN_DATO = '#3a3f47';
    different classes if the break passes right between them. In other
    words, the color shows RELATIVE POSITION within the city, not an
    absolute score. */
-function escalonesPorCuantiles(valores, rampa, sufijo = '') {
+/* `piso` turns the lowest class into an ABSOLUTE band and runs the quantiles
+   over what is left. Pure quantiles cannot separate a thin tail: for services,
+   4% of the sectors span 0-80% coverage while the other 96% crowd into 80-100,
+   so the bottom class came out `0.0% - 87.1%` and was 25 TIMES wider than the
+   next one -- a sector with 20% coverage wore the same colour as one with 86%.
+   Adding classes does not fix it, because there are not enough sectors down
+   there to earn a break of their own; the fix is to stop pretending the tail is
+   another step on the same scale.
+
+   Only pass a floor where the threshold means something in the world. For a
+   coverage percentage, "under 80%" is a statement about the sector. For a
+   synthetic 0-100 score it would be a number invented here, which is why the
+   investment index stays on pure quantiles even though its bottom class is wide
+   too -- see the note in AYUDA_INDICE. */
+function escalonesPorCuantiles(valores, rampa, sufijo = '', piso = null) {
     const datos = valores
         .filter(v => v !== null && v !== undefined && !Number.isNaN(v))
         .sort((a, b) => a - b);
     if (datos.length === 0) return [];
 
     const fmt = v => v.toFixed(1) + sufijo;
-    const cuantil = p => datos[Math.min(datos.length - 1, Math.floor(p * datos.length))];
+    // A floor nothing falls below -- or that everything falls below -- would
+    // produce an empty class, so it simply is not applied.
+    const usaPiso = piso !== null && datos[0] < piso && datos[datos.length - 1] >= piso;
+    const escalables = usaPiso ? datos.filter(v => v >= piso) : datos;
+    const nClases = usaPiso ? rampa.length - 1 : rampa.length;
+    const cuantil = p => escalables[Math.min(escalables.length - 1, Math.floor(p * escalables.length))];
 
     const escalones = [];
-    for (let i = rampa.length - 1; i >= 0; i--) {
-        const minimo = i === 0 ? datos[0] : cuantil(i / rampa.length);
-        const maximo = i === rampa.length - 1
-            ? datos[datos.length - 1]
-            : cuantil((i + 1) / rampa.length);
+    for (let i = nClases - 1; i >= 0; i--) {
+        // With a floor, the bottom quantile class starts AT the floor rather
+        // than at the lowest value above it, so the bands stay contiguous:
+        // otherwise the legend reads "Menos de 80.0%" then "80.1% - …" and
+        // leaves a gap no sector can be in but every reader can see.
+        const minimo = i === 0 ? (usaPiso ? piso : escalables[0]) : cuantil(i / nClases);
+        const maximo = i === nClases - 1
+            ? escalables[escalables.length - 1]
+            : cuantil((i + 1) / nClases);
         // If two breaks coincide (many repeated values) the class
         // would be empty; skip it instead of showing a dead color
         // in the legend.
         if (escalones.length && minimo >= escalones[escalones.length - 1].minimo) continue;
-        // How many sectors actually landed in the class, so the legend
-        // help can state the real figure instead of promising an even
-        // split that repeated values can break.
-        const conteo = datos.filter(v => v >= minimo && v <= maximo).length;
-        escalones.push({ minimo, color: rampa[i], conteo, etiqueta: `${fmt(minimo)} - ${fmt(maximo)}` });
+        // How many sectors actually landed in the class, so the legend help can
+        // state the real figure instead of promising an even split that repeated
+        // values can break. Counted the way crearFuncionColor assigns -- closed
+        // below, open above, except for the top class. Counting both ends closed
+        // put every value sitting exactly on a break into two classes, so the
+        // totals came out above the number of sectors that exist (413 of 410).
+        const esLaMasAlta = i === nClases - 1;
+        const conteo = escalables.filter(
+            v => v >= minimo && (esLaMasAlta ? v <= maximo : v < maximo)).length;
+        escalones.push({
+            minimo,
+            color: rampa[usaPiso ? i + 1 : i],
+            conteo,
+            etiqueta: `${fmt(minimo)} - ${fmt(maximo)}`
+        });
+    }
+    if (usaPiso) {
+        // The global minimum on purpose: crearFuncionColor walks the classes
+        // from the top and takes the first whose minimum the value clears, so
+        // this one has to be the catch-all at the bottom.
+        escalones.push({
+            minimo: datos[0],
+            absoluto: true,
+            color: rampa[0],
+            conteo: datos.length - escalables.length,
+            etiqueta: `Menos de ${fmt(piso)}`
+        });
     }
     return escalones;
 }
@@ -547,11 +592,24 @@ const AYUDA_INDICE = {
 function htmlAyudaIndice(clave, escalones, nSinDato) {
     const a = AYUDA_INDICE[clave];
     if (!a) return '';
-    const porClase = escalones.length ? Math.round(
-        escalones.reduce((n, e) => n + (e.conteo || 0), 0) / escalones.length) : 0;
+    // Averaged over the QUANTILE classes only. Including an absolute floor class
+    // would report a figure true of no class on the map: 17 averaged with four
+    // classes of ~98 gives 78, which is neither.
+    const porCuantil = escalones.filter(e => !e.absoluto);
+    const piso = escalones.find(e => e.absoluto);
+    const porClase = porCuantil.length ? Math.round(
+        porCuantil.reduce((n, e) => n + (e.conteo || 0), 0) / porCuantil.length) : 0;
     const reparto = porClase
-        ? `Cada clase agrupa aproximadamente el mismo número de sectores (~${porClase}).`
-        : 'Cada clase agrupa aproximadamente el mismo número de sectores.';
+        ? `Cada una de esas clases agrupa aproximadamente el mismo número de sectores (~${porClase}).`
+        : 'Cada una de esas clases agrupa aproximadamente el mismo número de sectores.';
+    // Stated because it is the one class whose boundary does NOT move with the
+    // data, which is the opposite of what the paragraph above promises.
+    const notaPiso = piso
+        ? `<p><strong>La clase más baja es la excepción:</strong> «${esc(piso.etiqueta)}» es un
+           <em>corte absoluto</em>, no un cuantil, y no se mueve aunque cambien los datos.
+           Existe porque la cola baja es muy delgada — ${piso.conteo} de ${escalones.reduce((n, e) => n + (e.conteo || 0), 0)}
+           sectores — y por cuantiles quedaba junta con sectores de cobertura muy superior.</p>`
+        : '';
     return `
         <details class="legend-help">
             <summary>¿Qué significa el color de ${esc(NOMBRE_CORTO_CAPA[clave] || '')}?</summary>
@@ -565,6 +623,7 @@ function htmlAyudaIndice(clave, escalones, nSinDato) {
                 <p>Dos consecuencias que conviene tener presentes: los cortes cambian si cambian los
                    datos, y dos sectores con valores casi idénticos pueden caer en clases distintas
                    si el corte pasa justo entre ellos.</p>
+                ${notaPiso}
                 ${nSinDato > 0 ? `<p><strong>Gris:</strong> ${nSinDato} ${nSinDato === 1 ? 'sector' : 'sectores'} sin dato publicado.
                    No es un cero: al hacer clic, la ficha dice el motivo.</p>` : ''}
             </div>
@@ -925,7 +984,8 @@ function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, configEsca
             if (configEscala) {
                 const valores = geojson.features.map(f => f.properties[campoValor]);
                 configEscala.asignar(
-                    escalonesPorCuantiles(valores, configEscala.rampa, configEscala.sufijo)
+                    escalonesPorCuantiles(
+                        valores, configEscala.rampa, configEscala.sufijo, configEscala.piso ?? null)
                 );
                 SIN_DATO_CONTEO[clave] = valores.filter(sinDato).length;
             }
@@ -1747,6 +1807,11 @@ cargarCapaChoropleth({
     configEscala: {
         rampa: RAMPA_SERVICIOS,
         sufijo: '%',
+        // Absolute floor, not a quantile: see escalonesPorCuantiles. 80% average
+        // coverage is a statement about the sector, and below it the city has
+        // only 17 sectors -- too few to earn a break of their own, and far too
+        // different from the rest to keep sharing a colour with them.
+        piso: 80,
         asignar: escalones => { ESCALONES_SERVICIOS = escalones; }
     },
     funcionEstilo: crearEstiloCapa('SERVICIOS_INDEX', crearFuncionColor(() => ESCALONES_SERVICIOS)),
