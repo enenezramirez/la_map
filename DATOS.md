@@ -234,11 +234,15 @@ or construction after the study, and the difference between *pluvial* flooding a
 from arroyos are all candidates, and nothing here distinguishes them. IMPLAN was integrating
 a separate *plan pluvial* as of Nov 2024.
 
-**Consequence for the product:** the existing glossary line — "a model at urban scale, not a
-site study" — is true but too soft for this. A reader comparing zones would take a blank map
-as evidence of safety, and in Omega's case that reading is contradicted by an event. Pending
-task: state in the flood layer's help that absence of a mapped zone is **not** evidence of
-absence of flooding, and cite this episode.
+**Consequence for the product, acted on 2026-08-03.** The existing glossary line — "a model
+at urban scale, not a site study" — is true but too soft for this. A reader comparing zones
+would take a blank map as evidence of safety, and in Omega's case that reading is contradicted
+by an event. The flood layer's legend now carries the caveat in two places: a pinned line next
+to the ramp (**absence of a mapped zone is not evidence of absence of flooding**, plus the
+July 2025 episode in one clause), and the episode in full inside the layer's help — the
+colonias, the depths, the fact that dropping `Muy bajo` renders such a colonia clean, and
+what this does and does not establish. Only this layer carries it; the other two risk layers
+have no measured counter-example, and a caveat printed everywhere would say nothing anywhere.
 
 ### 2.5 IMPLAN Saltillo — Riesgo por deslizamientos traslacionales (Atlas de Riesgos 2024)
 

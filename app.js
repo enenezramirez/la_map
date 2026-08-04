@@ -272,7 +272,24 @@ const AYUDA_RIESGO = {
     inundacion: {
         mide: 'Acumulación de agua de lluvia en zona urbana.',
         omite: 'Se omite el nivel «Muy bajo», que es el fondo del modelo y cubre casi toda la mancha urbana.',
-        indice: 'Es la única capa de riesgo que penaliza el Índice de Inversión.'
+        indice: 'Es la única capa de riesgo que penaliza el Índice de Inversión.',
+        // The most serious caveat attached to any layer in this project, and it
+        // is measured rather than inferred (DATOS.md 2.4). It is split in two on
+        // purpose. The short half is pinned to the legend, because the reader it
+        // protects is the one comparing zones who never opens the help and takes
+        // a blank map for a safe one; the long half — the episode itself, and
+        // what it does and does not establish — lives inside the disclosure,
+        // where there is room to say it without overstating it.
+        advertencia: {
+            lead: 'La ausencia de zona marcada no es evidencia de ausencia de inundación.',
+            cuerpo: 'En julio de 2025 se inundaron colonias que esta capa deja limpias.'
+        },
+        limitacion: [
+            'En julio de 2025 se inundaron colonias que este mismo Atlas 2024 clasifica en sus niveles más bajos: Omega llegó a 1.30 m de agua y en esta capa no tiene ni una zona marcada; Terranova, con 1 m, aparece solo como «Bajo» en el 13% de su superficie.',
+            'Ninguna de las 16 colonias reportadas alcanza un solo metro clasificado «Alto» ni «Muy alto». Y como se omite «Muy bajo», una colonia clasificada así se dibuja completamente limpia — que es exactamente lo que le ocurre a Omega.',
+            'Esto establece que la clasificación publicada subrepresenta inundaciones ocurridas en lugares concretos; no establece por qué. El periodo de retorno modelado, las obras o construcciones posteriores y la diferencia entre inundación pluvial y por arroyo son todas candidatas, y nada aquí las distingue.',
+            'Episodio reportado por Vanguardia el 24 de julio de 2025; el cruce contra esta capa está documentado en la bitácora de datos del proyecto.'
+        ]
     },
     deslizamientos: {
         mide: 'Movimiento de material ladera abajo sobre una superficie de falla (traslacional).',
@@ -298,6 +315,14 @@ function htmlAyudaRiesgo(clave, conteos) {
     // whole point: "Medio" is the worst level mapped for landslides but
     // the mildest one shown for chemical risk.
     const peor = presentes[0];
+    // Only a layer whose blank areas have been measured against a real event
+    // earns this block; the rest render nothing here.
+    const limitacion = a.limitacion
+        ? `<div class="help-caveat">
+               <p><strong>${esc(a.advertencia.lead)}</strong></p>
+               ${a.limitacion.map(p => `<p>${esc(p)}</p>`).join('')}
+           </div>`
+        : '';
     return `
         <details class="legend-help">
             <summary>¿Qué significan los niveles de ${esc(NOMBRE_CORTO_CAPA[clave] || '')}?</summary>
@@ -312,6 +337,7 @@ function htmlAyudaRiesgo(clave, conteos) {
                    al «Medio» de otra.</p>
                 <p>${esc(a.omite)}</p>
                 <p>${esc(a.indice)}</p>
+                ${limitacion}
                 <p>Es un modelo a escala urbana para comparar zonas, <strong>no un estudio de sitio</strong>:
                    no sustituye un dictamen para un predio concreto. Cubre solo el municipio de Saltillo.</p>
             </div>
@@ -331,7 +357,13 @@ function htmlLeyendaRiesgo(titulo, clave, conteos, fuente, fecha) {
     const src = fuente
         ? `<p class="legend-source">Fuente: ${esc(fuente)}${fecha ? ' · ' + esc(fecha) : ''}.</p>`
         : '';
-    return `<p class="legend-title">${esc(titulo)}</p>${filas}${src}${htmlAyudaRiesgo(clave, conteos)}`;
+    // Sits next to the swatches, not inside the collapsed help, because the
+    // reader it is for is reading the ramp to decide whether a zone is clear.
+    const adv = (AYUDA_RIESGO[clave] || {}).advertencia;
+    const aviso = adv
+        ? `<p class="legend-caveat"><strong>${esc(adv.lead)}</strong> ${esc(adv.cuerpo)}</p>`
+        : '';
+    return `<p class="legend-title">${esc(titulo)}</p>${filas}${aviso}${src}${htmlAyudaRiesgo(clave, conteos)}`;
 }
 
 // Pre-built legend HTML per risk layer (filled on load).

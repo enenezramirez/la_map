@@ -295,6 +295,44 @@ body {
     color: var(--tz-text-2);
 }
 
+/* Caveat pinned inside one layer's legend, beside the ramp rather than inside
+   the collapsed help: the reader it protects is the one scanning colors to
+   decide whether a zone is clear, and that reader never opens a disclosure.
+   Same inset amber mark as .legend-note — this is a notice about how to read
+   the map, not a level of the data, so it must not look like a swatch row. */
+.legend-caveat {
+    margin-top: 12px;
+    padding: 8px 0 8px 10px;
+    box-shadow: inset 3px 0 0 var(--tz-accent);
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: var(--tz-text-2);
+}
+
+.legend-caveat strong {
+    color: var(--tz-text);
+    font-weight: 500;
+}
+
+/* The same notice inside the help body, where the episode behind it is told in
+   full. Marked rather than merged into the surrounding paragraphs so it stays
+   findable when the disclosure is opened for some other reason. */
+.help-caveat {
+    margin-top: 8px;
+    padding: 8px 0 8px 10px;
+    box-shadow: inset 3px 0 0 var(--tz-accent);
+}
+
+.help-caveat p + p {
+    margin-top: 8px;
+}
+
+/* The block is a <div>, so the sibling selector on .legend-help-body p + p
+   stops at it and the paragraph that follows would butt right up against it. */
+.help-caveat + p {
+    margin-top: 8px;
+}
+
 .legend-title {
     font-family: var(--tz-mono);
     font-size: 0.7rem;
