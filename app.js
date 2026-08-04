@@ -290,7 +290,10 @@ const ORDEN_RIESGO = ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo'];
 function crearEstiloRiesgo() {
     return feature => ({
         fillColor: COLORES_RIESGO[feature.properties.INTENSIDAD] || '#9ca3af',
-        weight: 1,
+        // Same zoom scaling as the choropleths, and these layers need it more,
+        // not less: there are 1,358 flood zones and 2,136 chemical ones against
+        // 431 AGEBs, so far more outline per screen.
+        weight: pesoBorde(),
         color: 'rgba(255, 255, 255, 0.25)',
         fillOpacity: 0.6
     });
@@ -560,12 +563,33 @@ function crearFuncionColor(obtenerEscalones) {
     };
 }
 
+/* Stroke weight is in SCREEN pixels, so it does not shrink with the map: zoom
+   out and a polygon's fill falls with the SQUARE of the scale while its outline
+   falls only with the perimeter. Measured on the real AGEBs (median area
+   386,027 m², perimeter 3,162 m), the outline is this share of a sector's
+   pixels at weight 1: z13 12%, z12 22%, z11 36%, z10 53%, z9 69%. Past halfway
+   the map stops being a choropleth and becomes a white mesh -- which is exactly
+   what going opaque made visible, and it was already true at 0.25 alpha, only
+   dimmer.
+
+   The outline exists to delimit a sector the reader can tell apart. Below the
+   zoom where a sector is a few pixels across there is nothing to delimit, so it
+   thins out and then goes. These weights hold the outline near 12-18% of the
+   shape at every zoom where it is drawn at all. */
+function pesoBorde() {
+    const z = map.getZoom();
+    if (z >= 13) return 1;
+    if (z >= 12) return 0.6;
+    if (z >= 11) return 0.4;
+    return 0;
+}
+
 function crearEstiloCapa(campoValor, funcionColor) {
     return feature => {
         const valor = feature.properties[campoValor];
         return {
             fillColor: funcionColor(valor),
-            weight: 1,
+            weight: pesoBorde(),
             // Opaque white, and that is the measured answer rather than a taste
             // call. Sweeping every opaque grey against all 16 fills actually on
             // the map -- three ramps composited at 0.65 over the basemap, plus
@@ -897,6 +921,21 @@ function actualizarDisponibilidadCapas() {
 }
 
 map.on('moveend', actualizarDisponibilidadCapas);
+
+// The style functions read pesoBorde() when Leaflet calls them, so the layers
+// have to be told to ask again after a zoom. resetStyle() with no argument
+// re-applies the layer's own style function to every feature, which is exactly
+// what is wanted -- and it costs nothing on the zooms that do not cross a
+// threshold, because the repaint is skipped when the weight has not changed.
+let pesoBordeAplicado = null;
+map.on('zoomend', () => {
+    const peso = pesoBorde();
+    if (peso === pesoBordeAplicado) return;
+    pesoBordeAplicado = peso;
+    for (const { capa } of capasEnVista) {
+        if (capa && typeof capa.resetStyle === 'function') capa.resetStyle();
+    }
+});
 
 // A missing value is shown as a dash, not as 0: "I don't know" and "it
 // is zero" are different statements and the map must not confuse them.
@@ -1249,7 +1288,7 @@ function cargarCapaCatastro(checkbox) {
                 // Same opaque white as crearEstiloCapa, for the same measured
                 // reason: this ramp reaches #f2d79c, the lightest fill on the
                 // map and the one a translucent border disappears against.
-                weight: 1, opacity: 1, color: '#ffffff', fillOpacity: 0.65
+                weight: pesoBorde(), opacity: 1, color: '#ffffff', fillOpacity: 0.65
             }),
             onEachFeature: (feature, layer) => {
                 layer.on({
