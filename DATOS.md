@@ -31,6 +31,8 @@ instead of estimating it.
 | 10 | Susceptibilidad a inundaciones pluviales | IMPLAN Saltillo | 2024 | 2026-07-15 | Discarded |
 | 11 | Tablas de Valores de Suelo y Construcción 2026 | Tesorería Municipal de Saltillo | 2026 | 2026-08-03 | In use |
 | 12 | Satellite Embedding (AlphaEarth Foundations) | Google / Google DeepMind | 2017–2025, annual | Not downloaded | Evaluated, screening pending |
+| 13 | Vulnerabilidad socio organizativa (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | Not downloaded | Discarded |
+| 14 | Vulnerabilidad sanitario ecológica (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-08-03 (PDF) | Discarded |
 
 ---
 
@@ -734,17 +736,56 @@ consequences of that are not symmetric:
 
 * ***Vulnerabilidad socio organizativa*: do not publish.** The objection above is not about data
   quality, so no download would change it. Recorded as decided, not as pending.
-* ***Vulnerabilidad sanitario ecológica*: one open question, and it is worth settling.** The
-  title is genuinely ambiguous. In CENAPRED's taxonomy sanitary-ecological phenomena include
-  soil, water and air **contamination** — which is a property of the *place*, and would be a
-  legitimate risk layer of exactly the kind this app already publishes — but the word
-  *vulnerabilidad* points instead at the population's susceptibility to them. The one-line
-  portal description does not settle it. **Settling it needs the layer's PDF**, which carries the
-  legend and usually the method; that is a download, so it waits on the user.
+* ***Vulnerabilidad sanitario ecológica*: settled 2026-08-03 by reading the PDF, and NOT on the
+  question that was open.** See below — the place-versus-population question turned out not to
+  matter, because the layer does not discriminate at all.
+
+**The PDF was downloaded (user approved) and read: the whole legend has two classes, and both
+are at the bottom of the scale.**
+
+* **File:** `raw_data/implan_vulnerabilidad/atlas_vulnerabilidad_sanitario_ecologico.pdf`,
+  8,148,779 bytes (matches `Content-Length`), `Last-Modified` 2026-05-27, gitignored.
+  Source: <https://implansaltillo.mx/perfil/> → `PDF/ATLAS DE RIESGOS - VULNERABILIDAD SANITARIO ECOLOGICO.pdf`.
+* **The complete vector text of the document is six lines:** `Estructura urbana`,
+  `Curvas de nivel`, `Limites municipales`, `Vulnerabilidad Sanitario- Ecológicos`, **`Bajo`**,
+  **`Muy bajo`**. That is the entire legend. There is no `Medio`, no `Alto`, no `Muy alto`
+  anywhere in the published map of Saltillo.
+* **So it fails the same test that deferred fire in §3.3: it would not discriminate.** Compare
+  with what is already published — landslides top out at `Medio` (and the glossary has to say
+  so), chemical *starts* at `Medio` because `Bajo` covers 93% of the mesh. This one **maxes out
+  at `Bajo`**. Worse, this project's export rule drops `Muy bajo` as the model's background
+  (§2.4), so applying the existing treatment would leave a **single-class layer** — one colour,
+  everywhere it appears, distinguishing no sector from any other. A variable that does not
+  separate zones is dead weight in the index and noise in the panel.
+* **The ambiguity that motivated the download is now moot.** Whether the layer describes the
+  place or the population no longer decides anything: at one usable class it cannot inform an
+  investment decision either way. The redlining objection above stands for the
+  socio-organizational layer on its own merits.
+* **Verdict: do not publish.** Decided, not deferred.
+* **Honest limit of this evidence:** a PDF is a map export, so the legend lists the classes
+  *rendered in the published map*. That is the strongest evidence short of reading the SHP
+  attribute table — a published atlas legend lists what is on the map, and a higher class
+  occurring anywhere in the municipality would have to appear in it — but it is not the same as
+  having counted the shapefile's rows. The SHP was **not** downloaded, because a second download
+  could only overturn this if the cartographer had omitted classes that exist in the data.
+
+**Method note, refining the lesson of §3.5.** That entry recorded that an extractor reporting
+"unreadable" is not evidence of a scan — `WebFetch` simply does not inflate FlateDecode. This
+file adds the next trap: the text is drawn with a **subset-embedded font using Identity
+encoding**, so the content stream contains glyph codes (`<0001> Tj`) and not characters, and the
+alphabet lives in the font's `/ToUnicode` CMap — **which is stored uncompressed here**. An
+extractor that only inflates Flate streams therefore finds the codes and never the mapping, and
+reports the page as unreadable a second time, for a completely different reason. Two further
+details that cost time: a map atlas has one enormous stream (89 MB inflated, pure vector
+geometry), so an inflate cap must **skip** that stream and keep scanning rather than abort; and
+`BT` occurs by chance inside the embedded JPEGs, so real text objects have to be identified by
+containing a `Tf` font selection — by that test only 1 of the file's 6 streams carries text.
 
 **Reactivation criterion for the socio-organizational layer:** none under the current product.
 It would need the audience to change — a municipal or civil-protection user, for whom knowing
 where the vulnerable population lives is the point of the map rather than a hazard to them.
+**For the sanitary-ecological layer:** a future edition of the Atlas that actually classifies
+some part of the city above `Bajo`.
 
 ---
 
