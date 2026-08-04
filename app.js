@@ -566,7 +566,18 @@ function crearEstiloCapa(campoValor, funcionColor) {
         return {
             fillColor: funcionColor(valor),
             weight: 1,
-            color: 'rgba(255, 255, 255, 0.25)',
+            // Opaque white, and that is the measured answer rather than a taste
+            // call. Sweeping every opaque grey against all 16 fills actually on
+            // the map -- three ramps composited at 0.65 over the basemap, plus
+            // the no-data grey -- white is the best possible flat border, worst
+            // case 3.17:1. It is also the ONLY value that clears 3:1 everywhere:
+            // at 0.25 alpha the worst case was 1.40:1 and at 0.75 still 2.47,
+            // because a translucent white blends toward whatever is under it and
+            // so vanishes against the LIGHT end of the ramps. The earlier note
+            // proposing 0.45 had measured against the dark fill only, where the
+            // border was never the problem.
+            color: '#ffffff',
+            opacity: 1,
             // AGEBs with no data are drawn fainter: present and
             // clickable (the card explains why there's no data), but
             // without visually competing with those that do measure something.
@@ -1235,7 +1246,10 @@ function cargarCapaCatastro(checkbox) {
         capa = L.geoJSON({ type: 'FeatureCollection', features }, {
             style: f => ({
                 fillColor: colorCatastro(f.properties.CATASTRO && f.properties.CATASTRO.valor),
-                weight: 1, opacity: 1, color: 'rgba(255,255,255,0.25)', fillOpacity: 0.65
+                // Same opaque white as crearEstiloCapa, for the same measured
+                // reason: this ramp reaches #f2d79c, the lightest fill on the
+                // map and the one a translucent border disappears against.
+                weight: 1, opacity: 1, color: '#ffffff', fillOpacity: 0.65
             }),
             onEachFeature: (feature, layer) => {
                 layer.on({
