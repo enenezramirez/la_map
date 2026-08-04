@@ -29,6 +29,8 @@ instead of estimating it.
 | 8 | Riesgo por deslizamientos rotacionales (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-07-17 | Evaluated, not published |
 | 9 | Indicadores Municipales PEV | CENAPRED | — | 2026-07-08 | Discarded |
 | 10 | Susceptibilidad a inundaciones pluviales | IMPLAN Saltillo | 2024 | 2026-07-15 | Discarded |
+| 11 | Tablas de Valores de Suelo y Construcción 2026 | Tesorería Municipal de Saltillo | 2026 | 2026-08-03 | In use |
+| 12 | Satellite Embedding (AlphaEarth Foundations) | Google / Google DeepMind | 2017–2025, annual | Not downloaded | Evaluated, screening pending |
 
 ---
 
@@ -564,6 +566,132 @@ granularity trap.**
   value is genuinely ambiguous for an investor — cheap entry versus weak area — so unlike
   services (higher is better) and risk (higher is worse), it has no obvious sign, and picking one
   arbitrarily would bake an unstated thesis into the score.
+
+### 3.6 AlphaEarth Foundations / Satellite Embedding — evaluated 2026-08-03, screening approved, nothing trained
+
+User's idea (2026-08-03), after seeing an engineer combine AlphaEarth with ML to predict burned
+areas near Acapulco. **No data was downloaded.** This entry is the decision document that task
+asked for. Everything below was verified on 2026-08-03 against primary sources or measured
+locally; none of it is from memory.
+
+**What it is.** A geospatial embedding model from Google DeepMind. Its public output is the
+*Satellite Embedding* dataset: **64 dimensions per 10 m pixel, one image per year**, covering
+global land and shallow water. Each vector condenses a year of observations across Sentinel-2,
+Landsat optical and thermal, radar, 3D surface measurements, elevation, climate, gravity fields
+and descriptive text. The vectors are **unit-norm — points on a 64-dimensional sphere — so the
+dot product is the cosine similarity**, and that is the intended comparison operation. Google
+states the space is temporally consistent by design, so a stable place keeps a similar vector
+across years and the angle between two years is the documented change-detection operator. The
+documentation is explicit that **individual bands have no independent meaning**.
+Years: 2017–2024 in the Earth Engine catalog, 2017–2025 on the public mirror.
+Citation required: Brown, Kazmierski, Pasquarella et al. (2025), arXiv:2507.22291.
+
+**The commercial question is answered, and the answer is the one that unblocks this.** The
+dataset is **CC-BY 4.0** — commercial use is permitted with attribution, and the attribution
+string is fixed: *"The AlphaEarth Foundations Satellite Embedding dataset is produced by Google
+and Google DeepMind."* The concern on record was that a product aimed at investors would hit a
+Google-terms wall. There is no such wall on the data. There *is* one on the platform: Earth
+Engine separates a free noncommercial tier from a paid commercial account, and a company using
+it operationally needs the latter. **That is a reason to not use Earth Engine, not a reason to
+drop the dataset** — see access below.
+
+**Access, and the route that matters.** Two exist. Earth Engine needs a Google account, project
+registration and its own Python client, and drags the commercial-tier question along. The
+alternative is a public mirror on Source Cooperative / AWS Open Data:
+`s3://us-west-2.opendata.source.coop/tge-labs/aef/v1/annual/`, **anonymous, no AWS account**,
+Cloud-Optimized GeoTIFFs organized by year and UTM zone, with a spatial index for finding the
+tiles that intersect a bounding box. Saltillo is UTM zone **14N**. The mirror keeps this project
+off Earth Engine's terms entirely and off a Google account.
+
+**Local cost, measured rather than assumed.** Reading a COG needs `rasterio`. The precedent was
+discouraging: `fiona` was skipped from this project because there is no GDAL wheel for Python
+3.14 on Windows. **`rasterio` 1.5.0 is not blocked** — a `pip install --dry-run
+--only-binary=:all: rasterio` on this venv's interpreter (3.14.6, AMD64) resolves cleanly to
+wheels, pulling only `affine`, `click`, `cligj` and `pyparsing`. `numpy` 2.5.1 is already
+installed. So the whole thing is **one dependency**, no GDAL build, no cloud SDK.
+
+**Data volume, measured against this project's own extent.** The published AGEB layer spans
+**49.8 × 37.6 km** (431 AGEBs, three municipios). At 10 m that is **18.72 M pixels**, and a
+64-band `int8` array over it is **1.20 GB for a single year** — not "a small crop". One source
+COG tile in zone 14N is **~3.2 GB**; the small STAC index is 4.99 MB (the full index parquet is
+77.8 MB). The screening step below avoids all of this by reading a COG **overview** instead of
+full resolution.
+
+**The objection that decides the headline use case.** The embeddings are **annual**: they
+summarize a full year's trajectory, and Google's own documentation frames them as year-long
+patterns, not sub-annual events. **A pluvial flood that stands water for hours has no signal of
+its own here.** So the honest reframing of "contrast the flood layer" is not *detect the July
+2025 flood* — that is out of reach — but *do the colonias that flooded carry a distinguishable
+land-cover and terrain signature?* That is a susceptibility proxy, and a weaker claim than the
+task note assumed.
+
+**And the label problem is worse than it looks.** The positives are the 16 colonias one
+newspaper named. There are **no negatives**: a colonia that was not reported may simply not have
+been reported. That is positive-unlabeled learning with ~16 positives at colonia granularity,
+against 342 Saltillo AGEBs. Google's own published anchor for "few labels" is **150 samples per
+class**. Pixel counts do not rescue this — the 10 m pixels inside one colonia are not
+independent samples, and the unit in which this app publishes *every* number is the AGEB.
+
+**The five candidate uses, re-ranked after the evidence:**
+
+1. **Contrast the flood layer — weakened, not dead.** This is the open wound in §2.4, and it is
+   still the use that would matter most. But it survives only in the reframed, weaker form
+   above, and only if the screening below says the signature separates. Decision rule fixed
+   *before* running: if it does not, this use is dropped and recorded here, like fire and
+   insecurity were.
+2. **Detect change since the 2020 Census — the strongest one, and it was not the headline.**
+   Year-over-year angle is the documented operation, needs **no labels at all**, and yields a
+   bounded, defensible claim: *this sector has changed a lot since the Census was taken*. It
+   flags staleness without inventing a single Census figure. It survives precisely where the
+   others do not, because it asks nothing of a training set.
+3. **Fire / wildland-urban interface — still blocked, and by the same thing as in §3.3.** That
+   entry deferred fire because the hazard is in the sierra where there are no AGEBs, not only
+   because no source published a layer. AlphaEarth supplies a source; **it does not supply an
+   analysis unit**. Fixing the source does not fix the geometry.
+4. **Filling the gaps** (96 AGEBs with no cadastral row, 21 with no Census figures). Needs
+   land-use labels this project does not have, and would be inventing a category where today
+   there is an honest blank.
+5. **Expansion to Monterrey / Torreón / Monclova.** The real strategic argument — every risk
+   layer we publish is IMPLAN's and therefore Saltillo-only — but it is downstream of (2)
+   working, not a reason on its own.
+
+**What must be true if any of this ships, and it is not negotiable.** The premise of this whole
+file is *verified official provenance*: every number the app publishes traces to a document with
+a publisher and a cutoff date. **Model output is a different kind of claim.** If it enters, it
+enters as a separate layer, labelled as this project's own estimate, with its method and its
+error, **never merged into a field that cites a source, and never into the Investment Index** —
+which has no slot for a term with no publisher to refer the reader to. The ethical precedent set
+in §3.4 applies with more force, not less: a model that marks zones affects real people's
+property, and *"our model predicts high risk here"* is a **stronger** assertion than citing an
+atlas, because there is nobody to appeal to behind it.
+
+**Approved next step — screening only, no training, not yet run:**
+
+1. Read the STAC geoparquet index (4.99 MB) and select the 14N tiles intersecting the project
+   bbox `-101.067, 25.263, -100.571, 25.607`.
+2. Read a COG **overview** rather than full resolution. At ~160 m the extent is ~73 K pixels,
+   about **4.7 MB instead of 1.20 GB** — enough to answer "do these look alike?" for roughly
+   1/250th of the transfer. **Check before trusting it:** overview pixels are averaged
+   embeddings, and a mean of unit vectors is not itself unit-norm, so renormalize and confirm
+   against a full-resolution sample before drawing any conclusion. Values arrive as `int8` and
+   need rescaling to the documented −1…1 range.
+3. Aggregate to AGEB (mean pixel vector, renormalized): a 431 × 64 table, ~220 KB.
+4. Answer two questions with cosine similarity alone, no model: **(a)** do zones we already know
+   to be different separate — the GIS industrial sector, residential colonias, the sierra?
+   **(b)** are the 16 flooded colonias closer to each other than to a random sample of the same
+   size? If (a) fails, the pipeline is wrong. If (b) fails, use 1 dies cheaply.
+
+**What NOT to do, so it does not have to be re-litigated:**
+
+* **Do not train anything** before (b) answers.
+* **Do not use Earth Engine.** The mirror avoids the account, the commercial tier and the
+  platform terms, and keeps the stack at `pandas` + `geopandas` + one new wheel.
+* **Do not add `aef-loader`.** It is purpose-built and tempting, but it pulls `asyncio`,
+  `obstore`, `VirtualiZarr`, `odc-geobox` and `dask` into a project whose entire data stack is
+  `pandas` and `geopandas`. `rasterio` alone does a windowed COG read over HTTPS.
+* **Do not validate at pixel level and report at AGEB level.** That is how 18.72 M "samples"
+  turn into a confidence nobody earned.
+* **Do not let a model result reach the Investment Index**, or share a field with a cited figure.
 
 ---
 
