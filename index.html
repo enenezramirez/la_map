@@ -133,61 +133,84 @@
             </div>
         </section>
 
+        <!-- Layers are grouped because the panel mixes three kinds of claim, and
+             a flat list of six said they were all the same kind: indices this
+             project computes, a risk classification it republishes from IMPLAN,
+             and a figure it merely cites. The grouping is declared HERE and
+             nowhere else — app.js reads the family off each switch's enclosing
+             .layer-group, so the legend regroups itself and cannot drift.
+             role="group" carries to assistive tech what the heading carries to
+             the eye (SC 1.3.1); the headings alone would only be an outline. -->
         <section class="panel-section" id="layers-section" aria-labelledby="layers-heading">
-            <h2 id="layers-heading">Capas de Riesgo y Servicios</h2>
-            
-            <div class="layer-control">
-                <label class="switch-container">
-                    <input type="checkbox" id="layer-services" checked>
-                    <span class="slider"></span>
-                    <span class="layer-name">Cobertura de Servicios Básicos</span>
-                </label>
-                <p class="layer-desc">Porcentaje de agua, luz, drenaje e internet por sector (Censo 2020).</p>
+            <h2 id="layers-heading">Capas</h2>
+
+            <div class="layer-group" id="group-indices" role="group" aria-labelledby="group-indices-title">
+                <h3 class="layer-group-title" id="group-indices-title">Índices</h3>
+                <p class="layer-group-desc">Calculados por este proyecto.</p>
+
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-investment">
+                        <span class="slider"></span>
+                        <span class="layer-name">Índice de Inversión Inmobiliaria</span>
+                    </label>
+                    <p class="layer-desc">Zonas sugeridas de inversión: servicios y equipamiento, penalizado por riesgo de inundación.</p>
+                </div>
+
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-services" checked>
+                        <span class="slider"></span>
+                        <span class="layer-name">Cobertura de Servicios Básicos</span>
+                    </label>
+                    <p class="layer-desc">Porcentaje de agua, luz, drenaje e internet por sector (Censo 2020).</p>
+                </div>
             </div>
 
-            <div class="layer-control">
-                <label class="switch-container">
-                    <input type="checkbox" id="layer-floods">
-                    <span class="slider"></span>
-                    <span class="layer-name">Riesgo de Inundación</span>
-                </label>
-                <p class="layer-desc">Zonas de riesgo por inundación pluvial urbana (IMPLAN · Atlas de Riesgos 2024).</p>
+            <div class="layer-group" id="group-riesgos" role="group" aria-labelledby="group-riesgos-title">
+                <h3 class="layer-group-title" id="group-riesgos-title">Riesgos</h3>
+                <p class="layer-group-desc">Clasificación del IMPLAN, sin recalcular.</p>
+
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-floods">
+                        <span class="slider"></span>
+                        <span class="layer-name">Riesgo de Inundación</span>
+                    </label>
+                    <p class="layer-desc">Zonas de riesgo por inundación pluvial urbana (IMPLAN · Atlas de Riesgos 2024).</p>
+                </div>
+
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-landslides">
+                        <span class="slider"></span>
+                        <span class="layer-name">Riesgo de Deslizamientos</span>
+                    </label>
+                    <p class="layer-desc">Remoción de masa en laderas, riesgo geológico traslacional (IMPLAN · 2024).</p>
+                </div>
+
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-chemical">
+                        <span class="slider"></span>
+                        <span class="layer-name">Riesgo Químico-Tecnológico</span>
+                    </label>
+                    <p class="layer-desc">Zonas expuestas al almacenamiento de sustancias químicas peligrosas (IMPLAN · Atlas de Riesgos 2024).</p>
+                </div>
             </div>
 
-            <div class="layer-control">
-                <label class="switch-container">
-                    <input type="checkbox" id="layer-landslides">
-                    <span class="slider"></span>
-                    <span class="layer-name">Riesgo de Deslizamientos</span>
-                </label>
-                <p class="layer-desc">Remoción de masa en laderas, riesgo geológico traslacional (IMPLAN · 2024).</p>
-            </div>
+            <div class="layer-group" id="group-referencia" role="group" aria-labelledby="group-referencia-title">
+                <h3 class="layer-group-title" id="group-referencia-title">Valor de referencia</h3>
+                <p class="layer-group-desc">Cifra oficial citada tal cual.</p>
 
-            <div class="layer-control">
-                <label class="switch-container">
-                    <input type="checkbox" id="layer-chemical">
-                    <span class="slider"></span>
-                    <span class="layer-name">Riesgo Químico-Tecnológico</span>
-                </label>
-                <p class="layer-desc">Zonas expuestas al almacenamiento de sustancias químicas peligrosas (IMPLAN · Atlas de Riesgos 2024).</p>
-            </div>
-
-            <div class="layer-control">
-                <label class="switch-container">
-                    <input type="checkbox" id="layer-cadastral">
-                    <span class="slider"></span>
-                    <span class="layer-name">Valor Catastral del Suelo</span>
-                </label>
-                <p class="layer-desc">Valor de referencia por m² que el municipio usa para el predial (Tesorería · 2026). No es precio de mercado.</p>
-            </div>
-
-            <div class="layer-control">
-                <label class="switch-container">
-                    <input type="checkbox" id="layer-investment">
-                    <span class="slider"></span>
-                    <span class="layer-name">Índice de Inversión Inmobiliaria</span>
-                </label>
-                <p class="layer-desc">Zonas sugeridas de inversión: servicios y equipamiento, penalizado por riesgo de inundación.</p>
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-cadastral">
+                        <span class="slider"></span>
+                        <span class="layer-name">Valor Catastral del Suelo</span>
+                    </label>
+                    <p class="layer-desc">Valor de referencia por m² que el municipio usa para el predial (Tesorería · 2026). No es precio de mercado.</p>
+                </div>
             </div>
         </section>
 

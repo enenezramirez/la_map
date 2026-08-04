@@ -173,6 +173,34 @@ body {
     font-weight: 400;
 }
 
+/* Layer families. The <h2> above stays the section's micro-label ("Capas");
+   these headings are what the reader actually navigates by, so they are set
+   in sentence case and at full text color rather than as another tag. */
+.layer-group + .layer-group {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--tz-border);
+}
+
+.layer-group-title {
+    font-family: var(--tz-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+    color: var(--tz-text);
+    margin-bottom: 2px;
+}
+
+/* One line on what kind of claim the family makes. This is the whole reason
+   for grouping: an index this project computed and a figure it merely cites
+   are not the same sort of statement, and a flat list said they were. */
+.layer-group-desc {
+    font-size: 0.7rem;
+    line-height: 1.35;
+    color: var(--tz-text-3);
+    margin-bottom: 12px;
+}
+
 /* Layer Control */
 .layer-control {
     margin-bottom: 16px;
@@ -279,6 +307,72 @@ body {
     margin-top: 18px;
     padding-top: 14px;
     border-top: 1px solid var(--tz-border-strong);
+}
+
+/* Legend families, mirroring the panel's groups and folding as a unit. This is
+   where the column's height lives: three risk layers alone are ~590 px of the
+   ~2,550 px the legend reaches with everything on, and before this the only way
+   to get them out of the way was one block at a time. */
+.legend-group + .legend-group {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--tz-border-strong);
+}
+
+.legend-group > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+    padding: 2px 0;
+    cursor: pointer;
+    font-family: var(--tz-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--tz-text-2);
+    list-style: none;
+}
+
+.legend-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Drawn rather than left to the native marker: display:flex on a <summary>
+   drops the disclosure triangle in Chrome, and a fold control with no
+   affordance is one nobody finds. */
+.legend-group > summary::before {
+    content: '';
+    flex-shrink: 0;
+    width: 0;
+    height: 0;
+    border-left: 5px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.15s ease;
+}
+
+.legend-group[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.legend-group > summary:hover {
+    color: var(--tz-text);
+}
+
+.legend-group > summary:focus-visible {
+    outline: 2px solid var(--tz-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.legend-group-count {
+    font-variant-numeric: tabular-nums;
+    color: var(--tz-text-3);
+}
+
+.legend-group-body {
+    padding-top: 12px;
 }
 
 /* Shown only when more than one risk layer is on. Labelling each block is not

@@ -619,6 +619,38 @@ function ordenDePanel(claves) {
         enPanel.indexOf(checkboxPorClave.get(a)) - enPanel.indexOf(checkboxPorClave.get(b)));
 }
 
+// Which family a layer belongs to, read off the switch's enclosing group in
+// the markup. Deriving it — rather than keeping a list here — means the panel
+// declares the grouping once: regrouping index.html regroups the legend, and
+// the two cannot disagree about which layer is a risk and which is an index.
+function familiaDeCapa(clave) {
+    const checkbox = checkboxPorClave.get(clave);
+    const grupo = checkbox && checkbox.closest('.layer-group');
+    if (!grupo) return null;
+    const titulo = grupo.querySelector('.layer-group-title');
+    return { id: grupo.id, titulo: titulo ? titulo.textContent.trim() : '' };
+}
+
+// Groups the already panel-ordered keys, keeping that order both between
+// families and inside each one. A layer whose group is missing from the markup
+// still gets a block, in an unnamed group, rather than vanishing from the
+// legend while it is painted on the map.
+function agruparPorFamilia(claves) {
+    const grupos = [];
+    const porId = new Map();
+    for (const clave of claves) {
+        const familia = familiaDeCapa(clave) || { id: '', titulo: '' };
+        let grupo = porId.get(familia.id);
+        if (!grupo) {
+            grupo = { id: familia.id, titulo: familia.titulo, claves: [] };
+            porId.set(familia.id, grupo);
+            grupos.push(grupo);
+        }
+        grupo.claves.push(clave);
+    }
+    return grupos;
+}
+
 // The help panes are re-rendered along with the legend, so an open one
 // would snap shut just because another layer was toggled — irrelevant
 // when a single legend existed, annoying now that reading one layer's
@@ -633,6 +665,15 @@ function ayudasAbiertas() {
         .map(bloque => bloque.dataset.capa));
 }
 
+// Same idea one level up: which family sections the reader had folded. Read
+// off the DOM for the same reason, and tracked separately because a folded
+// family must not also forget which helps were open inside it.
+function gruposPlegados() {
+    return new Set(Array.from(document.querySelectorAll('#legend-container .legend-group'))
+        .filter(grupo => !grupo.open)
+        .map(grupo => grupo.dataset.grupo));
+}
+
 function actualizarLeyenda() {
     const contenedor = document.getElementById('legend-container');
     if (capasActivas.size === 0) {
@@ -640,19 +681,32 @@ function actualizarLeyenda() {
         return;
     }
     const abiertas = ayudasAbiertas();
+    const plegados = gruposPlegados();
     const claves = ordenDePanel(Array.from(capasActivas));
 
-    // Named up front, because labelling each block is not enough here:
-    // the brick ramp is shared, so "Medio" is literally the same swatch
-    // in two legends while meaning a different thing in each.
-    const nRiesgo = claves.filter(k => CLAVES_RIESGO.has(k)).length;
-    const aviso = nRiesgo > 1
-        ? `<p class="legend-note">${nRiesgo} capas de riesgo activas. Cada bloque explica la suya:
-           los colores se repiten entre capas, y un «Medio» de una no equivale al «Medio» de otra.</p>`
-        : '';
-
-    contenedor.innerHTML = aviso + claves.map(clave =>
-        `<div class="legend-block" data-capa="${esc(clave)}">${LEYENDAS[clave]()}</div>`).join('');
+    // The legend mirrors the panel's grouping, and each family folds as a unit.
+    // That is where the height is: three risk layers on their own are ~590 px
+    // of the ~2,550 px this column reaches with everything active, and folding
+    // them one block at a time was the only way to get out of the way.
+    contenedor.innerHTML = agruparPorFamilia(claves).map(grupo => {
+        // Named at the top of its own family, because labelling each block is
+        // not enough here: the brick ramp is shared, so "Medio" is literally
+        // the same swatch in two legends while meaning a different thing.
+        const nRiesgo = grupo.claves.filter(k => CLAVES_RIESGO.has(k)).length;
+        const aviso = nRiesgo > 1
+            ? `<p class="legend-note">${nRiesgo} capas de riesgo activas. Cada bloque explica la suya:
+               los colores se repiten entre capas, y un «Medio» de una no equivale al «Medio» de otra.</p>`
+            : '';
+        const bloques = grupo.claves.map(clave =>
+            `<div class="legend-block" data-capa="${esc(clave)}">${LEYENDAS[clave]()}</div>`).join('');
+        if (!grupo.titulo) return bloques;
+        const abierto = plegados.has(grupo.id) ? '' : ' open';
+        return `
+            <details class="legend-group" data-grupo="${esc(grupo.id)}"${abierto}>
+                <summary>${esc(grupo.titulo)} <span class="legend-group-count">${grupo.claves.length}</span></summary>
+                <div class="legend-group-body">${aviso}${bloques}</div>
+            </details>`;
+    }).join('');
 
     // Each swatch carries its color in data-swatch and gets it applied here,
     // rather than arriving as a `style="background:…"` attribute. A style
