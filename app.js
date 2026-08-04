@@ -303,6 +303,19 @@ const AYUDA_RIESGO = {
     }
 };
 
+// Both halves of the caveat are read through here, so the guard tests the very
+// fields that get dereferenced instead of a neighbouring one. Checking
+// `limitacion` and then reading `advertencia.lead` is the shape of bug this
+// repo has already shipped once — `if (!dato)` said nothing about `dato.valor`
+// — and here it would throw inside cargarCapaRiesgo's `.then()`, whose `.catch`
+// only logs: the switch would stay checked and do nothing, with one console
+// line to show for it. A half-filled entry degrades to no caveat instead.
+function advertenciaDeRiesgo(clave) {
+    const ayuda = AYUDA_RIESGO[clave];
+    const adv = ayuda && ayuda.advertencia;
+    return adv && adv.lead && adv.cuerpo ? adv : null;
+}
+
 // Help sits at the end of every legend, always in the same place, so it
 // can be found the same way for any layer.
 function htmlAyudaRiesgo(clave, conteos) {
@@ -317,9 +330,10 @@ function htmlAyudaRiesgo(clave, conteos) {
     const peor = presentes[0];
     // Only a layer whose blank areas have been measured against a real event
     // earns this block; the rest render nothing here.
-    const limitacion = a.limitacion
+    const adv = advertenciaDeRiesgo(clave);
+    const limitacion = adv && Array.isArray(a.limitacion) && a.limitacion.length
         ? `<div class="help-caveat">
-               <p><strong>${esc(a.advertencia.lead)}</strong></p>
+               <p><strong>${esc(adv.lead)}</strong></p>
                ${a.limitacion.map(p => `<p>${esc(p)}</p>`).join('')}
            </div>`
         : '';
@@ -359,7 +373,7 @@ function htmlLeyendaRiesgo(titulo, clave, conteos, fuente, fecha) {
         : '';
     // Sits next to the swatches, not inside the collapsed help, because the
     // reader it is for is reading the ramp to decide whether a zone is clear.
-    const adv = (AYUDA_RIESGO[clave] || {}).advertencia;
+    const adv = advertenciaDeRiesgo(clave);
     const aviso = adv
         ? `<p class="legend-caveat"><strong>${esc(adv.lead)}</strong> ${esc(adv.cuerpo)}</p>`
         : '';
@@ -628,7 +642,15 @@ function familiaDeCapa(clave) {
     const grupo = checkbox && checkbox.closest('.layer-group');
     if (!grupo) return null;
     const titulo = grupo.querySelector('.layer-group-title');
-    return { id: grupo.id, titulo: titulo ? titulo.textContent.trim() : '' };
+    if (!titulo) return null;
+    // Identity comes from the heading's id, not the container's, because the
+    // heading's is load-bearing in the markup already — aria-labelledby points
+    // at it, so it cannot be deleted as tidying without something visibly
+    // breaking. A container id used only from here looks inert in index.html;
+    // removing it would silently collapse every family into one key (the DOM
+    // `id` property yields '', not null) and render all six layers inside a
+    // single <details> wearing the first family's name, with valid HTML.
+    return { id: titulo.id, titulo: titulo.textContent.trim() };
 }
 
 // Groups the already panel-ordered keys, keeping that order both between
@@ -684,22 +706,37 @@ function actualizarLeyenda() {
     const plegados = gruposPlegados();
     const claves = ordenDePanel(Array.from(capasActivas));
 
+    // Counted over EVERY active layer, not per family. The hazard is two brick
+    // ramps on screen at once — "Medio" is literally the same swatch in two
+    // legends meaning a different thing — and that is true however the panel
+    // groups them. Counting per family looked tidier and quietly broke it: move
+    // one risk layer to another group and each side counts 1, so two identical
+    // ramps would render with nothing saying so. CLAVES_RIESGO is the one thing
+    // still declared in JS rather than derived from the markup, which is
+    // exactly why it must not be crossed with the markup's grouping.
+    const nRiesgo = claves.filter(k => CLAVES_RIESGO.has(k)).length;
+    const avisoRiesgo = nRiesgo > 1
+        ? `<p class="legend-note">${nRiesgo} capas de riesgo activas. Cada bloque explica la suya:
+           los colores se repiten entre capas, y un «Medio» de una no equivale al «Medio» de otra.</p>`
+        : '';
+    // It still gets placed inside the first family that holds a risk layer,
+    // next to what it is about — but it is emitted exactly once, and the
+    // untitled fallback path below carries it too rather than dropping it.
+    let avisoPendiente = avisoRiesgo;
+
     // The legend mirrors the panel's grouping, and each family folds as a unit.
     // That is where the height is: three risk layers on their own are ~590 px
     // of the ~2,550 px this column reaches with everything active, and folding
     // them one block at a time was the only way to get out of the way.
     contenedor.innerHTML = agruparPorFamilia(claves).map(grupo => {
-        // Named at the top of its own family, because labelling each block is
-        // not enough here: the brick ramp is shared, so "Medio" is literally
-        // the same swatch in two legends while meaning a different thing.
-        const nRiesgo = grupo.claves.filter(k => CLAVES_RIESGO.has(k)).length;
-        const aviso = nRiesgo > 1
-            ? `<p class="legend-note">${nRiesgo} capas de riesgo activas. Cada bloque explica la suya:
-               los colores se repiten entre capas, y un «Medio» de una no equivale al «Medio» de otra.</p>`
-            : '';
+        let aviso = '';
+        if (avisoPendiente && grupo.claves.some(k => CLAVES_RIESGO.has(k))) {
+            aviso = avisoPendiente;
+            avisoPendiente = '';
+        }
         const bloques = grupo.claves.map(clave =>
             `<div class="legend-block" data-capa="${esc(clave)}">${LEYENDAS[clave]()}</div>`).join('');
-        if (!grupo.titulo) return bloques;
+        if (!grupo.titulo) return aviso + bloques;
         const abierto = plegados.has(grupo.id) ? '' : ' open';
         return `
             <details class="legend-group" data-grupo="${esc(grupo.id)}"${abierto}>
