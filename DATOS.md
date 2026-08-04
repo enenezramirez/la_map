@@ -693,6 +693,59 @@ atlas, because there is nobody to appeal to behind it.
   turn into a confidence nobody earned.
 * **Do not let a model result reach the Investment Index**, or share a field with a cited figure.
 
+### 3.7 IMPLAN — Vulnerabilidad socio organizativa / sanitario ecológica (Atlas 2024) — desk evaluation 2026-08-03
+
+The last two of the Atlas's seven layers, and the only ones never assessed. **Nothing was
+downloaded.** Read off the CARTO SALTILLO portal on 2026-08-03, both are published by IMPLAN,
+dated 2024, offered as SHP/KML/PDF, and described in one line each:
+
+* *Vulnerabilidad socio organizativa* — "Ubicación de la vulnerabilidad de los fenómenos socio
+  organizativos a nivel manzana".
+* *Vulnerabilidad sanitario ecológica* — "Ubicación de la vulnerabilidad de los fenómenos
+  sanitario ecológico a nivel manzana".
+
+**For once the granularity is not the problem — it is the opposite problem.** Every source this
+file has turned away (CENAPRED §3.1, insecurity §3.4, fire's `GP_IF`) failed for being *coarser*
+than the AGEB. These are **per city block**, finer than the unit this app publishes in, so they
+aggregate upward cleanly. The technical objection that killed the others does not apply.
+
+**What stops them is what they measure.** Both name a *vulnerability*, not a hazard, and in
+CENAPRED's taxonomy — which the Atlas follows — risk is hazard × exposure × **vulnerability**,
+where the vulnerability term describes the **population**, not the place. That is a different
+object from every risk layer already published here: flooding, landslides and chemical storage
+all classify **the ground**. This project's audience is an investor or buyer, and the two
+consequences of that are not symmetric:
+
+1. **It would double-count.** A socio-economic vulnerability index built on Census
+   characteristics measures, through another lens, much of what `SERVICIOS_INDEX` (§2.2) already
+   measures — basic-service coverage is itself a marginalization proxy. Adding it to the
+   Investment Index would weight the same underlying variable twice while looking like new
+   evidence.
+2. **And publishing it to this audience is the mechanism of redlining.** A map that tells
+   investors which blocks hold vulnerable populations, sold as a property-decision tool, is how
+   disinvestment in poor neighbourhoods is manufactured. §3.4 already set this precedent for
+   insecurity — the self-fulfilling-prophecy concern — and it applies here with less ambiguity,
+   because there the object was crime and here it is people's poverty stated directly. The
+   project's own rule is **curate, do not accumulate**: a layer must change an investment
+   decision or show something not otherwise visible. This one changes a decision in a direction
+   the project should not be pushing.
+
+**Recommendation, split rather than lumped:**
+
+* ***Vulnerabilidad socio organizativa*: do not publish.** The objection above is not about data
+  quality, so no download would change it. Recorded as decided, not as pending.
+* ***Vulnerabilidad sanitario ecológica*: one open question, and it is worth settling.** The
+  title is genuinely ambiguous. In CENAPRED's taxonomy sanitary-ecological phenomena include
+  soil, water and air **contamination** — which is a property of the *place*, and would be a
+  legitimate risk layer of exactly the kind this app already publishes — but the word
+  *vulnerabilidad* points instead at the population's susceptibility to them. The one-line
+  portal description does not settle it. **Settling it needs the layer's PDF**, which carries the
+  legend and usually the method; that is a download, so it waits on the user.
+
+**Reactivation criterion for the socio-organizational layer:** none under the current product.
+It would need the audience to change — a municipal or civil-protection user, for whom knowing
+where the vulnerable population lives is the point of the map rather than a hazard to them.
+
 ---
 
 ## 4. Traceability of the published layers
