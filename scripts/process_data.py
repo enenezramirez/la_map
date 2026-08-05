@@ -1196,15 +1196,19 @@ def calcular_indice_inversion(
     flood-Risk penalty (0.3) is applied, subtracting up to 30 points based on
     the AGEB's exposure. The result is clipped to [0, 100].
 
-    A sector the flood model never covered gets NO penalty -- there is nothing
-    to penalize it with -- but it is flagged rather than silently scored as if
-    it had been assessed and found safe. The old `fillna(0)` made that same
-    arithmetic while asserting something false, and the effect was measurable:
-    Ramos Arizpe put 33% of its AGEBs in the index's top quintile against
-    Saltillo's 20%, where on a level field the two sit at 23% and 21%. The
-    index rewarded those municipalities for a gap in OUR data. Same error the
-    Census fix (MOTIVO_SIN_DATO) already corrected once: absence of a figure is
-    not a zero.
+    A sector the flood model never covered gets NO index at all, the same rule
+    the services weight already follows: when a component of the weight is
+    missing, there is no index to publish. It is not that the penalty happens
+    to be zero -- it is that 30% of what the number means was never measured,
+    and the missing term can only move a score UP, so publishing it would
+    flatter those sectors for a gap in OUR data.
+
+    That was measurable before this rule: with the old `fillna(0)`, Ramos
+    Arizpe put 33% of its AGEBs in the index's top quintile against Saltillo's
+    20%, where on a level field the two sit at 23% and 21%. Flagging it was not
+    enough, because the colour ramp still ranked them; only leaving them out of
+    the scale does. Same error the Census fix (MOTIVO_SIN_DATO) corrected once:
+    absence of a figure is not a zero.
     """
     gdf = gdf_ageb_servicios.merge(df_comercios, on="CVEGEO", how="left")
     gdf = gdf.merge(df_riesgo, on="CVEGEO", how="left")
@@ -1214,14 +1218,19 @@ def calcular_indice_inversion(
     base = (
         gdf["SERVICIOS_INDEX"] * PESO_SERVICIOS + gdf["COMERCIOS_INDEX"] * PESO_COMERCIOS
     ) / peso_base
-    penalizacion = gdf["RIESGO_INDEX"].fillna(0) * PESO_RIESGO
-    gdf["INVERSION_INDEX"] = (base - penalizacion).clip(lower=0, upper=100)
+    gdf["INVERSION_INDEX"] = (base - gdf["RIESGO_INDEX"] * PESO_RIESGO).clip(
+        lower=0, upper=100
+    )
+    # NaN propagates through the subtraction on its own, so this is belt and
+    # braces -- and it is the line that states the rule, which is worth having
+    # explicitly rather than as a side effect of arithmetic.
+    gdf.loc[~gdf["RIESGO_EVALUADO"], "INVERSION_INDEX"] = float("nan")
 
     sin_evaluar = int((~gdf["RIESGO_EVALUADO"]).sum())
     if sin_evaluar:
         print(
-            f"  {sin_evaluar} AGEBs scored without a flood penalty (outside the "
-            f"Atlas). Their index is NOT comparable with an assessed sector's."
+            f"  {sin_evaluar} AGEBs outside the flood Atlas: no index published "
+            f"(30% of its weight was never measured there)."
         )
 
     return gdf
@@ -1250,7 +1259,10 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
     # With no service data there is no index: 40% of its weight is missing, so
     # INVERSION_INDEX ends up null by NaN propagation. They are kept in the
     # layer to paint them gray and explain the reason, rather than letting an
-    # unmeasured AGEB look like a bad investment.
+    # unmeasured AGEB look like a bad investment. The same rule now covers the
+    # flood term (30%): a sector outside the Atlas is grey too, because the
+    # missing penalty could only flatter it and the colour ramp would have
+    # ranked it against sectors that did pay one.
     gdf_final = gdf_inversion[columnas_finales].copy()
     gdf_final["geometry"] = gdf_final["geometry"].simplify(
         TOLERANCIA_SIMPLIFICACION, preserve_topology=True
