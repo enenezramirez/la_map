@@ -30,8 +30,11 @@ const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabe
     maxZoom: 20
 }).addTo(map);
 
-// Alternative base layer - CartoDB Positron (premium light style, in case the user prefers light)
-const lightBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+// Alternative base layer - CartoDB Positron, label-free to match the dark one.
+// Kept symmetric on purpose: with one variant labelled and the other not,
+// switching base changed the theme AND the information density at once, so the
+// control stopped being a single choice.
+const lightBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
     maxZoom: 20
