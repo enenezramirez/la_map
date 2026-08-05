@@ -50,10 +50,14 @@ Open `http://localhost:8000` in your browser.
 ## Structure
 
 ```
-index.html           Map (Leaflet) and interface logic
+index.html           Markup, Content-Security-Policy, asset loading
+app.js               Application logic: map, layers, legends, search, cards
 styles.css           Styles (dark theme, design tokens in :root)
 assets/
   logo-traza.svg     Vertex mark; also the favicon
+  fonts/             Self-hosted Inter and IBM Plex Mono (.woff2) + licenses
+  vendor/
+    leaflet-1.9.4/   Leaflet, vendored so no CDN sits in the render path
 scripts/
   process_data.py    Data processing pipeline (GeoPandas)
 data/
@@ -63,6 +67,8 @@ data/
   riesgo_deslizamientos.geojson  Landslide-risk layer (IMPLAN)
   riesgo_quimico.geojson         Chemical-technological risk layer (IMPLAN)
   riesgo_inundacion.png          ANRI severity raster (backup) + its _meta.json
+  calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
+  valor_catastral.json           Cadastral land value per AGEB (informational, not in the index)
 DATOS.md             Data log: provenance of each dataset
 ```
 

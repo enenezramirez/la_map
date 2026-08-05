@@ -57,8 +57,10 @@ source for being local, vector and from 2024.
 
 import json
 import re
+import unicodedata
 import urllib.parse
 import urllib.request
+import zlib
 from datetime import date
 from pathlib import Path
 
@@ -214,6 +216,49 @@ NIVELES_ELEVADOS_QUIMICO = ["Medio", "Alto", "Muy alto"]
 RIESGO_INUNDACION_GEOJSON = DATA_DIR / "riesgo_inundacion.geojson"
 RIESGO_DESLIZAMIENTOS_GEOJSON = DATA_DIR / "riesgo_deslizamientos.geojson"
 RIESGO_QUIMICO_GEOJSON = DATA_DIR / "riesgo_quimico.geojson"
+
+# --- Cadastral land value (Tesorería Municipal de Saltillo) -----------------
+# Published per colonia, which is the unit this project already works in, so
+# the join needs no geometry at all — see DATOS.md §3.5. Informational layer:
+# it does NOT enter the Investment Index. A low land value is genuinely
+# ambiguous for a buyer (cheap entry or weak area), so giving it a sign in the
+# score would bake in an undeclared thesis.
+CATASTRO_PDF = RAW_DATA / "catastro" / "TABLAS_VALORES_SUELO_CONSTRUCCION_2026.pdf"
+CATASTRO_JSON = DATA_DIR / "valor_catastral.json"
+CATASTRO_FUENTE = (
+    "Tesorería Municipal de Saltillo — Tablas de Valores de Suelo y "
+    "Construcción (aprobadas por el Congreso de Coahuila)"
+)
+CATASTRO_EDICION = "2026"
+# The cell separator inside the PDF content streams is the document's language
+# tag, and it CHANGES between editions (es-ES in older ones, es-MX in 2026).
+# Hardcoding either returns zero rows against the other, silently.
+CATASTRO_SEPARADOR = re.compile(r"es-[A-Z]{2}")
+# Terrain classes as printed, with the spelling drift the source actually
+# contains: "RESIDENCIAL 1a." vs "RESIDENCIAL 1a", "RESIDENCIAL LUJO" vs
+# "RESIDENCIAL DE LUJO", "MEDIO MEDIO" vs "MEDIA MEDIA". Left unnormalized,
+# a handful of colonias fall through the value lookup with no error at all.
+CATASTRO_CLASE = re.compile(
+    r"^(POPULAR(\s*\(\d\))?|INTERES SOCIAL(\s*\(\d\))?|MEDI[OA] (BAJ[OA]|MEDI[OA]|ALT[OA])"
+    r"|RESIDENCIAL(\s+(DE\s+)?LUJO|\s+1a\.?)?|ZONA TIPICA|INDUSTRIAL(\s*\(\d\))?"
+    r"|CAMPESTRE|MARGINADO|LOCALIDAD\s*\(SOLAR\))\s*$", re.I)
+CATASTRO_RUIDO = re.compile(
+    r"CONGRESO|SOBERANO|ZARAGOZA|PODER LEGISLATIVO|TABLA|COLONIA O FRACC"
+    r"|TIPO DE TERRENO|FRACCIONAMIENTOS \d{4}|^NO\.?$|^\d{1,3}$", re.I)
+# Alphabet allowed in anything published from the cadastral PDF, mirroring
+# CARACTERES_PERMITIDOS for the street index. Today the values cannot escape
+# this anyway — the classes come from an anchored whitelist and the colonia
+# names from a normalizer that strips every HTML metacharacter — but that
+# invariant is spread across three functions, and loosening any one of them
+# (a 2027 edition adding a class, or "stop destroying apostrophes in names")
+# would dissolve it silently. This is the second layer the project says it wants.
+CATASTRO_PERMITIDOS = re.compile(r"^[0-9A-ZÁÉÍÓÚÜÑ ().]+$")
+# Ceiling per inflated PDF stream. The file is downloaded by hand rather than
+# fetched by the pipeline, so this is not an exposed attack surface — but it is
+# the one hand-rolled parser here pointed at a third-party binary, and 200 MB of
+# zeros compresses to ~204 KB, so one crafted stream could take the machine out
+# mid-run, after some layers are written and before others.
+CATASTRO_MAX_FLUJO = 64 * 1024 * 1024
 
 # 2020 Census variables used for the basic-services coverage index. The
 # "positive" variants are used (dwellings that DO have the service):
@@ -553,6 +598,265 @@ def exportar_indice_calles(indice: dict) -> None:
           f"{len(indice['calles'])} lines)")
 
 
+def _normalizar_catastro(texto: str) -> str:
+    """Fold a colonia name for matching: accents, case, punctuation, and the
+    zero padding the cadastre uses on dates ("05 DE MAYO" vs "5 DE MAYO")."""
+    plano = unicodedata.normalize("NFD", texto)
+    plano = "".join(c for c in plano if unicodedata.category(c) != "Mn")
+    plano = re.sub(r"[^\w\s]", " ", plano.upper())
+    plano = re.sub(r"\s+", " ", plano).strip()
+    return re.sub(r"\b0(\d)\b", r"\1", plano)
+
+
+def _normalizar_clase(clase: str) -> str:
+    """Collapse the source's own spelling drift onto one label per class."""
+    c = re.sub(r"\s+", " ", clase.upper().replace(".", "")).strip()
+    c = c.replace("MEDIA MEDIA", "MEDIO MEDIO").replace("MEDIA ", "MEDIO ")
+    c = c.replace("RESIDENCIAL LUJO", "RESIDENCIAL DE LUJO")
+    return c
+
+
+def extraer_tablas_catastrales() -> tuple[dict[str, float], dict[str, str]]:
+    """
+    Read the cadastral PDF: the value per terrain class, and the class of each
+    colonia.
+
+    The PDF carries real embedded text, so no OCR and no PDF dependency is
+    needed — inflating its FlateDecode streams with the standard library and
+    reading the text-showing operators is enough. Note that a fetch tool
+    reporting the file as "unreadable" means only that it did not inflate the
+    streams; it is not evidence of a scan.
+
+    Returns:
+        (value per normalized class in pesos/m², class per normalized colonia).
+        Both empty if the PDF is not present, so the pipeline can continue.
+    """
+    if not CATASTRO_PDF.exists():
+        print(f"  Notice: {CATASTRO_PDF} not found; skipping cadastral values.")
+        return {}, {}
+
+    crudo = CATASTRO_PDF.read_bytes()
+    literal = re.compile(rb"\((?:\\.|[^()\\])*\)", re.S)
+    escape = re.compile(rb"\\([()\\])")
+    paginas: list[str] = []
+    for m in re.finditer(rb"stream\r?\n", crudo):
+        ini = m.end()
+        fin = crudo.find(b"endstream", ini)
+        if fin == -1:
+            continue
+        try:
+            descompresor = zlib.decompressobj()
+            flujo = descompresor.decompress(crudo[ini:fin], CATASTRO_MAX_FLUJO)
+            if descompresor.unconsumed_tail:
+                print(f"  Warning: stream at byte {ini} inflates past "
+                      f"{CATASTRO_MAX_FLUJO // 1048576} MB; skipped.")
+                continue
+        except zlib.error:
+            continue  # image or already-uncompressed stream
+        if b"Tj" in flujo or b"TJ" in flujo:
+            paginas.append("".join(
+                escape.sub(rb"\1", s.group(0)[1:-1]).decode("latin-1")
+                for s in literal.finditer(flujo)
+            ))
+
+    # Table 1: class -> $/m2. Printed as "0POPULAR (1)$263.18 1POPULAR (2)..."
+    valores: dict[str, float] = {}
+    for pagina in paginas:
+        if "VALOR APLICABLE POR M" not in pagina:
+            continue
+        # The label must START with a letter, which is what keeps the row index
+        # ("11INDUSTRIAL (2)") out of it, but digits have to be allowed INSIDE
+        # or every class written with a numeral — POPULAR (2), INTERES SOCIAL
+        # (2), INDUSTRIAL (2) — silently fails to match. Those three are among
+        # the most common classes in the tables.
+        for m in re.finditer(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s()\.\da]{3,40}?)\$([\d,]+\.\d{2})",
+                             pagina):
+            etiqueta = _normalizar_clase(re.sub(r"^\d+", "", m.group(1)).strip())
+            if CATASTRO_CLASE.match(etiqueta):
+                valores[etiqueta] = float(m.group(2).replace(",", ""))
+        break
+
+    # Table 2: colonia -> class. A class label always follows the colonia it
+    # classifies, so the nearest preceding non-class cell is the name.
+    colonias: dict[str, str] = {}
+    for pagina in paginas:
+        if not CATASTRO_SEPARADOR.search(pagina):
+            continue
+        pendiente = None
+        for celda in (c.strip() for c in CATASTRO_SEPARADOR.split(pagina)):
+            if not celda or CATASTRO_RUIDO.search(celda):
+                continue
+            if CATASTRO_CLASE.match(celda):
+                if pendiente:
+                    colonias.setdefault(_normalizar_catastro(pendiente),
+                                        _normalizar_clase(celda))
+                    pendiente = None
+            else:
+                pendiente = celda
+
+    print(f"  Cadastral tables read: {len(valores)} terrain classes, "
+          f"{len(colonias)} colonias (edition {CATASTRO_EDICION}).")
+    # A present-but-unparsable PDF is the dangerous case, not a missing one:
+    # the export would return early, leave the PREVIOUS valor_catastral.json in
+    # place, and the run would still report success — shipping last year's
+    # figures under this year's edition label. The tables are reissued yearly
+    # and their internals already drift, so this is a "when", not an "if".
+    if not colonias or not valores:
+        raise ValueError(
+            f"{CATASTRO_PDF} was read but yielded {len(valores)} classes and "
+            f"{len(colonias)} colonias. The layout probably changed (the cell "
+            f"separator is a language tag and varies by edition). Refusing to "
+            f"continue rather than silently republish the previous file."
+        )
+    faltantes = {c for c in colonias.values() if c not in valores}
+    if faltantes:
+        # Loud rather than silent: a class with no value would publish a
+        # colonia with no figure and no explanation.
+        print(f"  Warning: {len(faltantes)} class(es) with no value in the "
+              f"table: {sorted(faltantes)}")
+    return valores, colonias
+
+
+def asignar_valor_catastral(
+    gdf_ageb_servicios: gpd.GeoDataFrame,
+    valores: dict[str, float],
+    colonias: dict[str, str],
+) -> dict:
+    """
+    Attach a cadastral class and value to each AGEB through its colonia name.
+
+    Matching is deliberately conservative: an exact fold first, then equality
+    of the *set* of words, which catches the real reordering in the data
+    ("AMPLIACIÓN 26 DE MARZO" vs "26 DE MARZO AMPLIACION"). Word-*subset*
+    matching was measured and rejected: it would pair the app's "AMISTAD" with
+    the cadastre's "AMISTAD III", and a land value bound to the wrong colonia
+    is worse than no value at all. Anything unmatched is published as having no
+    figure, the same way MOTIVO_SIN_DATO handles missing Census cells.
+    """
+    por_palabras: dict[frozenset, tuple[str, str]] = {}
+    # Spacing alone differs often enough to matter ("VISTA HERMOSA" on the map,
+    # "VISTAHERMOSA" in the tables). Collapsing it is a strict normalization,
+    # not a fuzzy guess: two distinct colonias separated only by a space are
+    # not a real case, whereas the miss is.
+    sin_espacios: dict[str, tuple[str, str]] = {}
+    for nombre, clase in colonias.items():
+        por_palabras.setdefault(frozenset(nombre.split()), (nombre, clase))
+        sin_espacios.setdefault(nombre.replace(" ", ""), (nombre, clase))
+
+    sectores: dict[str, dict] = {}
+    conteo = {"exacto": 0, "palabras": 0, "espacios": 0, "sin_dato": 0}
+    for _, fila in gdf_ageb_servicios.iterrows():
+        if str(fila.get("NOM_MUN", "")).upper() != "SALTILLO":
+            continue  # the tables cover the municipality of Saltillo only
+        colonia = fila.get("COLONIA")
+        if not colonia or colonia == "SIN_COLONIA":
+            continue
+        plano = _normalizar_catastro(colonia)
+        if plano in colonias:
+            nombre_catastro, clase, via = colonia, colonias[plano], "exacto"
+        elif frozenset(plano.split()) in por_palabras:
+            nombre_catastro, clase = por_palabras[frozenset(plano.split())]
+            via = "palabras"
+        elif plano.replace(" ", "") in sin_espacios:
+            nombre_catastro, clase = sin_espacios[plano.replace(" ", "")]
+            via = "espacios"
+        else:
+            conteo["sin_dato"] += 1
+            continue
+        conteo[via] += 1
+        sectores[fila["CVEGEO"]] = {
+            "clase": clase,
+            "valor": valores.get(clase),
+            # Recorded so the card can say how the figure was reached: on a
+            # word-set match the cadastre files the colonia under a differently
+            # ordered name, and hiding that would contradict the map's label.
+            "via": via,
+            **({"nombre_catastro": nombre_catastro} if via != "exacto" else {}),
+        }
+
+    total = sum(conteo.values())
+    if total:
+        print(f"  Cadastral value matched to {len(sectores)} of {total} Saltillo "
+              f"AGEBs ({len(sectores) / total:.1%}): {conteo['exacto']} exact, "
+              f"{conteo['palabras']} by word set, {conteo['espacios']} by spacing, "
+              f"{conteo['sin_dato']} with no published row.")
+    return sectores
+
+
+def validar_registros_catastrales(sectores: dict) -> None:
+    """
+    Refuse to publish a cadastral record whose contents are not what the
+    frontend is built to receive.
+
+    Mirrors `validar_nombres_publicados` for the street index, and raises for
+    the same reason: the alternative is a browser discovering the problem in
+    front of a user, far from here. The value check is not cosmetic — a class
+    listed for a colonia but absent from the value table exports as `null`, the
+    map still paints it, and only the click reveals it.
+
+    Raises:
+        ValueError: listing the offending records, at most a handful.
+    """
+    malos = []
+    for clave, registro in sectores.items():
+        if not CATASTRO_PERMITIDOS.match(registro["clase"]):
+            malos.append((clave, "clase", registro["clase"]))
+        alias = registro.get("nombre_catastro")
+        if alias is not None and not CATASTRO_PERMITIDOS.match(alias):
+            malos.append((clave, "nombre_catastro", alias))
+        if not isinstance(registro["valor"], (int, float)):
+            malos.append((clave, "valor", registro["valor"]))
+
+    if malos:
+        muestra = ", ".join(f"{c} {campo}={v!r}" for c, campo, v in malos[:5])
+        raise ValueError(
+            f"{len(malos)} cadastral record(s) with unexpected content, refusing "
+            f"to publish the layer. First few — {muestra}"
+        )
+
+
+def exportar_valor_catastral(sectores: dict) -> None:
+    """
+    Write the cadastral lookup to data/: keyed by AGEB, one sector per line.
+
+    No geometry on purpose. The browser already holds the AGEB polygons from
+    the services layer, and a third copy of them would cost ~640 KB against
+    the 5 MB budget of SPEC §2 — which data/ is already close to. One line per
+    sector for the same reason as the street index: a single-line file renders
+    every future change as one deleted and one added line, unreviewable.
+    """
+    if not sectores:
+        print("  No cadastral values to export.")
+        return
+
+    validar_registros_catastrales(sectores)
+
+    compacto = {"ensure_ascii": False, "separators": (",", ":")}
+    cabecera = {
+        "fuente": CATASTRO_FUENTE,
+        "edicion": CATASTRO_EDICION,
+        # Carried in the file rather than the frontend so the warning travels
+        # with the data: this is a tax base, not a market price.
+        "nota": ("Valor catastral de referencia (base fiscal), no precio de "
+                 "mercado. Es una clase asignada a toda la colonia, no un "
+                 "avalúo del predio."),
+    }
+    texto = (
+        json.dumps(cabecera, **compacto)[:-1]
+        + ',"sectores":{\n'
+        + ",\n".join(f"{json.dumps(clave, **compacto)}:{json.dumps(valor, **compacto)}"
+                     for clave, valor in sorted(sectores.items()))
+        + "\n}}"
+    )
+    if json.loads(texto)["sectores"] != sectores:
+        raise ValueError("The serialized cadastral index does not match the source data.")
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CATASTRO_JSON.write_text(texto, encoding="utf-8")
+    print(f"  Cadastral values exported: {CATASTRO_JSON} "
+          f"({CATASTRO_JSON.stat().st_size / 1024:.1f} KB, {len(sectores)} sectors)")
+
+
 def cargar_censo_servicios() -> pd.DataFrame:
     """
     Load the 2020 Census CSV by urban AGEB (all of Coahuila) and keep only the
@@ -814,14 +1118,45 @@ def exportar_capa_riesgo(
     return gdf
 
 
+def agebs_evaluados_por_riesgo(
+    gdf_agebs: gpd.GeoDataFrame, gdf_riesgo_completo: gpd.GeoDataFrame
+) -> set[str]:
+    """
+    Which AGEBs the flood model actually looked at.
+
+    This is the difference between "no exposure" and "not assessed", and it is
+    not decorative: the IMPLAN Atlas covers the municipality of Saltillo only,
+    so an AGEB in Ramos Arizpe or Arteaga has no flood figure for the same
+    reason a masked Census cell has no coverage figure -- nobody measured it.
+    Treating that as zero hands those sectors a guaranteed no-penalty in the
+    Investment Index, which is a reward for OUR missing data.
+
+    Coverage is derived from the model's own extent rather than from a
+    municipality name, for the same reason the frontend derives layer
+    availability from each GeoJSON's bounds: a hardcoded `== "Saltillo"` would
+    be a magic value that silently goes stale the day another city's atlas
+    arrives, which is precisely the expansion this pipeline is meant to allow.
+
+    `gdf_riesgo_completo` must be the UNFILTERED mesh: a cell classed "Muy
+    bajo" was still assessed, it just is not published as a risk zone.
+    """
+    malla = gdf_riesgo_completo[["geometry"]].to_crs(CRS_METRICO)
+    agebs = gdf_agebs[["CVEGEO", "geometry"]].to_crs(CRS_METRICO)
+    tocados = gpd.sjoin(agebs, malla, how="inner", predicate="intersects")
+    return set(tocados["CVEGEO"].unique())
+
+
 def calcular_riesgo_inundacion_por_ageb(
-    gdf_agebs: gpd.GeoDataFrame, gdf_inundacion: gpd.GeoDataFrame
+    gdf_agebs: gpd.GeoDataFrame,
+    gdf_inundacion: gpd.GeoDataFrame,
+    gdf_riesgo_completo: gpd.GeoDataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Compute RIESGO_INDEX (0-100) per AGEB as area-weighted flood exposure:
     sum(level_intersection_area × level_score) over the AGEB's total area. An
-    AGEB with no intersection with elevated risk → 0. The computation is done
-    in a metric CRS (EPSG:6372) for correct areas.
+    AGEB inside the model's coverage with no intersection with elevated risk →
+    0; an AGEB the model never covered → NaN, which is a different statement.
+    The computation is done in a metric CRS (EPSG:6372) for correct areas.
     """
     agebs_m = gdf_agebs[["CVEGEO", "geometry"]].to_crs(CRS_METRICO).copy()
     agebs_m["AREA_AGEB"] = agebs_m.geometry.area
@@ -837,6 +1172,16 @@ def calcular_riesgo_inundacion_por_ageb(
     resultado = agebs_m[["CVEGEO", "AREA_AGEB"]].copy()
     resultado["APORTE"] = resultado["CVEGEO"].map(aporte_por_ageb).fillna(0)
     resultado["RIESGO_INDEX"] = (resultado["APORTE"] / resultado["AREA_AGEB"]).clip(0, 100)
+
+    if gdf_riesgo_completo is not None:
+        evaluados = agebs_evaluados_por_riesgo(gdf_agebs, gdf_riesgo_completo)
+        fuera = ~resultado["CVEGEO"].isin(evaluados)
+        resultado.loc[fuera, "RIESGO_INDEX"] = float("nan")
+        print(
+            f"  Flood model coverage: {len(evaluados)} AGEBs assessed, "
+            f"{int(fuera.sum())} outside the Atlas (no figure, not a zero)."
+        )
+
     return resultado[["CVEGEO", "RIESGO_INDEX"]]
 
 
@@ -850,16 +1195,43 @@ def calcular_indice_inversion(
     Services (0.4) and Comercios (0.3) renormalized to 0-100; on top of it the
     flood-Risk penalty (0.3) is applied, subtracting up to 30 points based on
     the AGEB's exposure. The result is clipped to [0, 100].
+
+    A sector the flood model never covered gets NO index at all, the same rule
+    the services weight already follows: when a component of the weight is
+    missing, there is no index to publish. It is not that the penalty happens
+    to be zero -- it is that 30% of what the number means was never measured,
+    and the missing term can only move a score UP, so publishing it would
+    flatter those sectors for a gap in OUR data.
+
+    That was measurable before this rule: with the old `fillna(0)`, Ramos
+    Arizpe put 33% of its AGEBs in the index's top quintile against Saltillo's
+    20%, where on a level field the two sit at 23% and 21%. Flagging it was not
+    enough, because the colour ramp still ranked them; only leaving them out of
+    the scale does. Same error the Census fix (MOTIVO_SIN_DATO) corrected once:
+    absence of a figure is not a zero.
     """
     gdf = gdf_ageb_servicios.merge(df_comercios, on="CVEGEO", how="left")
     gdf = gdf.merge(df_riesgo, on="CVEGEO", how="left")
-    gdf["RIESGO_INDEX"] = gdf["RIESGO_INDEX"].fillna(0)
+    gdf["RIESGO_EVALUADO"] = gdf["RIESGO_INDEX"].notna()
 
     peso_base = PESO_SERVICIOS + PESO_COMERCIOS
     base = (
         gdf["SERVICIOS_INDEX"] * PESO_SERVICIOS + gdf["COMERCIOS_INDEX"] * PESO_COMERCIOS
     ) / peso_base
-    gdf["INVERSION_INDEX"] = (base - gdf["RIESGO_INDEX"] * PESO_RIESGO).clip(lower=0, upper=100)
+    gdf["INVERSION_INDEX"] = (base - gdf["RIESGO_INDEX"] * PESO_RIESGO).clip(
+        lower=0, upper=100
+    )
+    # NaN propagates through the subtraction on its own, so this is belt and
+    # braces -- and it is the line that states the rule, which is worth having
+    # explicitly rather than as a side effect of arithmetic.
+    gdf.loc[~gdf["RIESGO_EVALUADO"], "INVERSION_INDEX"] = float("nan")
+
+    sin_evaluar = int((~gdf["RIESGO_EVALUADO"]).sum())
+    if sin_evaluar:
+        print(
+            f"  {sin_evaluar} AGEBs outside the flood Atlas: no index published "
+            f"(30% of its weight was never measured there)."
+        )
 
     return gdf
 
@@ -876,6 +1248,10 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
         "SCORE_SUPERMERCADO",
         "COMERCIOS_INDEX",
         "RIESGO_INDEX",
+        # Travels with the data on purpose: the card cannot tell "assessed and
+        # found clear" from "never assessed" by looking at a null RIESGO_INDEX
+        # alone, and those two mean opposite things to a buyer.
+        "RIESGO_EVALUADO",
         "INVERSION_INDEX",
         "MOTIVO_SIN_DATO",
         "geometry",
@@ -883,7 +1259,10 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
     # With no service data there is no index: 40% of its weight is missing, so
     # INVERSION_INDEX ends up null by NaN propagation. They are kept in the
     # layer to paint them gray and explain the reason, rather than letting an
-    # unmeasured AGEB look like a bad investment.
+    # unmeasured AGEB look like a bad investment. The same rule now covers the
+    # flood term (30%): a sector outside the Atlas is grey too, because the
+    # missing penalty could only flatter it and the colour ramp would have
+    # ranked it against sectors that did pay one.
     gdf_final = gdf_inversion[columnas_finales].copy()
     gdf_final["geometry"] = gdf_final["geometry"].simplify(
         TOLERANCIA_SIMPLIFICACION, preserve_topology=True
@@ -1048,10 +1427,17 @@ if __name__ == "__main__":
 
     exportar_capa_servicios_basicos(gdf_ageb_servicios)
 
+    print("\nReading cadastral land values (Tesorería Municipal, 2026)...")
+    catastro_valores, catastro_colonias = extraer_tablas_catastrales()
+    exportar_valor_catastral(asignar_valor_catastral(
+        gdf_ageb_servicios, catastro_valores, catastro_colonias))
+
     print("\nProcessing IMPLAN risk layers (CARTO SALTILLO, 2024 Atlas)...")
-    gdf_inundacion = preparar_capa_riesgo(
-        cargar_riesgo_implan(IMPLAN_INUNDACION_SHP, "Intensid_1")
-    )
+    # Kept unfiltered as well: the published layer drops "Muy bajo", but a cell
+    # in that class WAS assessed, so the full mesh -- not the visible zones --
+    # is what says which AGEBs the model looked at.
+    gdf_inundacion_completa = cargar_riesgo_implan(IMPLAN_INUNDACION_SHP, "Intensid_1")
+    gdf_inundacion = preparar_capa_riesgo(gdf_inundacion_completa)
     exportar_capa_riesgo(
         gdf_inundacion, RIESGO_INUNDACION_GEOJSON,
         "Riesgo por Inundaciones Pluviales", "Hidrometeorológico",
@@ -1077,7 +1463,9 @@ if __name__ == "__main__":
     )
 
     print("\nComputing flood exposure per AGEB (penalty)...")
-    df_riesgo = calcular_riesgo_inundacion_por_ageb(gdf_agebs, gdf_inundacion)
+    df_riesgo = calcular_riesgo_inundacion_por_ageb(
+        gdf_agebs, gdf_inundacion, gdf_inundacion_completa
+    )
 
     print("\nComputing Real-Estate Investment Index...")
     gdf_denue = cargar_denue()
