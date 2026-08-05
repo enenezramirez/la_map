@@ -944,6 +944,26 @@ const formatoEntero = valor => sinDato(valor) ? SIN_VALOR : Number(valor).toLoca
 const formatoPct = valor => sinDato(valor) ? SIN_VALOR : `${Number(valor).toFixed(1)}%`;
 const formatoIndice = valor => sinDato(valor) ? SIN_VALOR : Number(valor).toFixed(1);
 
+// The flood penalty is 30% of the index's weight, and the IMPLAN Atlas covers
+// Saltillo only -- so a sector outside it is scored WITHOUT that term. Saying
+// so matters more than it looks: the missing penalty can only move the score
+// up, so an unassessed sector is flattered by our own gap in the data, and its
+// number is not comparable with an assessed sector's.
+//
+// Tested against `false` and not for falsiness on purpose: a visitor holding an
+// older cached GeoJSON has no such field at all, and `undefined` there means
+// "this file predates the flag", not "not assessed". Claiming the latter would
+// print the warning over every sector in the city.
+function htmlSinEvaluacionDeRiesgo(props) {
+    return props.RIESGO_EVALUADO === false
+        ? `<p class="detail-source">Este sector queda fuera del Atlas de Riesgos del IMPLAN,
+           que solo cubre el municipio de Saltillo, así que su índice se calcula
+           <strong>sin penalización por inundación</strong>. No significa que no haya riesgo:
+           significa que nadie lo ha medido aquí, y que este número no es comparable con el
+           de un sector sí evaluado.</p>`
+        : '';
+}
+
 // Note explaining why an AGEB has no index (no dwellings, figures
 // masked for confidentiality, or absent from the Census).
 function htmlMotivoSinDato(props) {
@@ -1011,6 +1031,7 @@ function mostrarDetalleInversion(props) {
         <p class="detail-row"><span>Índice de Comercios</span><strong>${formatoIndice(props.COMERCIOS_INDEX)}</strong></p>
         <p class="detail-row"><span>Riesgo de inundación (−)</span><strong>${formatoIndice(props.RIESGO_INDEX)}</strong></p>
         <p class="detail-row detail-index"><span>Índice de Inversión</span><strong>${formatoIndice(props.INVERSION_INDEX)}</strong></p>
+        ${htmlSinEvaluacionDeRiesgo(props)}
         ${htmlMotivoSinDato(props)}
     `;
     abrirFicha();

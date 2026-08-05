@@ -1118,14 +1118,45 @@ def exportar_capa_riesgo(
     return gdf
 
 
+def agebs_evaluados_por_riesgo(
+    gdf_agebs: gpd.GeoDataFrame, gdf_riesgo_completo: gpd.GeoDataFrame
+) -> set[str]:
+    """
+    Which AGEBs the flood model actually looked at.
+
+    This is the difference between "no exposure" and "not assessed", and it is
+    not decorative: the IMPLAN Atlas covers the municipality of Saltillo only,
+    so an AGEB in Ramos Arizpe or Arteaga has no flood figure for the same
+    reason a masked Census cell has no coverage figure -- nobody measured it.
+    Treating that as zero hands those sectors a guaranteed no-penalty in the
+    Investment Index, which is a reward for OUR missing data.
+
+    Coverage is derived from the model's own extent rather than from a
+    municipality name, for the same reason the frontend derives layer
+    availability from each GeoJSON's bounds: a hardcoded `== "Saltillo"` would
+    be a magic value that silently goes stale the day another city's atlas
+    arrives, which is precisely the expansion this pipeline is meant to allow.
+
+    `gdf_riesgo_completo` must be the UNFILTERED mesh: a cell classed "Muy
+    bajo" was still assessed, it just is not published as a risk zone.
+    """
+    malla = gdf_riesgo_completo[["geometry"]].to_crs(CRS_METRICO)
+    agebs = gdf_agebs[["CVEGEO", "geometry"]].to_crs(CRS_METRICO)
+    tocados = gpd.sjoin(agebs, malla, how="inner", predicate="intersects")
+    return set(tocados["CVEGEO"].unique())
+
+
 def calcular_riesgo_inundacion_por_ageb(
-    gdf_agebs: gpd.GeoDataFrame, gdf_inundacion: gpd.GeoDataFrame
+    gdf_agebs: gpd.GeoDataFrame,
+    gdf_inundacion: gpd.GeoDataFrame,
+    gdf_riesgo_completo: gpd.GeoDataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Compute RIESGO_INDEX (0-100) per AGEB as area-weighted flood exposure:
     sum(level_intersection_area × level_score) over the AGEB's total area. An
-    AGEB with no intersection with elevated risk → 0. The computation is done
-    in a metric CRS (EPSG:6372) for correct areas.
+    AGEB inside the model's coverage with no intersection with elevated risk →
+    0; an AGEB the model never covered → NaN, which is a different statement.
+    The computation is done in a metric CRS (EPSG:6372) for correct areas.
     """
     agebs_m = gdf_agebs[["CVEGEO", "geometry"]].to_crs(CRS_METRICO).copy()
     agebs_m["AREA_AGEB"] = agebs_m.geometry.area
@@ -1141,6 +1172,16 @@ def calcular_riesgo_inundacion_por_ageb(
     resultado = agebs_m[["CVEGEO", "AREA_AGEB"]].copy()
     resultado["APORTE"] = resultado["CVEGEO"].map(aporte_por_ageb).fillna(0)
     resultado["RIESGO_INDEX"] = (resultado["APORTE"] / resultado["AREA_AGEB"]).clip(0, 100)
+
+    if gdf_riesgo_completo is not None:
+        evaluados = agebs_evaluados_por_riesgo(gdf_agebs, gdf_riesgo_completo)
+        fuera = ~resultado["CVEGEO"].isin(evaluados)
+        resultado.loc[fuera, "RIESGO_INDEX"] = float("nan")
+        print(
+            f"  Flood model coverage: {len(evaluados)} AGEBs assessed, "
+            f"{int(fuera.sum())} outside the Atlas (no figure, not a zero)."
+        )
+
     return resultado[["CVEGEO", "RIESGO_INDEX"]]
 
 
@@ -1154,16 +1195,34 @@ def calcular_indice_inversion(
     Services (0.4) and Comercios (0.3) renormalized to 0-100; on top of it the
     flood-Risk penalty (0.3) is applied, subtracting up to 30 points based on
     the AGEB's exposure. The result is clipped to [0, 100].
+
+    A sector the flood model never covered gets NO penalty -- there is nothing
+    to penalize it with -- but it is flagged rather than silently scored as if
+    it had been assessed and found safe. The old `fillna(0)` made that same
+    arithmetic while asserting something false, and the effect was measurable:
+    Ramos Arizpe put 33% of its AGEBs in the index's top quintile against
+    Saltillo's 20%, where on a level field the two sit at 23% and 21%. The
+    index rewarded those municipalities for a gap in OUR data. Same error the
+    Census fix (MOTIVO_SIN_DATO) already corrected once: absence of a figure is
+    not a zero.
     """
     gdf = gdf_ageb_servicios.merge(df_comercios, on="CVEGEO", how="left")
     gdf = gdf.merge(df_riesgo, on="CVEGEO", how="left")
-    gdf["RIESGO_INDEX"] = gdf["RIESGO_INDEX"].fillna(0)
+    gdf["RIESGO_EVALUADO"] = gdf["RIESGO_INDEX"].notna()
 
     peso_base = PESO_SERVICIOS + PESO_COMERCIOS
     base = (
         gdf["SERVICIOS_INDEX"] * PESO_SERVICIOS + gdf["COMERCIOS_INDEX"] * PESO_COMERCIOS
     ) / peso_base
-    gdf["INVERSION_INDEX"] = (base - gdf["RIESGO_INDEX"] * PESO_RIESGO).clip(lower=0, upper=100)
+    penalizacion = gdf["RIESGO_INDEX"].fillna(0) * PESO_RIESGO
+    gdf["INVERSION_INDEX"] = (base - penalizacion).clip(lower=0, upper=100)
+
+    sin_evaluar = int((~gdf["RIESGO_EVALUADO"]).sum())
+    if sin_evaluar:
+        print(
+            f"  {sin_evaluar} AGEBs scored without a flood penalty (outside the "
+            f"Atlas). Their index is NOT comparable with an assessed sector's."
+        )
 
     return gdf
 
@@ -1180,6 +1239,10 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
         "SCORE_SUPERMERCADO",
         "COMERCIOS_INDEX",
         "RIESGO_INDEX",
+        # Travels with the data on purpose: the card cannot tell "assessed and
+        # found clear" from "never assessed" by looking at a null RIESGO_INDEX
+        # alone, and those two mean opposite things to a buyer.
+        "RIESGO_EVALUADO",
         "INVERSION_INDEX",
         "MOTIVO_SIN_DATO",
         "geometry",
@@ -1358,9 +1421,11 @@ if __name__ == "__main__":
         gdf_ageb_servicios, catastro_valores, catastro_colonias))
 
     print("\nProcessing IMPLAN risk layers (CARTO SALTILLO, 2024 Atlas)...")
-    gdf_inundacion = preparar_capa_riesgo(
-        cargar_riesgo_implan(IMPLAN_INUNDACION_SHP, "Intensid_1")
-    )
+    # Kept unfiltered as well: the published layer drops "Muy bajo", but a cell
+    # in that class WAS assessed, so the full mesh -- not the visible zones --
+    # is what says which AGEBs the model looked at.
+    gdf_inundacion_completa = cargar_riesgo_implan(IMPLAN_INUNDACION_SHP, "Intensid_1")
+    gdf_inundacion = preparar_capa_riesgo(gdf_inundacion_completa)
     exportar_capa_riesgo(
         gdf_inundacion, RIESGO_INUNDACION_GEOJSON,
         "Riesgo por Inundaciones Pluviales", "Hidrometeorológico",
@@ -1386,7 +1451,9 @@ if __name__ == "__main__":
     )
 
     print("\nComputing flood exposure per AGEB (penalty)...")
-    df_riesgo = calcular_riesgo_inundacion_por_ageb(gdf_agebs, gdf_inundacion)
+    df_riesgo = calcular_riesgo_inundacion_por_ageb(
+        gdf_agebs, gdf_inundacion, gdf_inundacion_completa
+    )
 
     print("\nComputing Real-Estate Investment Index...")
     gdf_denue = cargar_denue()
