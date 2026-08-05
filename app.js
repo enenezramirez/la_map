@@ -18,8 +18,13 @@ const REGION_BOUNDS = L.latLngBounds([
 ]);
 map.fitBounds(REGION_BOUNDS, { padding: [20, 20] });
 
-// Add base layer - CartoDB Dark Matter (premium dark style)
-const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+// Add base layer - CartoDB Dark Matter, label-free variant.
+// `dark_nolabels` rather than `dark_all` because the basemap's street labels
+// render UNDER the choropleth: inside an AGEB they sit beneath a 0.65 fill, so
+// they are noise without being readable, and outside the AGEBs they were
+// labelling territory the app makes no claim about. Same tile host, so the CSP
+// (which lists the host, not the path) is unaffected.
+const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
     maxZoom: 20
