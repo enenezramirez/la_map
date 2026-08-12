@@ -19,7 +19,9 @@ from __future__ import annotations
 import re
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
+# nosec B405 - see the note on ET.fromstring below; stdlib ElementTree is used
+# deliberately rather than adding defusedxml for a one-off local script.
+import xml.etree.ElementTree as ET  # nosec B405
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -58,7 +60,12 @@ def listar_vrts(anio: int) -> list[str]:
         if token:
             url += "&continuation-token=" + urllib.parse.quote(token, safe="")
         with urllib.request.urlopen(url, timeout=60) as r:  # nosec B310 - fixed https host
-            arbol = ET.fromstring(r.read())
+            # nosec B314 - this is AWS S3's own ListObjectsV2 response, fetched
+            # over TLS from a hard-coded host. stdlib ElementTree resolves no
+            # external entities, so XXE does not apply; the residual risk is
+            # entity-expansion DoS from a hostile response, whose blast radius
+            # is a local one-off analysis script. Not worth a dependency.
+            arbol = ET.fromstring(r.read())  # nosec B314
         for contenido in arbol.iter():
             if contenido.tag.endswith("}Contents"):
                 for hijo in contenido:

@@ -59,6 +59,22 @@ SALIDA_DIR = Path(__file__).resolve().parents[2] / "raw_data" / "alphaearth"
 SALIDA = SALIDA_DIR / "aef_overview_2024.npz"
 
 
+def exigir_north_up(ds, nombre: str) -> None:
+    """Refuse to read a dataset whose rows run south-to-north.
+
+    This is the guard against the mirror's bottom-up storage. It is a raise and
+    not an assert on purpose: `python -O` strips asserts, and an orientation
+    check that can be compiled away is not a check -- it would let the flipped
+    read through silently, which is the one failure here that produces a
+    plausible-looking wrong answer instead of an error.
+    """
+    if ds.bounds.top <= ds.bounds.bottom:
+        raise RuntimeError(
+            f"{nombre}: bounds N={ds.bounds.top:,.0f} <= S={ds.bounds.bottom:,.0f}. "
+            "El dataset vino bottom-up; hay que leer el .vrt, no el .tiff."
+        )
+
+
 def dequantizar(bruto: np.ndarray) -> np.ndarray:
     """Map int8 codes to the documented -1..1 embedding values.
 
@@ -76,8 +92,9 @@ def main(anio: int = 2024) -> None:
     # both tiles land on the same lattice and the mosaic cannot be off by a
     # pixel where they meet.
     with rasterio.open(base + TESELAS[0], OVERVIEW_LEVEL=NIVEL_OVERVIEW) as ds0:
-        assert ds0.bounds.top > ds0.bounds.bottom, "VRT no vino north-up"
-        assert abs(ds0.res[0] - RES) < 1e-6, f"resolucion inesperada {ds0.res}"
+        exigir_north_up(ds0, TESELAS[0])
+        if abs(ds0.res[0] - RES) > 1e-6:
+            raise RuntimeError(f"resolucion inesperada {ds0.res}, se esperaba {RES} m")
         e0, n0 = ds0.bounds.left, ds0.bounds.top
 
     col_min = int(np.floor((oeste - e0) / RES))
@@ -94,7 +111,7 @@ def main(anio: int = 2024) -> None:
     for nombre in TESELAS:
         t0 = time.time()
         with rasterio.open(base + nombre, OVERVIEW_LEVEL=NIVEL_OVERVIEW) as ds:
-            assert ds.bounds.top > ds.bounds.bottom, f"{nombre}: no north-up"
+            exigir_north_up(ds, nombre)
             # Offset of this tile's grid within the global one.
             dcol = int(round((ds.bounds.left - e0) / RES))
             dfila = int(round((n0 - ds.bounds.top) / RES))

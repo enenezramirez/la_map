@@ -81,7 +81,11 @@ def main() -> None:
     print(f"  pixel de overview [{iy},{ix}] -> centro E {e_px:,.0f} N {n_px:,.0f}")
 
     with rasterio.open(BASE + TESELA_OESTE) as ds:
-        assert ds.bounds.top > ds.bounds.bottom, "VRT no north-up"
+        # A raise, not an assert: `python -O` strips asserts, and this is the
+        # guard against the bottom-up storage -- the one failure mode here that
+        # yields a plausible wrong answer rather than an error.
+        if ds.bounds.top <= ds.bounds.bottom:
+            raise RuntimeError(f"{TESELA_OESTE}: vino bottom-up, no north-up")
         col = int((e_px - ds.bounds.left) / ds.res[0])
         fila = int((ds.bounds.top - n_px) / ds.res[1])
         c0, f0 = (col // FACTOR) * FACTOR, (fila // FACTOR) * FACTOR

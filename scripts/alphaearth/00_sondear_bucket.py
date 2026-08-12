@@ -11,7 +11,8 @@ path-style against the regional S3 endpoint.
 """
 
 import urllib.request
-import xml.etree.ElementTree as ET
+# nosec B405 - same justification as the ET.fromstring call below.
+import xml.etree.ElementTree as ET  # nosec B405
 
 BUCKET = "us-west-2.opendata.source.coop"
 ENDPOINTS = [
@@ -32,7 +33,11 @@ def listar(url: str, prefix: str, delimiter: str = "/", max_keys: int = 30):
         return None
 
     try:
-        raiz = ET.fromstring(cuerpo)
+        # nosec B314 - AWS S3's own ListObjectsV2 XML, over TLS from a
+        # hard-coded host. stdlib ElementTree resolves no external entities, so
+        # XXE does not apply; the residual entity-expansion DoS would take down
+        # a local one-off script. Not worth adding defusedxml.
+        raiz = ET.fromstring(cuerpo)  # nosec B314
     except ET.ParseError:
         print(f"    no es XML: {cuerpo[:200]!r}")
         return None
