@@ -1,0 +1,7 @@
+# Vendored third-party code must stay byte-identical to what upstream published,
+# so that anyone can re-verify it against the published hashes. This repo is
+# cloned on Windows with core.autocrlf=true, which rewrites line endings on
+# checkout — that alone would make leaflet.js hash differently from the file
+# unpkg serves, and the whole point of vendoring is being able to prove what
+# shipped. -text disables the conversion in both directions.
+assets/vendor/** -text
