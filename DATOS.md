@@ -701,6 +701,10 @@ Run exactly as specified above, with the decision rule fixed beforehand. Nothing
 Total transfer **~4.4 MB** against the 1.20 GB a full-resolution year would have cost, and
 **one** new dependency (`rasterio` 1.5.1), not two — see the note on the index below.
 
+**The scripts are archived in `scripts/alphaearth/`** so every number here can be re-derived
+rather than trusted. They are a one-off analysis, not pipeline: `scripts/process_data.py`
+imports nothing from that folder, and `rasterio` is theirs alone.
+
 **Three corrections to the plan, all found in the mirror's own README and all verified here
 rather than taken on faith.** They are recorded because any future read of this dataset hits
 the same three.
@@ -760,12 +764,17 @@ substitute after seeing the data would be choosing the anchor to fit the answer.
 colonia-granular and ZONA CENTRO alone spans 21 AGEBs. Only **7 of the 16** colonias resolve:
 this file records 8 by name and says "and others", and `NAZARIO ORTIZ GARZA` has no
 correspondence in the published layer. Observed cohesion **0.9209** against a null of
-**0.8877 ± 0.0366** over 20,000 random draws of 7 colonias — **z = +0.91, p = 0.194**. The
+**0.8873 ± 0.0368** over 20,000 random draws of 7 colonias — **z = +0.91, p = 0.195**. The
 threshold fixed in advance was p < 0.05.
 
+*(The p-values here are Monte Carlo estimates. The seed is fixed in the script, but the same
+test evaluated twice within one run — once pre-registered, once in the sensitivity block — gives
+0.195 and 0.188, so roughly ±0.007 of wobble. None of it is near 0.05, which is the only reason
+that wobble does not matter.)*
+
 **One configuration passes, and it is the one the rules above forbid.** At AGEB level the 29
-AGEBs of those colonias give p = 0.0057 — but **21 of the 29 are ZONA CENTRO**, and removing it
-returns p = 0.196. Those 21 are not 21 independent samples of "a place that flooded"; they are
+AGEBs of those colonias give p = 0.006 — but **21 of the 29 are ZONA CENTRO**, and removing it
+returns p = 0.191. Those 21 are not 21 independent samples of "a place that flooded"; they are
 one colonia, one newspaper mention, and the colonia with only **2%** of its area mapped as
 flood zone. ZONA CENTRO is also the most internally cohesive group measured anywhere here
 (0.9345), so counting it 21 times manufactures significance out of the historic core's own
@@ -774,7 +783,7 @@ level" failure, wearing a different disguise**, and it is the reason that rule w
 before any data was touched.
 
 **And the missing labels were not the binding constraint.** With k = 7 the test needs cohesion
-≥ 0.9411; with the full k = 16 it would need ≥ 0.9241. The observed 0.9209 clears neither. So
+≥ 0.9418; with the full k = 16 it would need ≥ 0.9232. The observed 0.9209 clears neither. So
 even if all 16 colonias resolved — and if the other 9 were as alike as these 7 — **the test
 still would not pass.** The effect is too small, not merely under-measured.
 
