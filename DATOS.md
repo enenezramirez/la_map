@@ -667,7 +667,7 @@ in §3.4 applies with more force, not less: a model that marks zones affects rea
 property, and *"our model predicts high risk here"* is a **stronger** assertion than citing an
 atlas, because there is nobody to appeal to behind it.
 
-**Approved next step — screening only, no training, not yet run:**
+**Approved next step — screening only, no training. RUN 2026-08-11; results below:**
 
 1. Read the STAC geoparquet index (4.99 MB) and select the 14N tiles intersecting the project
    bbox `-101.067, 25.263, -100.571, 25.607`.
@@ -694,6 +694,110 @@ atlas, because there is nobody to appeal to behind it.
 * **Do not validate at pixel level and report at AGEB level.** That is how 18.72 M "samples"
   turn into a confidence nobody earned.
 * **Do not let a model result reach the Investment Index**, or share a field with a cited figure.
+
+#### Screening result, 2026-08-11: (a) passes decisively, (b) fails, use 1 is dropped
+
+Run exactly as specified above, with the decision rule fixed beforehand. Nothing was trained.
+Total transfer **~4.4 MB** against the 1.20 GB a full-resolution year would have cost, and
+**one** new dependency (`rasterio` 1.5.1), not two — see the note on the index below.
+
+**The scripts are archived in `scripts/alphaearth/`** so every number here can be re-derived
+rather than trusted. They are a one-off analysis, not pipeline: `scripts/process_data.py`
+imports nothing from that folder, and `rasterio` is theirs alone.
+
+**Three corrections to the plan, all found in the mirror's own README and all verified here
+rather than taken on faith.** They are recorded because any future read of this dataset hits
+the same three.
+
+1. **The COGs are stored bottom-up** (origin bottom-left, positive y resolution). Opening the
+   `.tiff` directly returns **north and south swapped** — measured: the `.tiff` reports
+   `N=2,785,280 S=2,867,200` while its `.vrt` reports the correct `N=2,867,200 S=2,785,280`.
+   Reading the raster without the VRT would have assigned every AGEB the embedding of its
+   **mirrored** location, and nothing downstream would have looked wrong. Always use the `.vrt`.
+2. **De-quantization is not linear.** This entry previously said the `int8` values "need
+   rescaling to the −1…1 range". The documented mapping is `((v/127.5)**2) * sign(v)` —
+   **squared, sign-preserving**. A linear rescale leaves the vectors off the unit sphere and
+   silently distorts every cosine similarity.
+3. **The VRTs point at their sources with `/vsis3/`**, so anonymous S3 access must be enabled
+   (`AWS_NO_SIGN_REQUEST=YES`, `AWS_REGION=us-west-2`) or GDAL retries without credentials
+   until it gives up.
+
+**The STAC index was not needed, and that is what kept this to one dependency.** Reading it
+requires `pyarrow`, a second wheel where this entry budgeted one. Every tile ships a 27 KB
+`.vrt` whose first ~1.2 KB already carries the SRS and the GeoTransform, so a **ranged GET over
+all 520 tiles of zone 14N cost 711 KB** — less than the 4.99 MB index — and located the two
+tiles covering the project: `xluefwwtrb3tded2n-0000000000-0000008192` (44.3 km of the overlap)
+and `xv02dgpwlop8vtx30-0000000000-0000000000` (the remaining 6.1 km). The extent straddles
+their shared edge at E 336,160.
+
+**The overview check this entry demanded, answered with measurement.** The worry on record was
+that overview pixels are averaged embeddings and a mean of unit vectors is not unit-norm. The
+README claims the producer already renormalized them; that is a provider claim, so both halves
+were tested. **(A)** over the 74,495 valid pixels the de-quantized overview vectors have norm
+**1.000104 mean, worst deviation 0.0086** — unit-norm, the residual being int8 quantization.
+**(B)** an overview pixel against the 256 full-resolution pixels beneath it gives cosine
+**0.999934**, while the **negative control** — the same pixel against the vertically mirrored
+location — gives **0.4606**. So the test discriminates, and the georeferencing is right.
+
+**Aggregation.** 431 × 64 table, 212 KB. 425 AGEBs have their own 160 m pixels (median 15,
+max 227); 6 are smaller than a cell and fall back to the pixel under their centroid; **28
+(6.5%) rest on fewer than 5 pixels** and are thinner evidence than the rest.
+
+**(a) Do known-different zones separate? YES, and not marginally.** Mean pairwise cosine within
+a group minus mean cosine between groups:
+
+| pair | between | gap |
+|---|---|---|
+| Arteaga vs Saltillo (excl. centro) | 0.8477 | **+0.0332** |
+| Arteaga vs Ramos Arizpe | 0.8670 | **+0.0314** |
+| Ramos Arizpe vs Saltillo (excl. centro) | 0.8763 | **+0.0203** |
+| ZONA CENTRO vs Saltillo (excl. centro) | 0.8875 | **+0.0193** |
+
+**The control is what makes this readable:** random partitions of the same sizes give a gap of
+**−0.0001 ± 0.0014**, so the observed gaps sit **9 to 24 standard deviations** above chance.
+The pipeline is right. Note the anchors are municipio boundaries assigned by INEGI, not
+hand-picked colonias — this entry had suggested "the GIS industrial sector", but no colonia in
+the published layer is named GIS (the name never won the mode in any AGEB), and choosing a
+substitute after seeing the data would be choosing the anchor to fit the answer.
+
+**(b) Are the flooded colonias alike? NO.** Run at colonia level, because the labels are
+colonia-granular and ZONA CENTRO alone spans 21 AGEBs. Only **7 of the 16** colonias resolve:
+this file records 8 by name and says "and others", and `NAZARIO ORTIZ GARZA` has no
+correspondence in the published layer. Observed cohesion **0.9209** against a null of
+**0.8873 ± 0.0368** over 20,000 random draws of 7 colonias — **z = +0.91, p = 0.195**. The
+threshold fixed in advance was p < 0.05.
+
+*(The p-values here are Monte Carlo estimates. The seed is fixed in the script, but the same
+test evaluated twice within one run — once pre-registered, once in the sensitivity block — gives
+0.195 and 0.188, so roughly ±0.007 of wobble. None of it is near 0.05, which is the only reason
+that wobble does not matter.)*
+
+**One configuration passes, and it is the one the rules above forbid.** At AGEB level the 29
+AGEBs of those colonias give p = 0.006 — but **21 of the 29 are ZONA CENTRO**, and removing it
+returns p = 0.191. Those 21 are not 21 independent samples of "a place that flooded"; they are
+one colonia, one newspaper mention, and the colonia with only **2%** of its area mapped as
+flood zone. ZONA CENTRO is also the most internally cohesive group measured anywhere here
+(0.9345), so counting it 21 times manufactures significance out of the historic core's own
+land-cover coherence. **This is exactly the "do not validate at pixel level and report at AGEB
+level" failure, wearing a different disguise**, and it is the reason that rule was written
+before any data was touched.
+
+**And the missing labels were not the binding constraint.** With k = 7 the test needs cohesion
+≥ 0.9418; with the full k = 16 it would need ≥ 0.9232. The observed 0.9209 clears neither. So
+even if all 16 colonias resolved — and if the other 9 were as alike as these 7 — **the test
+still would not pass.** The effect is too small, not merely under-measured.
+
+**Verdict, per the rule fixed in advance: use 1 — contrasting the flood layer — is dropped,**
+and recorded here alongside fire (§3.3) and insecurity (§3.4). The honest reading is narrow:
+the 2024 Atlas's blind spot in §2.4 is **not** recoverable from annual land-cover embeddings,
+which is consistent with what the annual-resolution objection above already predicted. It does
+**not** show the colonias are similar or dissimilar in any physical sense, and it says nothing
+about why the Atlas missed them.
+
+**What survives, unchanged and now with its pipeline validated: use 2, change detection since
+the 2020 Census.** It needs no labels at all, so (b)'s failure does not touch it, and (a)
+passing means the read path, the de-quantization and the AGEB aggregation are all sound. It
+remains the strongest candidate, exactly as this entry argued before any data was read.
 
 ### 3.7 IMPLAN — Vulnerabilidad socio organizativa / sanitario ecológica (Atlas 2024) — desk evaluation 2026-08-03
 
