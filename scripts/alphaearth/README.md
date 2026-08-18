@@ -67,13 +67,36 @@ sources wherever they lead — reproduced here, not taken from the report: a VRT
 naming `/vsicurl/http://127.0.0.1:<port>/x.tif` made GDAL issue two real
 requests to that host. So steps 2 and 3 fetch each VRT first and refuse it
 unless every source sits under `/vsis3/us-west-2.opendata.source.coop/tge-labs/aef/`
-(`comun.exigir_fuentes_del_espejo`). It fails closed both ways: a source outside
-the prefix raises, and so does a VRT with no readable source at all.
+(`comun.exigir_fuentes_del_espejo`).
 
-**Its limit, since a guard whose limit is unstated gets trusted too far:** the
-check fetches the VRT and GDAL then fetches it again, so a server that answers
-one thing here and another to GDAL defeats it. It stops a repointed VRT, not a
-host that varies its answer per request.
+**The first version of that guard was bypassable, and a review caught it.**
+Worth recording, because both bypasses were one-line mutations and the guard
+was already written up as closed:
+
+1. **Element names were matched case-sensitively.** GDAL matches them with
+   `EQUAL()`, so `<sourcefilename>` is followed exactly like `<SourceFilename>`
+   — four spellings walked straight past, verified end to end.
+2. **The check was one level deep.** A source that is itself a `.vrt` under the
+   mirror's own prefix passed, and GDAL then followed *its* sources anywhere.
+   Free for a hostile mirror, which owns that prefix.
+
+Both are fixed: names are matched case-insensitively, chained VRTs are refused
+outright (every real tile points at its own `.tiff`, so nothing legitimate is
+lost), `..` in a source path is refused rather than trusted to `startswith`,
+and the VRT's own URL is checked before the fetch **and on the response**,
+since `urllib` follows redirects.
+
+**And the rules were split from the fetching** (`exigir_fuentes_bajo_el_espejo`)
+because a harness aimed at a local server got rejected by the URL check first,
+which reads as proof the rules work while testing none of them. They are now
+exercised directly, one hostile shape at a time.
+
+**What remains open, stated first this time:** the check fetches the VRT and
+GDAL fetches it again, so a server that serves one body here and another to
+GDAL wins. Nothing short of handing GDAL the exact validated bytes closes that.
+The earlier version of this section named only this limit — the expensive
+attack — while the two cheap ones above were live. Naming the hard limit and
+missing the easy ones is how a guard gets trusted further than it earned.
 
 **`CPL_VSIL_CURL_ALLOWED_EXTENSIONS` was measured and rejected.** It looks like
 the obvious fix and does not hold: with `.vrt,.tiff` allowed — the narrowest
