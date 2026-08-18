@@ -700,6 +700,8 @@ atlas, because there is nobody to appeal to behind it.
 Run exactly as specified above, with the decision rule fixed beforehand. Nothing was trained.
 Total transfer **~4.4 MB** against the 1.20 GB a full-resolution year would have cost, and
 **one** new dependency (`rasterio` 1.5.1), not two — see the note on the index below.
+Re-running it today costs ~82 KB more than that: the scripts were hardened afterwards and now
+fetch each VRT to check where it points before GDAL opens it — see the folder's `README.md`.
 
 **The scripts are archived in `scripts/alphaearth/`** so every number here can be re-derived
 rather than trusted. They are a one-off analysis, not pipeline: `scripts/process_data.py`

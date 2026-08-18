@@ -18,21 +18,19 @@ verified here rather than taken on faith:
   cosine similarity computed downstream.
 
 The VRTs reference their sources as /vsis3/, so anonymous S3 access has to be
-enabled or GDAL retries without credentials until it gives up.
+enabled or GDAL retries without credentials until it gives up. Where each VRT
+points is checked before GDAL opens it -- see comun.exigir_fuentes_del_espejo.
 """
 
 from __future__ import annotations
 
 import os
 
-os.environ.update({
-    "AWS_NO_SIGN_REQUEST": "YES",
-    "AWS_REGION": "us-west-2",
-    "AWS_DEFAULT_REGION": "us-west-2",
-    "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
-    "GDAL_HTTP_MAX_RETRY": "2",
-    "GDAL_HTTP_RETRY_DELAY": "1",
-})
+from comun import ENTORNO_GDAL, exigir_fuentes_del_espejo
+
+# Set before rasterio pulls in GDAL, so the timeouts are already in force for
+# the requests the driver makes at open() -- not just the ones at read().
+os.environ.update(ENTORNO_GDAL)
 
 import sys
 import time
@@ -42,8 +40,9 @@ import numpy as np
 import rasterio
 from rasterio.windows import Window
 
-BASE = ("/vsicurl/https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
-        "tge-labs/aef/v1/annual/{anio}/14N/")
+BASE_HTTPS = ("https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
+              "tge-labs/aef/v1/annual/{anio}/14N/")
+BASE = "/vsicurl/" + BASE_HTTPS
 TESELAS = [
     "xluefwwtrb3tded2n-0000000000-0000008192.vrt",
     "xv02dgpwlop8vtx30-0000000000-0000000000.vrt",
@@ -86,7 +85,15 @@ def dequantizar(bruto: np.ndarray) -> np.ndarray:
 
 def main(anio: int = 2024) -> None:
     base = BASE.format(anio=anio)
+    base_https = BASE_HTTPS.format(anio=anio)
     oeste, sur, este, norte = BBOX_UTM
+
+    # Checked before the first open(), not tile by tile: GDAL follows a VRT's
+    # sources to whatever host they name, so this runs while nothing has been
+    # opened yet and one bad tile stops the run instead of half-loading it.
+    for nombre in TESELAS:
+        fuentes = exigir_fuentes_del_espejo(base_https + nombre)
+        print(f"  fuente verificada: {fuentes[0].split('/')[-1]}")
 
     # A global 160 m grid anchored on the western tile's top-left corner, so
     # both tiles land on the same lattice and the mosaic cannot be off by a

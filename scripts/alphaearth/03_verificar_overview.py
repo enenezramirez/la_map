@@ -20,13 +20,11 @@ from __future__ import annotations
 
 import os
 
-os.environ.update({
-    "AWS_NO_SIGN_REQUEST": "YES",
-    "AWS_REGION": "us-west-2",
-    "AWS_DEFAULT_REGION": "us-west-2",
-    "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
-    "GDAL_HTTP_MAX_RETRY": "2",
-})
+from comun import ENTORNO_GDAL, exigir_fuentes_del_espejo
+
+# Set before rasterio pulls in GDAL, so the timeouts are already in force for
+# the requests the driver makes at open() -- not just the ones at read().
+os.environ.update(ENTORNO_GDAL)
 
 import sys
 from pathlib import Path
@@ -37,8 +35,9 @@ from rasterio.windows import Window
 
 DATOS = Path(__file__).resolve().parents[2] / "raw_data" / "alphaearth"
 NPZ = DATOS / "aef_overview_2024.npz"
-BASE = ("/vsicurl/https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
-        "tge-labs/aef/v1/annual/2024/14N/")
+BASE_HTTPS = ("https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
+              "tge-labs/aef/v1/annual/2024/14N/")
+BASE = "/vsicurl/" + BASE_HTTPS
 TESELA_OESTE = "xluefwwtrb3tded2n-0000000000-0000008192.vrt"
 FACTOR = 16
 
@@ -49,6 +48,9 @@ def dequantizar(bruto: np.ndarray) -> np.ndarray:
 
 
 def main() -> None:
+    # Same guard as step 2: check where the VRT sends GDAL before opening it.
+    exigir_fuentes_del_espejo(BASE_HTTPS + TESELA_OESTE)
+
     d = np.load(NPZ)
     bruto, cubierto = d["bruto"], d["cubierto"]
     origen_e, origen_n, res = float(d["origen_e"]), float(d["origen_n"]), float(d["res"])
