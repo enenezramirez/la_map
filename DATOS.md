@@ -895,6 +895,131 @@ some part of the city above `Bajo`.
 
 ---
 
+### 3.8 Historical stream courses — investigated 2026-08-17, and it moved the flood layer's caveat
+
+Opened to ask whether anything records where water naturally runs through Saltillo, to
+reinforce the flood analysis. The DEM question was already settled in §2.4 (the Atlas uses
+LiDAR and riverbed morphology, so our own DEM would duplicate it), which sharpened this one:
+what the Atlas cannot contain is a channel the city **culverted or paved over** as it grew.
+
+#### The finding that matters is not about hydrography data at all
+
+**The same Atlas we publish from also maps arroyo overflow, and it flags the colonias our
+layer leaves clean.** *Vanguardia* (2024-12-20) reports the Atlas's arroyo maps for Arroyo del
+Pueblo, Ceballos and El Cuatro across return periods of 5, 25, 50, 100 and 500 years. In the
+**5-year** scenario — the most frequent one — the article quotes the Atlas as "muy alto" for
+«Hacienda San Rafael, Nazario Ortiz Garza, Hacienda la Magueyada y a espaldas de la colonia
+Omega», and for Ceballos at 50 years it names Country Club.
+
+**Omega, Nazario Ortiz Garza and Country Club are three of the colonias §2.4 records as
+flooded in July 2025 and classed low or very low by the layer we publish.** So the
+"pluvial vs. arroyo" candidate that §2.4 lists as indistinguishable from return period and
+later public works is no longer on equal footing: the same Atlas, in a different analysis,
+does flag them. What we publish is the **pluvial and ponding** layer, and the flooding those
+colonias suffered is attributed by the Atlas itself to arroyo overflow.
+
+*Evidence grade, stated plainly:* this is a newspaper reading the Atlas's maps, not the Atlas
+data. It raises one hypothesis above the others; it does not close the question. Confirming it
+means reading the Atlas document itself.
+
+#### That analysis is not published as data
+
+The CARTO SALTILLO portal serves **25 datasets** (checked 2026-08-17). None is hydrographic:
+no arroyos, no channels, no drainage, no fluvial flood layer. The seven risk and vulnerability
+layers §2.4–§2.6 and §3.2–§3.7 already account for are all of it. **The arroyo maps exist
+inside the Atlas document, not as a shapefile**, so nothing here can be downloaded and joined.
+
+#### What our own flood layer turns out to be
+
+Read from the shapefile's own metadata, not assumed:
+
+* `idPurp`: «Representar la distribución de los distintos niveles de riesgo por inundaciones
+  pluviales **en las manzanas urbanas** del municipio de Saltillo». It classifies **blocks**,
+  not a hydraulic surface. `Detall` says «inundaciones pluviales y encharcamientos».
+* `idCredit`: Instituto de Geografía, UNAM — consistent with §2.4.
+* **The delivered export dropped most of the CENAPRED schema.** The geoprocessing history
+  shows fields added and populated — `Metodolog`, `Fuente`, `Magni_uni`, **`Perio_Ret`** — and
+  the file we received carries only `Titulo`, `Intensid_1`, `Detall`, `Fenom`. **So the return
+  period of the layer we publish is not declared anywhere in the data.** §2.4 lists return
+  period as a candidate explanation for the Omega failure; this is why it cannot be checked.
+* The same metadata names sibling layers the portal does not publish
+  (`R_BAJAS_TEMPERATURAS`, `R_TORMENTA_ELECTRICA`), from the producer's own working directory.
+
+#### INEGI Red Hidrográfica 1:50 000 ed. 2.0 — available, and the right shape of data
+
+* **Official source:** INEGI, Hidrografía. Free, direct SHP download, organized by basin.
+* **The basin that contains Saltillo is `RH24Be` — Subcuenca R. San Miguel**, Cuenca R.
+  Bravo - San Juan, RH24 Bravo Conchos. It holds **429 of our 431 AGEBs (99.5%)**, all 342 of
+  Saltillo.
+* **Edition 2010**, but the lines inside the city carry capture dates of **1998, 2001, 2004
+  and 2008** — none newer.
+* **99.8% of the 315 km inside the urban footprint is `INTERMITENTE`** — mapped intermittent
+  channels, not modelled flow. Only 0.5 km is `FLUJO VIRTUAL`.
+* **Local path:** `raw_data/inegi_red_hidrografica/` (gitignored). **Download date:**
+  2026-08-17.
+
+**Method note, because it cost two downloads.** RH37A (Sierra Madre Oriental, El Salado) was
+tried first on the reasonable-sounding grounds that Saltillo sits in the endorheic El Salado
+region: it holds **2 of 431 AGEBs**, both in the Arteaga sierra. RH24Bd (R. Salinas) was tried
+second: **0 of 431** — it starts at latitude 25.765 and the city ends at 25.607. Measuring
+against RH37A had already produced a confident-looking "the flooded colonias are 13–21 km from
+the nearest channel" — **a real number answering the wrong question**, because that basin does
+not contain the city. What settled it was comparing subbasin bounds against the city's, which
+is free once one package is on disk. **Check that the unit contains the study area before
+measuring anything against it.**
+
+#### The pre-registered test passed, and the control killed it
+
+The rule was fixed before downloading: do the flow lines run through the colonias that
+actually flooded in July 2025?
+
+**They do — all five of them touch a line.** And that carries no information, because
+**285 of 431 AGEBs (66.1%) touch one too.** The flooded colonias are tied at 0 m with two
+thirds of the city. This is the test that stopped the sanitary-ecological layer in §3.7: a
+layer that marks nearly everything discriminates nothing.
+
+Filtering by Strahler order concentrates it, and the direction is consistent:
+
+| order ≥ | AGEBs touching | of the 6 flooded AGEBs |
+|---|---|---|
+| 1 | 284 (65.9%) | 6 |
+| 2 | 211 (49.0%) | 3 |
+| 3 | 172 (39.9%) | 3 |
+| 4 | 122 (28.3%) | 3 |
+| 5 | 52 (12.1%) | 2 |
+| 6 | 13 (3.0%) | 1 |
+
+The flooded set touches at roughly 1.7–5.5× the base rate at every cut. **And it is 6 AGEBs
+from 4 colonias, which is not a sample.** §3.6 already recorded this exact trap — a test that
+"passed" by counting 21 non-independent units — so the lift is reported and not believed.
+
+#### Verdict
+
+**It cannot be a risk layer.** Nothing here validates it as a predictor, so by the rule in
+§3.6 it may not reach the Investment Index, share a field with a cited figure, or be presented
+as a classification of risk.
+
+**As a context layer it is defensible, and the age is what makes it interesting.** The task
+asked for *historical* courses; a network captured 1998–2008 predates a good part of the
+current urban expansion, so it shows channels that development may since have built over —
+which is exactly the mechanism §2.4's caveat is missing. It would be drawn, labelled as mapped
+channels with their capture date, and left for the reader to interpret.
+
+**Cost, measured, against 594 KB of headroom in `data/`:** clipped to the urban footprint and
+simplified, order ≥1 is 271 KB, order ≥3 is 135 KB, order ≥4 is 93 KB (110 km of main
+channels), order ≥5 is 47 KB.
+
+**Pending: the user's decision on whether to publish it as context.** Nothing was added to
+`data/`.
+
+#### Correction to a previous entry
+
+The July-2025 colonia `NAZARIO ORTIZ GARZA` was recorded in §3.6 as absent from our AGEB
+layer. **It is present, spelled `NAZARIO S. ORTIZ GARZA`** (with the middle initial), plus a
+`NAZARIO S. ORTIZ GARZA I`. The screening's k was therefore 8, not 7. It does not change that
+verdict — §3.6 records the test failing even with all 16 colonias resolved — but the layer
+does carry the colonia, and a name match that fails on a middle initial is worth remembering.
+
 ## 4. Traceability of the published layers
 
 For each file served to the browser, its origin:
