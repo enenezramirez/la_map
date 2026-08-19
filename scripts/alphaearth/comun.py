@@ -33,12 +33,25 @@ bypassed by something that GDAL decides by CONTENT.
   `<IndexDataset>`, and both are dispatched on content with a decoy
   `<SourceFilename>` satisfying the rule. Both verified end to end.
 
-So the fix is not a better parser. **GDAL now opens exactly one document, and
-the driver is pinned when it does:** the `.tiff` itself, with `driver="GTiff"`.
-There is no second open for a nested document to hijack, and no sniffing for a
-disguised one to win. The `.vrt` is still fetched and validated, but only by
-this module, to learn which `.tiff` a tile declares and to refuse a tile that
-points outside the mirror.
+So the fix is not a better parser. **GDAL now opens one document at the top
+level, with the driver pinned:** the `.tiff` itself, with `driver="GTiff"`.
+That kills all three bypasses above. The `.vrt` is still fetched and validated,
+but only by this module, to learn which `.tiff` a tile declares and to refuse a
+tile that points outside the mirror.
+
+**"Exactly one document" was the claim, and a third review showed it was not
+true.** Pinning the driver bounds the top-level open and nothing after it:
+GTiff honours the `OVERVIEWS/OVERVIEW_FILE` metadata item, and carries that
+domain **inside the file's own `GDAL_METADATA` tag**. So a hostile `.tiff` names
+a second dataset from within itself, GDAL opens that one **with no driver
+pinned**, and it was chained from there to a third host. `GDAL_DISABLE_READDIR_ON_OPEN`
+does not suppress it, because this is not a sibling probe. `exigir_sin_overview_externo`
+refuses it, read off a flat open at no extra cost -- a rule about the content
+of the one document we allow, rather than about the name of a second one.
+
+That is the third time a claim here outran what was verified. The pattern is
+always the same: the fix is checked against the attacks that were known when it
+was written.
 
 That trades one problem for another, honestly: the `.tiff` is stored bottom-up,
 so reading it directly is exactly the mirrored-image trap this screening was
@@ -57,6 +70,7 @@ through any document GDAL might be led to open next.
 
 from __future__ import annotations
 
+import re
 import urllib.request
 # stdlib ElementTree is used deliberately rather than adding defusedxml. This
 # parses the same XML GDAL will, on purpose: a regex over the raw text would
@@ -97,6 +111,9 @@ ENTORNO_GDAL = {
     "AWS_NO_SIGN_REQUEST": "YES",
     "AWS_REGION": "us-west-2",
     "AWS_DEFAULT_REGION": "us-west-2",
+    # Security, not performance: without it GDAL probes eight sibling paths on
+    # open, and a hostile .ovr sitting next to a tile reaches a foreign host
+    # even with the driver pinned. Measured both ways.
     "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
     "GDAL_HTTP_MAX_RETRY": "2",
     "GDAL_HTTP_RETRY_DELAY": "1",
@@ -121,6 +138,26 @@ def a_vsicurl(fuente: str) -> str:
         raise ValueError(f"{fuente!r}: no es una fuente /vsis3/")
     bucket, _, clave = fuente[len("/vsis3/"):].partition("/")
     return f"/vsicurl/https://s3.us-west-2.amazonaws.com/{bucket}/{clave}"
+
+
+def exigir_sin_overview_externo(ruta: str) -> None:
+    """Refuse a .tiff that names another dataset for GDAL to open as overviews.
+
+    Pinning the driver bounds the top-level open and nothing after it. GTiff
+    reads OVERVIEWS/OVERVIEW_FILE out of the file's own GDAL_METADATA tag and
+    opens whatever it names, unpinned -- so the tile can hand GDAL a second
+    document from inside itself. A flat open sees the item without fetching it,
+    so refusing costs nothing.
+    """
+    import rasterio
+
+    with rasterio.open(ruta, driver="GTiff") as ds:
+        etiquetas = ds.tags(ns="OVERVIEWS")
+    if etiquetas:
+        raise ValueError(
+            f"{ruta}: el .tiff declara overviews externas {etiquetas!r}. "
+            "GDAL abriria ese segundo dataset sin driver fijado."
+        )
 
 
 def bordes_north_up(ds):
@@ -148,15 +185,25 @@ def leer_ventana_north_up(ds, col: int, fila: int, ancho: int, alto: int):
     """
     from rasterio.windows import Window
 
-    if ds.bounds.top > ds.bounds.bottom:            # north-up
-        return ds.read(window=Window(col, fila, ancho, alto))
+    # Checked here and not only in the caller: this is the one place that
+    # flips, so a degenerate dataset must not reach the flip by falling through
+    # the north-up test. A guard that depends on being called in the right
+    # order is a guard with a precondition nobody reads.
+    bordes_north_up(ds)
 
-    fila_archivo = ds.height - fila - alto          # bottom-up
-    if fila_archivo < 0:
+    # Bounds in BOTH branches: rasterio silently clips an over-long window, so
+    # the north-up branch used to truncate where the bottom-up one raised.
+    if fila < 0 or alto <= 0 or ancho <= 0:
+        raise RuntimeError(f"ventana invalida: fila={fila} alto={alto} ancho={ancho}")
+    if fila + alto > ds.height:
         raise RuntimeError(
             f"ventana fuera del raster: fila {fila}+{alto} sobre alto {ds.height}"
         )
-    datos = ds.read(window=Window(col, fila_archivo, ancho, alto))
+
+    if ds.bounds.top > ds.bounds.bottom:            # north-up
+        return ds.read(window=Window(col, fila, ancho, alto))
+
+    datos = ds.read(window=Window(col, ds.height - fila - alto, ancho, alto))
     return datos[:, ::-1, :]
 
 
@@ -222,10 +269,16 @@ def exigir_fuentes_bajo_el_espejo(fuentes: list[str], origen: str) -> None:
                 f"{origen}: el VRT apunta fuera del espejo: {f!r}. "
                 f"Se esperaba que toda fuente empezara con {PREFIJO_ESPEJO!r}."
             )
-        if ".." in f.split("/"):
+        # A conservative alphabet rather than a list of things to forbid. The
+        # '..' rule alone was evaded with %2e%2e: curl percent-decodes before it
+        # normalises dot segments, so the request left the mirror's prefix while
+        # the literal check saw nothing. This also disposes of ?, #, @ and \.
+        clave = f[len(PREFIJO_ESPEJO):]
+        if not re.fullmatch(r"[A-Za-z0-9._/-]+", clave) or ".." in clave.split("/"):
             raise ValueError(
-                f"{origen}: la fuente {f!r} sale del prefijo con '..'. "
-                "El prefijo se compara como texto y GDAL resuelve los segmentos."
+                f"{origen}: la clave {clave!r} sale del juego de caracteres "
+                "permitido o del prefijo. El prefijo se compara como texto, y "
+                "curl decodifica antes de normalizar los segmentos."
             )
         if f.lower().endswith(".vrt"):
             raise ValueError(

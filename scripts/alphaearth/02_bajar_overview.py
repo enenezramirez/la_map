@@ -10,8 +10,9 @@ verified here rather than taken on faith:
 * The COGs are stored bottom-up, so the .tiff's own georeferencing comes back
   with north and south SWAPPED. Confirmed by opening both: the .tiff reports
   N=2,785,280 S=2,867,200 while its .vrt reports the correct N=2,867,200
-  S=2,785,280. Everything here goes through the .vrt, and the code asserts the
-  orientation rather than trusting it.
+  S=2,785,280. This reads the .tiff, so the flip is handled rather than
+  refused -- see comun.leer_ventana_north_up, which is why refusing stopped
+  being an option.
 * De-quantization is NOT the linear rescale 3.6 described. The documented
   mapping is ((v/127.5)**2) * sign(v) -- squared, sign-preserving. A linear
   rescale would leave vectors off the unit sphere and quietly distort every
@@ -28,7 +29,8 @@ from __future__ import annotations
 import os
 
 from comun import (ENTORNO_GDAL, a_vsicurl, bordes_north_up,
-                   exigir_fuentes_del_espejo, leer_ventana_north_up)
+                   exigir_fuentes_del_espejo, exigir_sin_overview_externo,
+                   leer_ventana_north_up)
 
 # Set before rasterio pulls in GDAL, so the timeouts are already in force for
 # the requests the driver makes at open() -- not just the ones at read().
@@ -78,6 +80,9 @@ def main(anio: int = 2024) -> None:
     for nombre in TESELAS:
         fuentes = exigir_fuentes_del_espejo(base_https + nombre)
         rutas[nombre] = a_vsicurl(fuentes[0])
+        # The .tiff can name a second dataset for GDAL to open as its
+        # overviews, unpinned. Checked here, before any OVERVIEW_LEVEL open.
+        exigir_sin_overview_externo(rutas[nombre])
         print(f"  fuente verificada: {fuentes[0].split('/')[-1]}")
 
     # A global 160 m grid anchored on the western tile's top-left corner, so

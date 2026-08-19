@@ -40,14 +40,17 @@ check where it points before GDAL opens it.
 
 1. **The COGs are stored bottom-up.** Opening a `.tiff` directly returns north
    and south swapped, which would hand every AGEB the embedding of its
-   *mirrored* location with nothing downstream looking wrong. Everything here
-   goes through the `.vrt`, and refuses to continue if the y resolution is not
-   negative.
+   *mirrored* location with nothing downstream looking wrong. Step 1 reads the
+   `.vrt` and refuses a non-negative y resolution; steps 2 and 3 read the
+   `.tiff` and so must **handle** the flip instead of refusing it — see the
+   security section below for why refusing stopped being an option.
 2. **De-quantization is `((v/127.5)**2) * sign(v)`** — squared and
    sign-preserving, not a linear rescale. A linear one leaves the vectors off
    the unit sphere and distorts every cosine similarity computed from them.
 3. **The VRTs reference their sources over `/vsis3/`**, so anonymous S3 access
-   must be enabled or GDAL retries without credentials until it gives up.
+   must be enabled or GDAL retries without credentials until it gives up. Steps
+   2 and 3 now rewrite that to `/vsicurl/https://`, so `AWS_NO_SIGN_REQUEST`
+   only still matters to step 1's listings.
 
 The STAC index is deliberately not used: reading it needs `pyarrow`, and each
 tile's `.vrt` already carries its SRS and GeoTransform in the first 1.2 KB, so
@@ -85,10 +88,9 @@ was bypassed by something GDAL decides by **content**:
 All three were verified end to end, and 1 and 2 were shipped as fixed before
 the next review found them still open.
 
-**So the fix is structural, not a better parser.** GDAL now opens **exactly one
-document per tile, with its driver pinned**: the `.tiff`, as `driver="GTiff"`.
-There is no second open for a nested document to hijack, and no sniffing for a
-disguised one to win. Measured, one process per case:
+**So the fix is structural, not a better parser.** GDAL now opens the `.tiff`
+with `driver="GTiff"`, which bounds the top-level open. Measured, one process
+per case:
 
 | hostile body served as `.tiff` | requests to the attacker's host |
 |---|---|
@@ -97,7 +99,39 @@ disguised one to win. Measured, one process per case:
 | nested VRT, **driver pinned** | **0** |
 | `GDAL_WMS`, **driver pinned** | **0** |
 
-**And that trade has a cost, which is the trap this screening exists to avoid.**
+**That was written up as "exactly one document", and a third review showed it
+was false.** Pinning the driver bounds the top-level open and nothing after it:
+GTiff honours the `OVERVIEWS/OVERVIEW_FILE` metadata item and carries that
+domain **inside the file's own `GDAL_METADATA` tag**, so a hostile `.tiff` names
+a second dataset from within itself, GDAL opens it **unpinned**, and the review
+chained that to a third host and served the analysed pixels from it. It only
+fires when the tile ships no internal overviews — which the attacker decides,
+since the attacker publishes the file — and `GDAL_DISABLE_READDIR_ON_OPEN` does
+not suppress it, because this is not a sibling probe.
+
+`comun.exigir_sin_overview_externo` refuses it, read off a flat open before any
+`OVERVIEW_LEVEL` open, at no extra request. It is a rule about the content of
+the one document we allow rather than about the name of a second one:
+
+| tile declaring an external overview | requests to the attacker's host |
+|---|---|
+| no guard, `OVERVIEW_LEVEL=3` | 3 at `open()`, 4 after `read()` — and the pixels come from there |
+| **guard in place** | **0, and the run stops** |
+
+**Also from that review, and both cheap:** the `..` rule was evaded with
+`%2e%2e`, because curl percent-decodes before normalising dot segments — the
+key is now matched against a conservative alphabet instead, which disposes of
+`?`, `#`, `@` and `\` at the same time. And `leer_ventana_north_up` checked its
+bounds in only one of its two branches, and would have flipped a degenerate
+dataset silently; both are handled inside the function now rather than relying
+on the caller having called `bordes_north_up` first.
+
+**One config value earns a note:** `GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR` is
+a security guard, not a performance one. Removing it, GDAL probes eight sibling
+paths on open and a hostile `.ovr` next to a tile reaches a foreign host **even
+with the driver pinned**. Measured both ways.
+
+**And the trade has a cost, which is the trap this screening exists to avoid.**
 The `.tiff` is stored bottom-up, so reading it directly is exactly the mirrored
 read that would hand every AGEB the embedding of the wrong place.
 `comun.leer_ventana_north_up` handles both row orders explicitly, and it is

@@ -21,7 +21,8 @@ from __future__ import annotations
 import os
 
 from comun import (ENTORNO_GDAL, a_vsicurl, bordes_north_up,
-                   exigir_fuentes_del_espejo, leer_ventana_north_up)
+                   exigir_fuentes_del_espejo, exigir_sin_overview_externo,
+                   leer_ventana_north_up)
 
 # Set before rasterio pulls in GDAL, so the timeouts are already in force for
 # the requests the driver makes at open() -- not just the ones at read().
@@ -51,6 +52,7 @@ def main() -> None:
     # the driver pinned -- GDAL opens one document and nothing chooses another.
     fuentes = exigir_fuentes_del_espejo(BASE_HTTPS + TESELA_OESTE)
     ruta = a_vsicurl(fuentes[0])
+    exigir_sin_overview_externo(ruta)
 
     d = np.load(NPZ)
     bruto, cubierto = d["bruto"], d["cubierto"]
