@@ -918,18 +918,108 @@ later public works is no longer on equal footing: the same Atlas, in a different
 does flag them. What we publish is the **pluvial and ponding** layer, and the flooding those
 colonias suffered is attributed by the Atlas itself to arroyo overflow.
 
-*Evidence grade, stated plainly:* this is a newspaper reading the Atlas's maps, not the Atlas
-data. It raises one hypothesis above the others; it does not close the question. Confirming it
-means reading the Atlas document itself.
+*Evidence grade when this was written:* a newspaper reading the Atlas's maps, not the Atlas
+data. **Both Atlas documents were then downloaded and read — see the closure below**, which
+confirms the mechanism from the source, corrects how the return periods were being read, and
+narrows the colonia attribution to what independent data supports.
 
-**And that document is available, at a price worth knowing before anyone proposes it.**
-`Atlas_Saltillo2VER_PUBLICA.pdf`, on the municipal transparency portal (updated 2025-09-30,
-IMPLAN), measured at **211,421,119 B = 201.6 MB**. **The server ignores `Range`:** a request
-for the first kilobyte returned `200` with the whole file, so there is no fetching just the
-arroyo pages — it is all of it or none. Add the PDF traps §3.5 and §3.7 already paid for
-(subset fonts in Identity encoding, so the stream carries glyph codes and the alphabet lives
-in an uncompressed `/ToUnicode` CMap; and one atlas stream inflating to 89 MB of pure
-geometry, which any extraction cap has to skip rather than abort on). Not attempted.
+**Cost of the documents, measured before downloading them.** The transparency portal's
+`Atlas_Saltillo2VER_PUBLICA.pdf` is **211,421,119 B = 201.6 MB**, and **the server ignores
+`Range`** — a request for the first kilobyte returned `200` with the whole file, so there is
+no fetching just the arroyo pages. The 2024 Atlas on IMPLAN's publications page is **78 MB**.
+Both were downloaded.
+
+#### Closed against the primary source, 2026-08-17 — the Atlas documents were read
+
+Both Atlas documents were downloaded and their text extracted. `pypdf` resolved them cleanly —
+423 pages in 23 s and 406 in 32 s, zero failures — so the `/ToUnicode` trap §3.5 and §3.7 paid
+for does not bite a library that implements CMaps. **Local path:** `raw_data/atlas_implan/`
+(gitignored). **Download date:** 2026-08-17.
+
+**Provenance trap first, because it wastes 202 MB.** The municipal transparency portal serves
+`Atlas_Saltillo2VER_PUBLICA.pdf` under the heading "El atlas municipal de riesgos", labelled
+*updated 30 September 2025*. **That file is the 2014 Atlas**: `/Title` says «Atlas de Riesgos,
+Saltillo, Coahuila, 2014», it was created in 2015, and its cover names the **Instituto
+Tecnológico y de Estudios Superiores de Monterrey**, contract MSC-TM-2014-21/1. The date on the
+portal is the page's, not the document's. **The 2024 Atlas is elsewhere** — IMPLAN's own
+publications page, `ATLAS-DE-RIESGOS-SALTILLO-web.pdf`, 78 MB, 406 pages, dated 2024-12-02.
+
+**The structural claim is confirmed from the source.** The 2024 Atlas has a chapter
+**«Inundaciones fluviales»**, distinct from its pluvial one, modelling five arroyo reaches —
+Arroyo del Pueblo (medio), Ceballos, El Cuatro–Arroyo Blanco, Ceballos bajo–El Cuatro bajo, and
+Arroyo del Pueblo alto (Derramadero) — with HEC-RAS 5.0.7 under CONAGUA and CENAPRED
+methodology, at return periods of **5, 10, 25, 50, 100 and 500 years**. So the flooding those
+colonias suffered belongs to a chapter of the Atlas we do not publish from. Its own account of
+the cause is worth quoting: the disasters are driven by «la invasión y alteración de los
+cauces», and in Saltillo «es evidente la alteración de las secciones hidráulicas de los
+numerosos arroyos que la cruzan», including «su obstrucción completa por edificaciones y
+calles».
+
+**Correction to how the return periods were read here, and in the press.** Reading page 141
+alone suggests Tr=5 *is* the "muy alto" class — it says the five-year period «presenta una
+probabilidad muy alta de inundación» and defines the federal strip that should cap urban
+development. **The maps say otherwise.** Map 36 (`PH-ZU-35`, Tr=5, Arroyo del Pueblo medio)
+classifies by **tirante de inundación in metres**: 0.0–0.2 muy bajo, 0.2–0.4 bajo, 0.4–0.8
+medio, 0.8–1.4 alto, **1.4–5.8 muy alto**. The class is **water depth**, and the return period
+selects the scenario. "Muy alto a 5 años" therefore means 1.4 m or more of water in the
+five-year event — which is exactly the order of the 1.30 m *Vanguardia* reported in Omega.
+
+**The colonia attributions are not in the documents.** Neither Atlas names Omega, Country Club,
+Terranova or Hacienda la Magueyada anywhere in 829 pages of text; the 2024 one mentions
+"Nazario" only as the **boulevard**, in a venue list and a road-accident section. The hazard
+maps carry no colonia labels — the mapped hazard is a narrow ribbon along the channel over a
+shaded-relief base. **So the colonia list is the journalist reading those maps**, and cannot be
+confirmed from the text.
+
+**But it can be tested against independent data, and two of four hold.** Using INEGI's named
+hydrographic toponymy for RH24Be against our own AGEB polygons:
+
+| colonia (flooded July 2025) | nearest named arroyo | distance |
+|---|---|---|
+| NAZARIO S. ORTIZ GARZA | ARROYO EL PUEBLO | **0 m** |
+| NAZARIO S. ORTIZ GARZA I | ARROYO DEL PUEBLO | **0 m** |
+| OMEGA | ARROYO EL PUEBLO | **417 m** |
+| RESIDENCIAL COUNTRY CLUB | ARROYO EL PUEBLO | 2,028 m |
+| TERRANOVA | ARROYO BLANCO | 1,720 m |
+
+**Nazario Ortiz Garza sits on the Arroyo del Pueblo**, the reach the Atlas models first. **Omega
+is 417 m from it — beside it, not on it, which is precisely what the article says**: «a espaldas
+de la colonia Omega». Country Club at 2 km is not explained by this arroyo, and the article
+attributes it to Ceballos instead, which carries no toponym in this subbasin and so could not be
+checked. Note also that the only channels actually touching Omega's own AGEB are **order 1**,
+858 and 1,068 m long — gullies, not the arroyo.
+
+**Verdict.** The mechanism is established from the primary source: the Atlas models arroyo
+flooding separately, by depth, at return periods including the five-year event, and attributes
+it to channels the city has altered and built over. The colonia-level attribution is
+corroborated for Nazario Ortiz Garza and consistent for Omega, unconfirmed for the other two.
+**What §2.4's caveat should now say is that the layer we publish is the pluvial chapter, and
+that the same Atlas maps arroyo flooding separately** — not that the cause is undetermined.
+
+**Still open, and cheap to close if wanted:** the fluvial hazard maps are figures, not data.
+Georeferencing Map 36 (it carries a coordinate grid and declares MEXICO ITRF 2008 LCC / EPSG:6372)
+would put the modelled ribbon on our map and settle every colonia at once.
+
+#### The 2014 Atlas is the better source for where the arroyos were buried
+
+Its section **5.3.11 Inundaciones fluviales** does what this task originally asked for. It walks
+**eleven "zonas de conflicto"** by colonia and street, and two are the mechanism itself:
+
+* **Colonia 15 de Abril**, Calle Novena at Carlos Salazar — the arroyo «recorre su cauce de
+  manera subterránea a través del entubamiento», with before-and-after channel profiles.
+* **Colonia San Lorenzo**, Paseo del Agua at Paseo de las Palmas — a canalisation the Atlas
+  estimates «las inundaciones en eventos extraordinarios rebasarán la capacidad de dichas
+  obras», through a 1.6 × 2.4 m drain.
+
+The others: Parajes de Santa Elena, La Esperanza, María del Carmen Cavazos, Valle Verde, Genaro
+Vázquez Rojas, Venustiano Carranza, Centro, Privada Biznaga, and Blvd. Jesús Valdez Sánchez.
+
+**And it independently justifies the Strahler cut this entry measured empirically.** Its
+hydraulic modelling was run «en los cauces de orden 5, 6 y 7 de la red superficial de
+escurrimientos», with cross-sections 600 m wide every 300 m off INEGI's DEM, and its urban
+network used a 100 ha accumulation threshold to start a channel. So **order ≥5 is the
+municipality's own consultants' definition of a channel worth modelling** — which is the 47 KB
+option in the size table above, and no longer an arbitrary pick.
 
 #### That analysis is not published as data
 
