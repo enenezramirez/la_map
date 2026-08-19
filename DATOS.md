@@ -922,6 +922,15 @@ colonias suffered is attributed by the Atlas itself to arroyo overflow.
 data. It raises one hypothesis above the others; it does not close the question. Confirming it
 means reading the Atlas document itself.
 
+**And that document is available, at a price worth knowing before anyone proposes it.**
+`Atlas_Saltillo2VER_PUBLICA.pdf`, on the municipal transparency portal (updated 2025-09-30,
+IMPLAN), measured at **211,421,119 B = 201.6 MB**. **The server ignores `Range`:** a request
+for the first kilobyte returned `200` with the whole file, so there is no fetching just the
+arroyo pages — it is all of it or none. Add the PDF traps §3.5 and §3.7 already paid for
+(subset fonts in Identity encoding, so the stream carries glyph codes and the alphabet lives
+in an uncompressed `/ToUnicode` CMap; and one atlas stream inflating to 89 MB of pure
+geometry, which any extraction cap has to skip rather than abort on). Not attempted.
+
 #### That analysis is not published as data
 
 The CARTO SALTILLO portal serves **25 datasets** (checked 2026-08-17). None is hydrographic:
