@@ -996,9 +996,90 @@ corroborated for Nazario Ortiz Garza and consistent for Omega, unconfirmed for t
 **What §2.4's caveat should now say is that the layer we publish is the pluvial chapter, and
 that the same Atlas maps arroyo flooding separately** — not that the cause is undetermined.
 
-**Still open, and cheap to close if wanted:** the fluvial hazard maps are figures, not data.
-Georeferencing Map 36 (it carries a coordinate grid and declares MEXICO ITRF 2008 LCC / EPSG:6372)
-would put the modelled ribbon on our map and settle every colonia at once.
+**That last gap is now closed for Map 36** — it was georeferenced the same day; see the
+section below. The remaining maps (Ceballos, El Cuatro, Arroyo del Pueblo alto) are the same
+procedure, once each.
+
+#### Map 36 georeferenced, 2026-08-17 — the caveat now has a measured mechanism
+
+The one thing left open above was that the fluvial hazard lives in figures, not data. Map 36
+(`PH-ZU-35`, «Peligro por inundación en Arroyo del Pueblo», Tr = 5 años) was extracted from the
+2024 Atlas as a 1242×804 JPEG and georeferenced. **Nothing here is published**; the result is a
+derived estimate from a raster figure, and by the rule in §3.6 it may not reach the Investment
+Index or share a field with a cited figure. Intermediates in `raw_data/atlas_implan/derivado/`
+(gitignored).
+
+**How, and every number measured rather than eyeballed.** The neatline was found by detecting
+long dark runs (rows 21 and 780, columns 28 and 936), and the graticule ticks by looking for
+short marks just outside it — four per edge. An affine pixel→lon/lat was then least-squares
+fitted to all sixteen tick constraints.
+
+**A trap that would have wrecked it, caught by arithmetic.** The tick labels render at about
+9 px and are genuinely ambiguous: `101°2'0"W` reads exactly like `101°20'W` at that size. Read
+as degrees-and-minutes, the map's longitude ticks would be 10′ apart while its latitude ticks
+are 1′ apart — which implies 85 m/px in one axis and 8.5 m/px in the other. **No conformal
+projection can do that.** Solving for consistency, cos φ = 197/217 = 0.908 gives φ = 24.8°,
+against the map's actual 25.45° (cos = 0.903) — a 0.5% match. The labels are **1′ apart on both
+axes**, and the ambiguous glyphs are the seconds field.
+
+**Fit quality, and two independent checks:**
+
+* Tick residuals: **2 m RMS, 4.4 m maximum**, at a scale of 8.5 m/px.
+* **Anisotropy 0.32%** between the horizontal and vertical scales — a conformal projection
+  requires ~0, so this tests the fit against the map's own geometry.
+* The graphic scale bar measures 288 px for its stated 2.4 km; the fit says 2,448 m over that
+  span, **2.0% apart** — within the error of measuring the bar's outer edge instead of its tick
+  centres (2 px at each end is already 1.4%). Reported because it is the weaker of the two
+  checks, not because it fails.
+
+**And the check that matters, against data this project did not derive.** The extracted hazard
+ribbon was compared against INEGI's RH24Be channel network (§3.8 above), which comes from a
+different producer, a different method and a different decade: **median distance 13.3 m, 90th
+percentile 32.4 m** — a pixel and a half. The channel under the ribbon is **Strahler order 5**,
+which is exactly the order the 2014 Atlas says its hydraulic modelling was run on.
+
+**Extraction.** Hazard pixels were classified against the five legend swatches sampled from the
+legend panel itself. The magnified inset (x 72–330, y 46–443) was excluded — it duplicates the
+data at 1.95× and would double-count; its bounds were confirmed by that magnification ratio
+against the extent box (x 471–603, y 336–540). Result: **4,185 px = 30.3 ha**, about 50 m of
+average ribbon width over roughly 6 km of channel.
+
+**The Atlas's Tr = 5 arroyo hazard, against the layer we publish.** Every colonia the ribbon
+falls inside, with its worst class in each:
+
+| colonia | Atlas, arroyo Tr=5 | our published pluvial layer |
+|---|---|---|
+| **OMEGA** | **Muy alto** | **no zone at all** |
+| ANTONIO CÁRDENAS | Muy alto | no zone at all |
+| REAL ANKARA | Muy alto | Bajo |
+| ZONA CENTRO | Muy alto | Bajo |
+| ASTURIAS | Muy alto | Bajo |
+| ISABEL AMALIA DE FLORES TAPIA | Muy alto | Bajo, Muy alto |
+| NAZARIO S. ORTIZ GARZA | Muy alto | Bajo, Muy alto |
+| SANTA FE | Muy alto | Bajo, Muy alto |
+| PUEBLO INSURGENTE | Muy alto | Bajo, Muy alto |
+| ANÁHUAC | Muy alto | Muy alto |
+| PUERTO DE FLORES | Alto | Bajo |
+| VALLE ESCONDIDO SUR | Alto | Bajo |
+
+**So the caveat in §2.4 is explained, not merely hypothesised.** The Atlas's own arroyo model
+puts **1.4–5.8 m of water inside colonia Omega in the five-year event**, and the layer this
+project publishes — the pluvial and ponding chapter — **marks nothing there whatsoever**. Omega
+flooded to 1.30 m in July 2025, which sits at the boundary of that same depth band. Nazario
+Ortiz Garza is confirmed the same way.
+
+**Two of the journalist's colonias are corroborated independently.** *Vanguardia* listed Anáhuac
+and Isabel Amalia for Arroyo del Pueblo, and both appear in the ribbon extracted here.
+
+**What this does not settle.** Only Map 36 was georeferenced — Arroyo del Pueblo (medio) at
+Tr = 5. **Country Club and Terranova are not explained by it** (4.0 km and 7.1 km from this
+ribbon); the article attributes Country Club to Ceballos, whose maps are figures 42–47 and were
+not processed. Extending to them is the same procedure, once per map.
+
+**Limits of the method, stated because a derived layer invites more trust than it earned:** this
+is a raster figure read at 8.5 m/px, not the Atlas's vector output; class boundaries carry JPEG
+blending; and everything rests on an affine fit to a conic projection, which is an
+approximation that the 0.32% anisotropy bounds but does not eliminate.
 
 #### The 2014 Atlas is the better source for where the arroyos were buried
 
