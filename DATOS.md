@@ -929,12 +929,12 @@ narrows the colonia attribution to what independent data supports.
 no fetching just the arroyo pages. The 2024 Atlas on IMPLAN's publications page is **78 MB**.
 Both were downloaded.
 
-#### Closed against the primary source, 2026-08-17 — the Atlas documents were read
+#### Closed against the primary source, 2026-08-18 — the Atlas documents were read
 
 Both Atlas documents were downloaded and their text extracted. `pypdf` resolved them cleanly —
 423 pages in 23 s and 406 in 32 s, zero failures — so the `/ToUnicode` trap §3.5 and §3.7 paid
 for does not bite a library that implements CMaps. **Local path:** `raw_data/atlas_implan/`
-(gitignored). **Download date:** 2026-08-17.
+(gitignored). **Download date:** 2026-08-18.
 
 **Provenance trap first, because it wastes 202 MB.** The municipal transparency portal serves
 `Atlas_Saltillo2VER_PUBLICA.pdf` under the heading "El atlas municipal de riesgos", labelled
@@ -1000,7 +1000,7 @@ that the same Atlas maps arroyo flooding separately** — not that the cause is 
 section below. The remaining maps (Ceballos, El Cuatro, Arroyo del Pueblo alto) are the same
 procedure, once each.
 
-#### Map 36 georeferenced, 2026-08-17 — the caveat now has a measured mechanism
+#### Map 36 georeferenced, 2026-08-18 — the caveat now has a measured mechanism
 
 The one thing left open above was that the fluvial hazard lives in figures, not data. Map 36
 (`PH-ZU-35`, «Peligro por inundación en Arroyo del Pueblo», Tr = 5 años) was extracted from the
