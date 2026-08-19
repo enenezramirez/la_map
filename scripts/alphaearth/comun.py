@@ -17,29 +17,42 @@ requests). The pipeline needs `.tiff`, so the attacker just spells it the way
 the allowlist already permits. Shipping it would have looked like a mitigation
 without being one.
 
-What does hold is checking where the VRT points before GDAL ever opens it, which
-is `exigir_fuentes_del_espejo` below.
+Two rounds of review later, the design changed, and the reason is worth stating
+because it is the general lesson: **inspecting the document does not bound what
+GDAL does with it.** Every version of the guard that reasoned about NAMES was
+bypassed by something that GDAL decides by CONTENT.
 
-Its limits, and the ordering here is deliberate -- the first version of this
-module stated only the third one, which is the hardest attack, while two
-one-line mutations walked past the guard. A review caught both. Naming the
-expensive limit and skipping the cheap ones is how a guard gets trusted further
-than it earned, which is the exact failure this module was written to avoid:
+* Round one: element names were matched case-sensitively. GDAL matches them
+  with EQUAL(), so `<sourcefilename>` was followed and never seen. Fixed --
+  matching is case-insensitive and namespace-stripped.
+* Round two, and the one that ended the approach: refusing sources whose name
+  ends in `.vrt` refuses a NAME. The VRT driver identifies a VRT by its header,
+  so a hostile mirror serves the nested VRT called `.tiff` -- which is what
+  every real source is called. And the element allowlist bounds nothing either:
+  `<GDAL_WMS>` names its target in `<ServerUrl>`, `GDALTileIndexDataset` in
+  `<IndexDataset>`, and both are dispatched on content with a decoy
+  `<SourceFilename>` satisfying the rule. Both verified end to end.
 
-1. Every spelling GDAL accepts has to be checked, not the one the real files
-   use. GDAL matches these element names with EQUAL(), so `<sourcefilename>`
-   is followed just like `<SourceFilename>`; the first version compared exact
-   case and let four other spellings through, verified end to end.
-2. One level of checking is a checked door in front of an unchecked one. A
-   source that is itself a `.vrt` under the mirror's own prefix satisfied the
-   prefix test, and GDAL then followed ITS sources anywhere -- free for a
-   hostile mirror, since the nested file sits in its own bucket. Chained VRTs
-   are refused outright rather than recursed into: every real tile points at
-   its own `.tiff`, so nothing legitimate is lost.
-3. What remains, and is not closed: this check fetches the VRT and GDAL then
-   fetches it again, so a server that serves one body here and another to GDAL
-   wins. Nothing short of handing GDAL the exact validated bytes closes that,
-   and the residual risk is a one-off script on a laptop.
+So the fix is not a better parser. **GDAL now opens exactly one document, and
+the driver is pinned when it does:** the `.tiff` itself, with `driver="GTiff"`.
+There is no second open for a nested document to hijack, and no sniffing for a
+disguised one to win. The `.vrt` is still fetched and validated, but only by
+this module, to learn which `.tiff` a tile declares and to refuse a tile that
+points outside the mirror.
+
+That trades one problem for another, honestly: the `.tiff` is stored bottom-up,
+so reading it directly is exactly the mirrored-image trap this screening was
+built to avoid. `leer_ventana_north_up` handles it explicitly, in both
+directions, and it is tested in both -- against the `.vrt`'s own north-up
+reading of the same window.
+
+**What is still not closed, stated first:** the mirror can tell this check and
+GDAL apart trivially. The two requests carry different user agents
+(`Python-urllib/…` versus `GDAL/…`), so a server that wants to serve one body
+here and another to GDAL can. This was previously written up as the expensive
+attack; it is not expensive. What the design does buy is that a hostile body
+now has to arrive through the single pinned-driver GTiff open, rather than
+through any document GDAL might be led to open next.
 """
 
 from __future__ import annotations
@@ -89,11 +102,62 @@ ENTORNO_GDAL = {
     "GDAL_HTTP_RETRY_DELAY": "1",
     "GDAL_HTTP_CONNECTTIMEOUT": "30",
     "GDAL_HTTP_TIMEOUT": "120",
-    # Off by default in GDAL today, but this is not a default worth inheriting:
-    # with it on, a VRT may carry Python to run. Pinned so the answer does not
-    # depend on the environment the script happens to run in.
+    # Both off by default in GDAL today, and neither is a default worth
+    # inheriting: with the first on, a VRT may carry Python to run; with the
+    # second, a VRT band may read an arbitrary local file. Pinned so the answer
+    # does not depend on the environment the script happens to run in.
     "GDAL_VRT_ENABLE_PYTHON": "NO",
+    "GDAL_VRT_ENABLE_RAWRASTERBAND": "NO",
 }
+
+
+def a_vsicurl(fuente: str) -> str:
+    """Turn a validated /vsis3/<bucket>/<key> source into a /vsicurl/ URL.
+
+    Anonymous HTTPS rather than S3 protocol, so the read path is the same one
+    the guard already checked, against the same hard-coded host.
+    """
+    if not fuente.startswith("/vsis3/"):
+        raise ValueError(f"{fuente!r}: no es una fuente /vsis3/")
+    bucket, _, clave = fuente[len("/vsis3/"):].partition("/")
+    return f"/vsicurl/https://s3.us-west-2.amazonaws.com/{bucket}/{clave}"
+
+
+def bordes_north_up(ds):
+    """(oeste, norte, este, sur) with north above south, whatever the row order.
+
+    The mirror stores its COGs bottom-up, so a dataset opened straight off the
+    .tiff reports its north and south swapped. Everything downstream reasons in
+    north-up terms; this is the single place that knows the difference.
+    """
+    b = ds.bounds
+    if b.top == b.bottom:
+        raise RuntimeError(f"bounds degenerados: top == bottom == {b.top}")
+    return b.left, max(b.top, b.bottom), b.right, min(b.top, b.bottom)
+
+
+def leer_ventana_north_up(ds, col: int, fila: int, ancho: int, alto: int):
+    """Read a window whose `fila` counts from the NORTH edge, flipping if needed.
+
+    This is the guard that replaced `exigir_north_up`, and it is stronger for
+    the same reason that one existed: refusing a bottom-up dataset only worked
+    while something else was correcting the orientation. Here nothing else is,
+    so refusing is not an option -- it has to be handled, in both directions,
+    and a silently mirrored read is the one failure that produces a plausible
+    wrong answer instead of an error.
+    """
+    from rasterio.windows import Window
+
+    if ds.bounds.top > ds.bounds.bottom:            # north-up
+        return ds.read(window=Window(col, fila, ancho, alto))
+
+    fila_archivo = ds.height - fila - alto          # bottom-up
+    if fila_archivo < 0:
+        raise RuntimeError(
+            f"ventana fuera del raster: fila {fila}+{alto} sobre alto {ds.height}"
+        )
+    datos = ds.read(window=Window(col, fila_archivo, ancho, alto))
+    return datos[:, ::-1, :]
 
 
 def leer_acotado(respuesta, limite: int) -> bytes:

@@ -62,56 +62,74 @@ Naming the assumption is the point of this section: **the mirror is trusted to
 serve the dataset it publishes, and nothing here assumes it is trusted to
 decide where else this machine connects, or how much it downloads.**
 
-**Where a VRT points is checked before GDAL opens it.** GDAL follows a VRT's
-sources wherever they lead — reproduced here, not taken from the report: a VRT
+**Where a VRT points is checked before anything is opened.** GDAL follows a VRT's
+sources wherever they lead — reproduced here, not taken from a report: a VRT
 naming `/vsicurl/http://127.0.0.1:<port>/x.tif` made GDAL issue two real
-requests to that host. So steps 2 and 3 fetch each VRT first and refuse it
-unless every source sits under `/vsis3/us-west-2.opendata.source.coop/tge-labs/aef/`
-(`comun.exigir_fuentes_del_espejo`).
+requests to that host. So steps 2 and 3 fetch each VRT and refuse it unless
+every source sits under `/vsis3/us-west-2.opendata.source.coop/tge-labs/aef/`.
 
-**The first version of that guard was bypassable, and a review caught it.**
-Worth recording, because both bypasses were one-line mutations and the guard
-was already written up as closed:
+**But that check is not what bounds the damage, and two rounds of review are
+how we learned it.** Every version of the guard that reasoned about **names**
+was bypassed by something GDAL decides by **content**:
 
-1. **Element names were matched case-sensitively.** GDAL matches them with
-   `EQUAL()`, so `<sourcefilename>` is followed exactly like `<SourceFilename>`
-   — four spellings walked straight past, verified end to end.
-2. **The check was one level deep.** A source that is itself a `.vrt` under the
-   mirror's own prefix passed, and GDAL then followed *its* sources anywhere.
-   Free for a hostile mirror, which owns that prefix.
+1. Element names were matched case-sensitively; GDAL matches them with
+   `EQUAL()`, so `<sourcefilename>` was followed and never seen.
+2. Refusing a source whose name ends in `.vrt` refuses a *name*. The VRT driver
+   identifies a VRT by its header, so a hostile mirror serves the nested VRT
+   called `.tiff` — which is what every real source is called.
+3. The element allowlist bounds nothing either: `<GDAL_WMS>` names its target
+   in `<ServerUrl>` and `GDALTileIndexDataset` in `<IndexDataset>`, both
+   dispatched on content, with a decoy `<SourceFilename>` under the prefix to
+   satisfy the rule.
 
-Both are fixed: names are matched case-insensitively, chained VRTs are refused
-outright (every real tile points at its own `.tiff`, so nothing legitimate is
-lost), `..` in a source path is refused rather than trusted to `startswith`,
-and the VRT's own URL is checked before the fetch **and on the response**,
-since `urllib` follows redirects.
+All three were verified end to end, and 1 and 2 were shipped as fixed before
+the next review found them still open.
 
-**And the rules were split from the fetching** (`exigir_fuentes_bajo_el_espejo`)
-because a harness aimed at a local server got rejected by the URL check first,
-which reads as proof the rules work while testing none of them. They are now
-exercised directly, one hostile shape at a time.
+**So the fix is structural, not a better parser.** GDAL now opens **exactly one
+document per tile, with its driver pinned**: the `.tiff`, as `driver="GTiff"`.
+There is no second open for a nested document to hijack, and no sniffing for a
+disguised one to win. Measured, one process per case:
 
-**What remains open, stated first this time:** the check fetches the VRT and
-GDAL fetches it again, so a server that serves one body here and another to
-GDAL wins. Nothing short of handing GDAL the exact validated bytes closes that.
-The earlier version of this section named only this limit — the expensive
-attack — while the two cheap ones above were live. Naming the hard limit and
-missing the easy ones is how a guard gets trusted further than it earned.
+| hostile body served as `.tiff` | requests to the attacker's host |
+|---|---|
+| nested VRT, driver not pinned | 1 |
+| `GDAL_WMS`, driver not pinned | 1 |
+| nested VRT, **driver pinned** | **0** |
+| `GDAL_WMS`, **driver pinned** | **0** |
 
-**`CPL_VSIL_CURL_ALLOWED_EXTENSIONS` was measured and rejected.** It looks like
-the obvious fix and does not hold: with `.vrt,.tiff` allowed — the narrowest
-list this pipeline can run on — a hostile source ending in `.tif` is blocked (0
-requests) but one ending in `.tiff` goes straight through (2 requests). The
-pipeline needs `.tiff`, so the attacker simply spells it the permitted way.
-Shipping it would have looked like a mitigation without being one.
+**And that trade has a cost, which is the trap this screening exists to avoid.**
+The `.tiff` is stored bottom-up, so reading it directly is exactly the mirrored
+read that would hand every AGEB the embedding of the wrong place.
+`comun.leer_ventana_north_up` handles both row orders explicitly, and it is
+tested in both — against the `.vrt`'s own north-up reading of the same window,
+at two overview levels, with a negative control confirming that an unflipped
+read really does differ. The whole screening was then re-run: the regenerated
+overview is byte-identical to the published intermediate in all five arrays.
+
+**What is still not closed, stated first this time.** The mirror can tell this
+check and GDAL apart trivially: the two requests carry different user agents
+(`Python-urllib/…` versus `GDAL/…`), so a server can serve one body here and
+another to GDAL. An earlier version of this section called that the expensive
+attack while two one-line mutations were live; it is not expensive. What the
+design buys is that a hostile body now has to arrive through the single
+pinned-driver GTiff open, instead of through whatever document GDAL could be
+led to open next.
+
+**`CPL_VSIL_CURL_ALLOWED_EXTENSIONS` was measured and rejected** for the same
+reason the `.vrt` rule failed — it is a rule about names. With `.vrt,.tiff`
+allowed, a hostile source ending in `.tif` is blocked (0 requests) but one
+ending in `.tiff` goes straight through (2 requests), and the pipeline needs
+`.tiff`.
 
 **Nothing here reads an unbounded body.** `Range:` is a request, not an
 obligation: a server may answer `200` with a body of any size, so every read is
-capped and every cap raises rather than truncating. Same reasoning for the two
-loops the server steers — pagination in step 1 stops after `MAX_PAGINAS`, and
-the key list is refused past `MAX_TESELAS` before it becomes that many
-requests. GDAL gets `GDAL_HTTP_TIMEOUT` and `GDAL_HTTP_CONNECTTIMEOUT`, because
-`GDAL_HTTP_MAX_RETRY` bounds how many times it retries, not how long it waits.
+capped and every cap raises rather than truncating. Same for the two loops the
+server steers — pagination stops at `MAX_PAGINAS`, and the key list is refused
+past `MAX_TESELAS` before it becomes that many requests. GDAL gets
+`GDAL_HTTP_TIMEOUT` and `GDAL_HTTP_CONNECTTIMEOUT`, because
+`GDAL_HTTP_MAX_RETRY` bounds how many times it retries, not how long it waits;
+and `GDAL_VRT_ENABLE_PYTHON` and `GDAL_VRT_ENABLE_RAWRASTERBAND` are pinned to
+`NO` rather than inherited from the environment.
 
 **What this is not.** These are one-off scripts run by hand on a laptop, and
 the guards are sized for that: they keep a hostile mirror from steering this
