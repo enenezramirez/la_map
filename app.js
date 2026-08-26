@@ -335,7 +335,7 @@ const AYUDA_RIESGO = {
         // because the reader it protects is the one comparing zones who never
         // opens the help and takes a blank map for a safe one; the long half —
         // the episode itself, and what it does and does not establish — lives
-        // inside the disclosure, where there is room to say it without
+        // in its own disclosure below, where there is room to say it without
         // overstating it. The pinned half now names which chapter this layer is:
         // "pluvial, not arroyo" is what changes the conclusion a reader draws
         // from an unmarked zone, so it cannot wait behind a click.
@@ -343,13 +343,22 @@ const AYUDA_RIESGO = {
             lead: 'La ausencia de zona marcada no es evidencia de ausencia de inundación.',
             cuerpo: 'Esta capa es solo la inundación pluvial: el desbordamiento de arroyos va en otro capítulo del Atlas que aquí no se publica. En julio de 2025 se inundaron colonias que esta capa deja limpias.'
         },
-        limitacion: [
-            'En julio de 2025 se inundaron colonias que este mismo Atlas 2024 clasifica en sus niveles más bajos: Omega llegó a 1.30 m de agua y en esta capa no tiene ni una zona marcada; Terranova, con 1 m, aparece solo como «Bajo» en el 13% de su superficie.',
-            'Ninguna de las 16 colonias reportadas alcanza un solo metro clasificado «Alto» ni «Muy alto». Y como se omite «Muy bajo», una colonia clasificada así se dibuja completamente limpia — que es exactamente lo que le ocurre a Omega.',
-            'Esto establece que la clasificación publicada subrepresenta inundaciones ocurridas en lugares concretos, y el Atlas mismo explica buena parte de por qué: modela el desbordamiento de arroyos en un capítulo aparte, «Inundaciones fluviales», que clasifica por tirante de agua y corre periodos de retorno desde 5 años — el escenario más frecuente. Lo que se publica en esta capa es el capítulo pluvial y de encharcamientos.',
-            'Dos de las colonias inundadas están sobre el Arroyo del Pueblo o junto a él — Nazario Ortiz Garza a 0 m del cauce mapeado por INEGI y Omega a 417 m —, y es una de las corrientes que ese otro capítulo modela; el Atlas atribuye estos desastres a «la invasión y alteración de los cauces». Country Club y Terranova, a 2 km o más del arroyo con nombre más cercano, no quedan explicadas por esta vía.',
-            'Episodio reportado por Vanguardia el 24 de julio de 2025; el cruce contra esta capa y la lectura de los documentos del Atlas están documentados en la bitácora de datos del proyecto.'
-        ]
+        // Its own disclosure, not a tail on the levels one. Measured before
+        // splitting: the levels disclosure ran 1,083 px — 1.56 viewports — and
+        // 59% of it was this episode, under a label that promises what «Medio»
+        // means. The reader who came for the scale got an essay on something
+        // else, and the reader who came for the episode had to scroll past the
+        // scale. Two labels, each answering the question it asks.
+        limitacion: {
+            resumen: '¿Por qué esta capa deja limpias colonias que sí se inundaron?',
+            parrafos: [
+                'En julio de 2025 se inundaron colonias que este mismo Atlas 2024 clasifica en sus niveles más bajos: Omega llegó a 1.30 m de agua y en esta capa no tiene ni una zona marcada; Terranova, con 1 m, aparece solo como «Bajo» en el 13% de su superficie.',
+                'Ninguna de las 16 colonias reportadas alcanza un solo metro clasificado «Alto» ni «Muy alto». Y como se omite «Muy bajo», una colonia clasificada así se dibuja completamente limpia — que es exactamente lo que le ocurre a Omega.',
+                'Esto establece que la clasificación publicada subrepresenta inundaciones ocurridas en lugares concretos, y el Atlas mismo explica buena parte de por qué: modela el desbordamiento de arroyos en un capítulo aparte, «Inundaciones fluviales», que clasifica por tirante de agua y corre periodos de retorno desde 5 años — el escenario más frecuente. Lo que se publica en esta capa es el capítulo pluvial y de encharcamientos.',
+                'Dos de las colonias inundadas están sobre el Arroyo del Pueblo o junto a él — Nazario Ortiz Garza a 0 m del cauce mapeado por INEGI y Omega a 417 m —, y es una de las corrientes que ese otro capítulo modela; el Atlas atribuye estos desastres a «la invasión y alteración de los cauces». Country Club y Terranova, a 2 km o más del arroyo con nombre más cercano, no quedan explicadas por esta vía.',
+                'Episodio reportado por Vanguardia el 24 de julio de 2025; el cruce contra esta capa y la lectura de los documentos del Atlas están documentados en la bitácora de datos del proyecto.'
+            ]
+        }
     },
     deslizamientos: {
         mide: 'Movimiento de material ladera abajo sobre una superficie de falla (traslacional).',
@@ -370,6 +379,19 @@ const AYUDA_RIESGO = {
 // — and here it would throw inside cargarCapaRiesgo's `.then()`, whose `.catch`
 // only logs: the switch would stay checked and do nothing, with one console
 // line to show for it. A half-filled entry degrades to no caveat instead.
+// The episode disclosure reads `limitacion.resumen` and `limitacion.parrafos`,
+// so this checks those and nothing else. Deliberately independent of
+// `advertenciaDeRiesgo`: coupling a block to a field it never renders is the
+// shape that already cost this repo a Medium finding, when counting risk layers
+// per group could silently drop the shared-ramp notice. A half-filled entry
+// renders no second disclosure instead of one labelled with an empty string.
+function limitacionDeRiesgo(clave) {
+    const ayuda = AYUDA_RIESGO[clave];
+    const lim = ayuda && ayuda.limitacion;
+    return lim && typeof lim.resumen === 'string' && lim.resumen
+        && Array.isArray(lim.parrafos) && lim.parrafos.length ? lim : null;
+}
+
 function advertenciaDeRiesgo(clave) {
     const ayuda = AYUDA_RIESGO[clave];
     const adv = ayuda && ayuda.advertencia;
@@ -389,13 +411,18 @@ function htmlAyudaRiesgo(clave, conteos) {
     // the mildest one shown for chemical risk.
     const peor = presentes[0];
     // Only a layer whose blank areas have been measured against a real event
-    // earns this block; the rest render nothing here.
-    const adv = advertenciaDeRiesgo(clave);
-    const limitacion = adv && Array.isArray(a.limitacion) && a.limitacion.length
-        ? `<div class="help-caveat">
-               <p><strong>${esc(adv.lead)}</strong></p>
-               ${a.limitacion.map(p => `<p>${esc(p)}</p>`).join('')}
-           </div>`
+    // earns this block; the rest render nothing here. It gets its own
+    // disclosure so neither label has to promise what the other one answers.
+    const lim = limitacionDeRiesgo(clave);
+    const limitacion = lim
+        ? `<details class="legend-help">
+               <summary>${esc(lim.resumen)}</summary>
+               <div class="legend-help-body">
+                   <div class="help-caveat">
+                       ${lim.parrafos.map(p => `<p>${esc(p)}</p>`).join('')}
+                   </div>
+               </div>
+           </details>`
         : '';
     return `
         <details class="legend-help">
@@ -411,11 +438,11 @@ function htmlAyudaRiesgo(clave, conteos) {
                    al «Medio» de otra.</p>
                 <p>${esc(a.omite)}</p>
                 <p>${esc(a.indice)}</p>
-                ${limitacion}
                 <p>Es un modelo a escala urbana para comparar zonas, <strong>no un estudio de sitio</strong>:
                    no sustituye un dictamen para un predio concreto. Cubre solo el municipio de Saltillo.</p>
             </div>
         </details>
+        ${limitacion}
     `;
 }
 
