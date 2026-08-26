@@ -330,21 +330,25 @@ const AYUDA_RIESGO = {
         omite: 'Se omite el nivel «Muy bajo», que es el fondo del modelo y cubre casi toda la mancha urbana.',
         indice: 'Es la única capa de riesgo que penaliza el Índice de Inversión.',
         // The most serious caveat attached to any layer in this project, and it
-        // is measured rather than inferred (DATOS.md 2.4). It is split in two on
-        // purpose. The short half is pinned to the legend, because the reader it
-        // protects is the one comparing zones who never opens the help and takes
-        // a blank map for a safe one; the long half — the episode itself, and
-        // what it does and does not establish — lives inside the disclosure,
-        // where there is room to say it without overstating it.
+        // is measured rather than inferred (DATOS.md 2.4; 3.8 for the cause). It
+        // is split in two on purpose. The short half is pinned to the legend,
+        // because the reader it protects is the one comparing zones who never
+        // opens the help and takes a blank map for a safe one; the long half —
+        // the episode itself, and what it does and does not establish — lives
+        // inside the disclosure, where there is room to say it without
+        // overstating it. The pinned half now names which chapter this layer is:
+        // "pluvial, not arroyo" is what changes the conclusion a reader draws
+        // from an unmarked zone, so it cannot wait behind a click.
         advertencia: {
             lead: 'La ausencia de zona marcada no es evidencia de ausencia de inundación.',
-            cuerpo: 'En julio de 2025 se inundaron colonias que esta capa deja limpias.'
+            cuerpo: 'Esta capa es solo la inundación pluvial: el desbordamiento de arroyos va en otro capítulo del Atlas que aquí no se publica. En julio de 2025 se inundaron colonias que esta capa deja limpias.'
         },
         limitacion: [
             'En julio de 2025 se inundaron colonias que este mismo Atlas 2024 clasifica en sus niveles más bajos: Omega llegó a 1.30 m de agua y en esta capa no tiene ni una zona marcada; Terranova, con 1 m, aparece solo como «Bajo» en el 13% de su superficie.',
             'Ninguna de las 16 colonias reportadas alcanza un solo metro clasificado «Alto» ni «Muy alto». Y como se omite «Muy bajo», una colonia clasificada así se dibuja completamente limpia — que es exactamente lo que le ocurre a Omega.',
-            'Esto establece que la clasificación publicada subrepresenta inundaciones ocurridas en lugares concretos; no establece por qué. El periodo de retorno modelado, las obras o construcciones posteriores y la diferencia entre inundación pluvial y por arroyo son todas candidatas, y nada aquí las distingue.',
-            'Episodio reportado por Vanguardia el 24 de julio de 2025; el cruce contra esta capa está documentado en la bitácora de datos del proyecto.'
+            'Esto establece que la clasificación publicada subrepresenta inundaciones ocurridas en lugares concretos, y el Atlas mismo explica buena parte de por qué: modela el desbordamiento de arroyos en un capítulo aparte, «Inundaciones fluviales», que clasifica por tirante de agua y corre periodos de retorno desde 5 años — el escenario más frecuente. Lo que se publica en esta capa es el capítulo pluvial y de encharcamientos.',
+            'Dos de las colonias inundadas están sobre el Arroyo del Pueblo o junto a él — Nazario Ortiz Garza a 0 m del cauce mapeado por INEGI y Omega a 417 m —, y es una de las corrientes que ese otro capítulo modela; el Atlas atribuye estos desastres a «la invasión y alteración de los cauces». Country Club y Terranova, a 2 km o más del arroyo con nombre más cercano, no quedan explicadas por esta vía.',
+            'Episodio reportado por Vanguardia el 24 de julio de 2025; el cruce contra esta capa y la lectura de los documentos del Atlas están documentados en la bitácora de datos del proyecto.'
         ]
     },
     deslizamientos: {

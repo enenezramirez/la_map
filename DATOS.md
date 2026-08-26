@@ -231,22 +231,29 @@ The highest level reached anywhere among them is `Medio`, over 6–13% of the ar
 that the export drops `Muy bajo`, so a colonia the Atlas placed in that class renders as
 completely clean — which is exactly what happens to Omega.
 
-**What this does and does not establish.** It establishes that the published classification
-under-represents flooding that actually occurred, in specific named places, one year after
-the Atlas edition. It does **not** establish why: the return period modelled, drainage works
-or construction after the study, and the difference between *pluvial* flooding and flooding
-from arroyos are all candidates, and nothing here distinguishes them. IMPLAN was integrating
+**What this does and does not establish — revised 2026-08-18, see §3.8.** It establishes that
+the published classification under-represents flooding that actually occurred, in specific
+named places, one year after the Atlas edition. **The cause is no longer undetermined.** When
+this was first written, the return period modelled, drainage works or construction after the
+study, and the difference between *pluvial* flooding and flooding from arroyos were listed as
+candidates that nothing here distinguished. Reading the 2024 Atlas itself settled it: the
+document models arroyo overflow in a **separate chapter** («Inundaciones fluviales», HEC-RAS,
+classed by water depth, at return periods from 5 years), and **what this project publishes is
+the pluvial and ponding chapter**. Nazario Ortiz Garza sits on the Arroyo del Pueblo and Omega
+417 m from it; the Atlas attributes these disasters to «la invasión y alteración de los
+cauces». Country Club and Terranova remain unexplained by that route. IMPLAN was integrating
 a separate *plan pluvial* as of Nov 2024.
 
 **Consequence for the product, acted on 2026-08-03.** The existing glossary line — "a model
 at urban scale, not a site study" — is true but too soft for this. A reader comparing zones
 would take a blank map as evidence of safety, and in Omega's case that reading is contradicted
 by an event. The flood layer's legend now carries the caveat in two places: a pinned line next
-to the ramp (**absence of a mapped zone is not evidence of absence of flooding**, plus the
-July 2025 episode in one clause), and the episode in full inside the layer's help — the
-colonias, the depths, the fact that dropping `Muy bajo` renders such a colonia clean, and
-what this does and does not establish. Only this layer carries it; the other two risk layers
-have no measured counter-example, and a caveat printed everywhere would say nothing anywhere.
+to the ramp (**absence of a mapped zone is not evidence of absence of flooding**, plus which
+chapter this layer is and the July 2025 episode, one clause each), and the episode in full
+inside the layer's help — the colonias, the depths, the fact that dropping `Muy bajo` renders
+such a colonia clean, and what this does and does not establish. Only this layer carries it;
+the other two risk layers have no measured counter-example, and a caveat printed everywhere
+would say nothing anywhere.
 
 ### 2.5 IMPLAN Saltillo — Riesgo por deslizamientos traslacionales (Atlas de Riesgos 2024)
 
