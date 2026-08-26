@@ -302,7 +302,14 @@ function crearEstiloRiesgo() {
         // not less: there are 1,358 flood zones and 2,136 chemical ones against
         // 431 AGEBs, so far more outline per screen.
         weight: pesoBorde(),
-        color: 'rgba(255, 255, 255, 0.25)',
+        // Was rgba(255,255,255,0.25), and that failed on BOTH basemaps -- 1.47:1
+        // over the dark one, 1.07 over the light -- because a translucent border
+        // blends toward its own fill. The opaque-white fix that closed this for
+        // the AGEB outline never reached here. Same rule now: 3.80 dark, 5.18
+        // light. It does make the outline read harder at z>=13, where the weight
+        // stops being 0; that is a visible change, not a silent one.
+        color: colorBorde(),
+        opacity: 1,
         fillOpacity: 0.6
     });
 }
@@ -615,6 +622,23 @@ function crearFuncionColor(obtenerEscalones) {
    zoom where a sector is a few pixels across there is nothing to delimit, so it
    thins out and then goes. These weights hold the outline near 12-18% of the
    shape at every zoom where it is drawn at all. */
+// Border colour is a function of the basemap under it, for the same kind of
+// measured reason the weight is a function of zoom. Every opaque grey was swept
+// against all 16 fills actually on the map, each composited over its basemap:
+// over the dark one only SEVEN clear 3:1 (#f9 through #ff), so white was very
+// nearly forced; over the light one FIFTY do (#00 through #31) -- and white is
+// not among them. It lands at 1.26:1 there, which is to say the border stops
+// delimiting anything the moment a reader switches base, which is exactly what
+// it is for. #1a1a1a over pure black (4.86 worst case) because 4.03 already
+// clears 3:1 with room, and a black hairline reads heavier on near-white than a
+// white one does on near-black.
+const BORDE_POR_TEMA = { oscuro: '#ffffff', claro: '#1a1a1a' };
+let temaBase = 'oscuro';
+
+function colorBorde() {
+    return BORDE_POR_TEMA[temaBase];
+}
+
 function pesoBorde() {
     const z = map.getZoom();
     if (z >= 13) return 1;
@@ -629,17 +653,12 @@ function crearEstiloCapa(campoValor, funcionColor) {
         return {
             fillColor: funcionColor(valor),
             weight: pesoBorde(),
-            // Opaque white, and that is the measured answer rather than a taste
-            // call. Sweeping every opaque grey against all 16 fills actually on
-            // the map -- three ramps composited at 0.65 over the basemap, plus
-            // the no-data grey -- white is the best possible flat border, worst
-            // case 3.17:1. It is also the ONLY value that clears 3:1 everywhere:
-            // at 0.25 alpha the worst case was 1.40:1 and at 0.75 still 2.47,
-            // because a translucent white blends toward whatever is under it and
-            // so vanishes against the LIGHT end of the ramps. The earlier note
-            // proposing 0.45 had measured against the dark fill only, where the
-            // border was never the problem.
-            color: '#ffffff',
+            // Opaque, and the colour comes from the basemap: see colorBorde().
+            // Opacity is the older half of that measurement -- at 0.25 alpha the
+            // worst case was 1.40:1 and at 0.75 still 2.47, because a
+            // translucent white blends toward whatever is under it and so
+            // vanishes against the LIGHT end of the ramps.
+            color: colorBorde(),
             opacity: 1,
             // AGEBs with no data are drawn fainter: present and
             // clickable (the card explains why there's no data), but
@@ -976,6 +995,21 @@ map.on('zoomend', () => {
     }
 });
 
+// The style functions read colorBorde() when Leaflet calls them, so switching
+// the basemap has to make the layers ask again -- exactly what zoomend already
+// does for pesoBorde(). Without this the border keeps whatever colour it was
+// painted with and the switch silently leaves it at 1.26:1.
+//
+// Compared against the layer object, not `e.name`: the name is the label
+// rendered in the control, i.e. UI text, and hanging the palette off a Spanish
+// string would break the map the day that control gets translated.
+map.on('baselayerchange', e => {
+    temaBase = e.layer === lightBaseLayer ? 'claro' : 'oscuro';
+    for (const { capa } of capasEnVista) {
+        if (capa && typeof capa.resetStyle === 'function') capa.resetStyle();
+    }
+});
+
 // A missing value is shown as a dash, not as 0: "I don't know" and "it
 // is zero" are different statements and the map must not confuse them.
 const SIN_VALOR = '—';
@@ -1104,7 +1138,7 @@ function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, configEsca
                 style: funcionEstilo,
                 onEachFeature: (feature, layer) => {
                     layer.on({
-                        mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
+                        mouseover: e => e.target.setStyle({ weight: 2, color: colorBorde(), fillOpacity: 0.8 }),
                         mouseout: e => capa.resetStyle(e.target),
                         click: e => {
                             resaltarGeometrias([e.target.feature.geometry]);
@@ -1161,7 +1195,7 @@ function cargarCapaRiesgo({ archivo, checkbox, clave, titulo }) {
                 style: crearEstiloRiesgo(),
                 onEachFeature: (feature, layer) => {
                     layer.on({
-                        mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.75 }),
+                        mouseover: e => e.target.setStyle({ weight: 2, color: colorBorde(), fillOpacity: 0.75 }),
                         mouseout: e => capa.resetStyle(e.target),
                         click: e => {
                             resaltarGeometrias([e.target.feature.geometry]);
@@ -1345,14 +1379,14 @@ function cargarCapaCatastro(checkbox) {
         capa = L.geoJSON({ type: 'FeatureCollection', features }, {
             style: f => ({
                 fillColor: colorCatastro(f.properties.CATASTRO && f.properties.CATASTRO.valor),
-                // Same opaque white as crearEstiloCapa, for the same measured
+                // Same border rule as crearEstiloCapa, for the same measured
                 // reason: this ramp reaches #f2d79c, the lightest fill on the
                 // map and the one a translucent border disappears against.
-                weight: pesoBorde(), opacity: 1, color: '#ffffff', fillOpacity: 0.65
+                weight: pesoBorde(), opacity: 1, color: colorBorde(), fillOpacity: 0.65
             }),
             onEachFeature: (feature, layer) => {
                 layer.on({
-                    mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
+                    mouseover: e => e.target.setStyle({ weight: 2, color: colorBorde(), fillOpacity: 0.8 }),
                     mouseout: e => capa.resetStyle(e.target),
                     click: e => {
                         resaltarGeometrias([e.target.feature.geometry]);
