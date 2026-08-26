@@ -70,7 +70,9 @@ through any document GDAL might be led to open next.
 
 from __future__ import annotations
 
+import contextlib
 import re
+import urllib.error
 import urllib.request
 # stdlib ElementTree is used deliberately rather than adding defusedxml. This
 # parses the same XML GDAL will, on purpose: a regex over the raw text would
@@ -82,9 +84,9 @@ import xml.etree.ElementTree as ET  # nosec B405
 # each VRT carries exactly one <SourceDataset>, pointing at its own .tiff here.
 PREFIJO_ESPEJO = "/vsis3/us-west-2.opendata.source.coop/tge-labs/aef/"
 
-# The same rule for the VRT's own URL. Checked on the response too, not just the
-# request: urllib follows redirects, so without this the mirror could 302 the
-# check onto a third host and that host would supply the bytes being validated.
+# The same rule for the VRT's own URL, enforced by `abrir_url` on the redirect
+# itself rather than on the response. The earlier note here said checking `r.url`
+# covered redirects; a review measured that it does not -- see `abrir_url`.
 PREFIJO_HTTPS = ("https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
                  "tge-labs/aef/")
 
@@ -111,9 +113,16 @@ ENTORNO_GDAL = {
     "AWS_NO_SIGN_REQUEST": "YES",
     "AWS_REGION": "us-west-2",
     "AWS_DEFAULT_REGION": "us-west-2",
-    # Security, not performance: without it GDAL probes eight sibling paths on
-    # open, and a hostile .ovr sitting next to a tile reaches a foreign host
-    # even with the driver pinned. Measured both ways.
+    # Security, not performance: without it GDAL probes sibling paths on open,
+    # and a hostile .ovr sitting next to a tile reaches a foreign host even with
+    # the driver pinned. Measured both ways against a local server that logs
+    # every request, both reads cold and on separate URLs so neither could be
+    # answered from the other's /vsicurl cache: 10 requests and 8 sibling probes
+    # without it (a directory GET, then HEADs for .aux.xml/.aux/.AUX/...), 2 and
+    # none with it. The count is not a constant -- it depends on the extension
+    # and on what siblings exist, and a review measured 48 in its own setup --
+    # so what is being claimed here is that the probing stops, not a number.
+    # `abrir_tesela` is what puts this in force; it used to be convention.
     "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
     "GDAL_HTTP_MAX_RETRY": "2",
     "GDAL_HTTP_RETRY_DELAY": "1",
@@ -126,6 +135,69 @@ ENTORNO_GDAL = {
     "GDAL_VRT_ENABLE_PYTHON": "NO",
     "GDAL_VRT_ENABLE_RAWRASTERBAND": "NO",
 }
+
+
+def abrir_url(peticion, prefijo: str, timeout: int = 60):
+    """GET, refusing any redirect that leaves `prefijo` BEFORE it is followed.
+
+    This replaces a check on `r.url` after `urlopen` returned, which read as if
+    it covered redirects and does not. `urlopen` FOLLOWS them: by the time a
+    response object exists, this machine has already issued the request to
+    whatever host the mirror named -- `127.0.0.1` and the rest of the intranet
+    included, over plain http, since a Location is not bound by the scheme of
+    the request that got it. The body was refused, which is why nothing hostile
+    ever reached the parser, but the request itself is precisely the capability
+    the module docstring says this exists to remove. Measured: one request to
+    the attacker before, none after.
+
+    `redirect_request` is the only hook that runs BEFORE the connection, so the
+    decision has to live there. Raising HTTPError rather than returning None is
+    deliberate: None makes urllib return the 302 to the caller as if it were the
+    answer, and a caller that then parses the body is reading the redirect page.
+    """
+    url = peticion.full_url if isinstance(peticion, urllib.request.Request) else peticion
+    if not url.startswith(prefijo):
+        raise ValueError(f"{url}: la URL no esta bajo {prefijo!r}")
+
+    class _SinSalida(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            if not newurl.startswith(prefijo):
+                raise urllib.error.HTTPError(
+                    newurl, code,
+                    f"redireccion fuera del espejo, a {newurl!r}", headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    return urllib.request.build_opener(_SinSalida).open(peticion, timeout=timeout)
+
+
+@contextlib.contextmanager
+def abrir_tesela(ruta: str, **opciones):
+    """The only way this pipeline opens a tile: driver pinned, environment in force.
+
+    Two review findings meet here, and both are the same shape: an invariant
+    that was true when written and optional afterwards.
+
+    The driver pin is what the whole design rests on -- a nested VRT named
+    `.tiff` is *deliberately* accepted by the source rules, because every real
+    source is called that, so an open without `driver="GTiff"` anywhere brings
+    back every bypass this module closed. It was retyped at five call sites and
+    enforced at none.
+
+    ENTORNO_GDAL was documented as the thing that stops sibling probing, but only
+    two scripts applied it, by convention. Measured with it absent: the guard
+    passed a tile, GDAL probed 48 sibling paths, found a hostile `.ovr` and
+    opened it WITHOUT a pinned driver -- `exigir_sin_overview_externo` never saw
+    it, because it arrived by sibling probe rather than by OVERVIEW_FILE.
+
+    Applied through `rasterio.Env` rather than `os.environ`, so it covers the
+    lazy /vsicurl reads that happen inside the `with`, and so importing this
+    module does not rewrite the caller's environment as a side effect.
+    """
+    import rasterio
+
+    with rasterio.Env(**ENTORNO_GDAL):
+        with rasterio.open(ruta, driver="GTiff", **opciones) as ds:
+            yield ds
 
 
 def a_vsicurl(fuente: str) -> str:
@@ -149,9 +221,7 @@ def exigir_sin_overview_externo(ruta: str) -> None:
     document from inside itself. A flat open sees the item without fetching it,
     so refusing costs nothing.
     """
-    import rasterio
-
-    with rasterio.open(ruta, driver="GTiff") as ds:
+    with abrir_tesela(ruta) as ds:
         etiquetas = ds.tags(ns="OVERVIEWS")
     if etiquetas:
         raise ValueError(
@@ -243,8 +313,9 @@ def exigir_fuentes_del_espejo(url_https: str, timeout: int = 60) -> list[str]:
     if not url_https.startswith(PREFIJO_HTTPS):
         raise ValueError(f"{url_https}: la URL no esta bajo {PREFIJO_HTTPS!r}")
 
-    # fixed https prefix, checked above and again on the response
-    with urllib.request.urlopen(url_https, timeout=timeout) as r:  # nosec B310
+    # Redirects are refused before they are followed; the check on r.url stays as
+    # a second reading of the same rule, in case a handler is ever bypassed.
+    with abrir_url(url_https, PREFIJO_HTTPS, timeout) as r:
         if not r.url.startswith(PREFIJO_HTTPS):
             raise ValueError(f"{url_https}: redirigido fuera del espejo, a {r.url!r}")
         fuentes = fuentes_del_vrt(leer_acotado(r, LIMITE_VRT))

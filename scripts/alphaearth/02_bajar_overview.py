@@ -28,12 +28,15 @@ from __future__ import annotations
 
 import os
 
-from comun import (ENTORNO_GDAL, a_vsicurl, bordes_north_up,
+from comun import (ENTORNO_GDAL, a_vsicurl, abrir_tesela, bordes_north_up,
                    exigir_fuentes_del_espejo, exigir_sin_overview_externo,
                    leer_ventana_north_up)
 
-# Set before rasterio pulls in GDAL, so the timeouts are already in force for
-# the requests the driver makes at open() -- not just the ones at read().
+# Second layer, not the enforcement: `abrir_tesela` wraps every open in
+# rasterio.Env(**ENTORNO_GDAL), which is what actually guarantees these are in
+# force. This stays because it covers any rasterio call that does NOT go
+# through it, and it is set before rasterio pulls in GDAL so the timeouts hold
+# for the requests the driver makes at open(), not just at read().
 os.environ.update(ENTORNO_GDAL)
 
 import sys
@@ -41,7 +44,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import rasterio
 
 BASE_HTTPS = ("https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
               "tge-labs/aef/v1/annual/{anio}/14N/")
@@ -88,8 +90,7 @@ def main(anio: int = 2024) -> None:
     # A global 160 m grid anchored on the western tile's top-left corner, so
     # both tiles land on the same lattice and the mosaic cannot be off by a
     # pixel where they meet.
-    with rasterio.open(rutas[TESELAS[0]], driver="GTiff",
-                       OVERVIEW_LEVEL=NIVEL_OVERVIEW) as ds0:
+    with abrir_tesela(rutas[TESELAS[0]], OVERVIEW_LEVEL=NIVEL_OVERVIEW) as ds0:
         if abs(ds0.res[0] - RES) > 1e-6:
             raise RuntimeError(f"resolucion inesperada {ds0.res}, se esperaba {RES} m")
         e0, n0, _, _ = bordes_north_up(ds0)
@@ -107,8 +108,7 @@ def main(anio: int = 2024) -> None:
 
     for nombre in TESELAS:
         t0 = time.time()
-        with rasterio.open(rutas[nombre], driver="GTiff",
-                           OVERVIEW_LEVEL=NIVEL_OVERVIEW) as ds:
+        with abrir_tesela(rutas[nombre], OVERVIEW_LEVEL=NIVEL_OVERVIEW) as ds:
             oeste_t, norte_t, _, _ = bordes_north_up(ds)
             # Offset of this tile's grid within the global one.
             dcol = int(round((oeste_t - e0) / RES))

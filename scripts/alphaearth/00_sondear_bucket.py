@@ -10,12 +10,11 @@ called "us-west-2.opendata.source.coop", not a hostname. The HTTPS form is
 path-style against the regional S3 endpoint.
 """
 
-import urllib.request
 # Same justification as the ET.fromstring call below. The marker stays bare:
 # bandit reads every word after the ID as a test name and warns once per word.
 import xml.etree.ElementTree as ET  # nosec B405
 
-from comun import LIMITE_LISTADO, leer_acotado
+from comun import LIMITE_LISTADO, abrir_url, leer_acotado
 
 BUCKET = "us-west-2.opendata.source.coop"
 ENDPOINTS = [
@@ -29,8 +28,8 @@ def listar(url: str, prefix: str, delimiter: str = "/", max_keys: int = 30):
     full = f"{url}?list-type=2&prefix={prefix}&delimiter={delimiter}&max-keys={max_keys}"
     print(f"\n--- {full}")
     try:
-        # fixed https host
-        with urllib.request.urlopen(full, timeout=30) as r:  # nosec B310
+        # Redirects out of this endpoint are refused before they are followed.
+        with abrir_url(full, url, timeout=30) as r:
             cuerpo = leer_acotado(r, LIMITE_LISTADO)
     except Exception as e:  # noqa: BLE001 - probing, any failure is informative
         print(f"    FALLO: {type(e).__name__}: {e}")

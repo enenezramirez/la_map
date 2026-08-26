@@ -20,19 +20,21 @@ from __future__ import annotations
 
 import os
 
-from comun import (ENTORNO_GDAL, a_vsicurl, bordes_north_up,
+from comun import (ENTORNO_GDAL, a_vsicurl, abrir_tesela, bordes_north_up,
                    exigir_fuentes_del_espejo, exigir_sin_overview_externo,
                    leer_ventana_north_up)
 
-# Set before rasterio pulls in GDAL, so the timeouts are already in force for
-# the requests the driver makes at open() -- not just the ones at read().
+# Second layer, not the enforcement: `abrir_tesela` wraps every open in
+# rasterio.Env(**ENTORNO_GDAL), which is what actually guarantees these are in
+# force. This stays because it covers any rasterio call that does NOT go
+# through it, and it is set before rasterio pulls in GDAL so the timeouts hold
+# for the requests the driver makes at open(), not just at read().
 os.environ.update(ENTORNO_GDAL)
 
 import sys
 from pathlib import Path
 
 import numpy as np
-import rasterio
 
 DATOS = Path(__file__).resolve().parents[2] / "raw_data" / "alphaearth"
 NPZ = DATOS / "aef_overview_2024.npz"
@@ -85,7 +87,7 @@ def main() -> None:
     print(f"\n=== B. contraste contra resolucion plena ===")
     print(f"  pixel de overview [{iy},{ix}] -> centro E {e_px:,.0f} N {n_px:,.0f}")
 
-    with rasterio.open(ruta, driver="GTiff") as ds:
+    with abrir_tesela(ruta) as ds:
         oeste_t, norte_t, _, _ = bordes_north_up(ds)
         col = int((e_px - oeste_t) / ds.res[0])
         fila = int((norte_t - n_px) / ds.res[1])
@@ -109,7 +111,7 @@ def main() -> None:
     # Control: the same overview pixel against the vertically mirrored location.
     # Still addressed north-up, so this is a real place on the map and not an
     # artefact of the file's row order -- which is the whole point of the test.
-    with rasterio.open(ruta, driver="GTiff") as ds:
+    with abrir_tesela(ruta) as ds:
         f_espejo = ds.height - f0 - FACTOR
         espejo = leer_ventana_north_up(ds, c0, f_espejo, FACTOR, FACTOR)
     ve = dequantizar(espejo)

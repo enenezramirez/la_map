@@ -26,7 +26,8 @@ import xml.etree.ElementTree as ET  # nosec B405
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from comun import LIMITE_LISTADO, MAX_PAGINAS, MAX_TESELAS, leer_acotado
+from comun import (LIMITE_LISTADO, MAX_PAGINAS, MAX_TESELAS, abrir_url,
+                   leer_acotado)
 
 BUCKET = "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
 PREFIJO = "tge-labs/aef/v1/annual/{anio}/14N/"
@@ -62,8 +63,8 @@ def listar_vrts(anio: int) -> list[str]:
         url = f"{BUCKET}?list-type=2&prefix={prefijo}&max-keys=1000"
         if token:
             url += "&continuation-token=" + urllib.parse.quote(token, safe="")
-        # fixed https host
-        with urllib.request.urlopen(url, timeout=60) as r:  # nosec B310
+        # Redirects out of the bucket are refused before they are followed.
+        with abrir_url(url, BUCKET, timeout=60) as r:
             # This is AWS S3's own ListObjectsV2 response, fetched over TLS from
             # a hard-coded host. stdlib ElementTree resolves no external
             # entities, so XXE does not apply; the residual risk is
@@ -90,8 +91,8 @@ def leer_cabecera(clave: str, bytes_cabecera: int = 1400) -> Tesela | None:
     peticion = urllib.request.Request(
         BUCKET + clave, headers={"Range": f"bytes=0-{bytes_cabecera}"}
     )
-    # fixed https host
-    with urllib.request.urlopen(peticion, timeout=60) as r:  # nosec B310
+    # Redirects out of the bucket are refused before they are followed.
+    with abrir_url(peticion, BUCKET, timeout=60) as r:
         # Range: asks, it does not oblige -- a server may answer 200 with the
         # whole 27 KB file, or more. Bound the read to what was requested.
         texto = leer_acotado(r, bytes_cabecera + 1).decode("utf-8", "replace")
