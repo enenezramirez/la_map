@@ -408,9 +408,10 @@ body {
     font-weight: 500;
 }
 
-/* The same notice inside the help body, where the episode behind it is told in
-   full. Marked rather than merged into the surrounding paragraphs so it stays
-   findable when the disclosure is opened for some other reason. */
+/* The episode behind the pinned notice, told in full inside its own disclosure.
+   It keeps the accent rule even though it is now the sole content of that body:
+   the rule is what visually ties it back to the one-line .legend-caveat pinned
+   beside the ramp, so a reader recognises the two as the same warning. */
 .help-caveat {
     margin-top: 8px;
     padding: 8px 0 8px 10px;
