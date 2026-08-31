@@ -86,6 +86,34 @@ DATA_DIR = Path("data")
 # the AGEB polygons at the map's zoom levels.
 TOLERANCIA_SIMPLIFICACION = 0.00005
 
+# Decimal places kept for coordinates on export. GDAL writes the full float64
+# precision when this is not set, which is ~15 decimals: sub-nanometre detail on
+# geometry that was just simplified to ~5 m above. Trimming it removes about a
+# quarter of every layer's bytes -- worth having in a file the browser downloads
+# whole on every visit. data/ goes from 4.42 MB to 3.54 MB. Written through
+# `exportar_geojson` so a new export cannot forget it.
+#
+# Do not read "6" as "11 cm". GDAL's COORDINATE_PRECISION is not a plain round:
+# it picks the shortest representation it considers within tolerance, so a value
+# sitting near a round number moves further than the decimal count implies.
+# Measured: -100.999995009 is written as -101.0, which is 4.99e-06 deg -- about
+# 55 cm, ten times the 5 cm a naive reading predicts. Across all five layers the
+# worst genuine vertex shift is 55.6 cm, on 2 of 2136 chemical-risk polygons;
+# every other vertex stays under 7.7 cm.
+#
+# It also drops vertices that collide once rounded, and that is worth knowing
+# before raising it back: AGEB 0503000013740 (EL DIVISADERO) carried a spike --
+# two vertices 3.3 cm apart, each ~26 m from its neighbours, so the boundary ran
+# out 26 m, turned around within 3.3 cm and came back. Rounding merged the pair
+# and the needle went with it: 2.86 m2 of a 1,288,112 m2 sector, and 52 m off a
+# perimeter that was tracing a digitising artefact.
+#
+# Both effects sit an order of magnitude inside TOLERANCIA_SIMPLIFICACION, which
+# already moves every boundary by up to 5 m and is documented as acceptable, so
+# 6 stands. If a future layer needs the guarantee rather than the bytes, 7 caps
+# the worst shift at 7.5 cm and keeps the spike, for 100 KB more.
+DECIMALES_COORDENADA = 6
+
 # The Census and DENUE files are published per state, and these used to be two
 # constants spelling Coahuila's code (05) into the path. That was the single
 # thing keeping the pipeline in one state: everything else already derives from
@@ -305,6 +333,18 @@ MUNICIPIOS_AGEB: dict[str, list[Path]] = {
         RAW_DATA / "marco_geoestadistico" / "arteaga_map_ageb" / "050040107",  # San Antonio de las Alazanas (sierra)
     ],
 }
+
+
+def exportar_geojson(gdf: gpd.GeoDataFrame, salida: Path) -> None:
+    """
+    Write a GeoDataFrame to GeoJSON with the project's coordinate precision.
+
+    Every GeoJSON this pipeline produces goes through here rather than calling
+    `to_file` directly: `COORDINATE_PRECISION` is a driver option, so a plain
+    `to_file` silently falls back to full float64 precision and inflates the
+    layer by ~20% without failing or warning. See `DECIMALES_COORDENADA`.
+    """
+    gdf.to_file(salida, driver="GeoJSON", COORDINATE_PRECISION=DECIMALES_COORDENADA)
 
 
 def municipios_por_entidad() -> dict[str, set[str]]:
@@ -1184,7 +1224,7 @@ def exportar_capa_riesgo(
     gdf["FECHA"] = IMPLAN_FECHA_CORTE
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    gdf.to_file(salida, driver="GeoJSON")
+    exportar_geojson(gdf, salida)
     tamano_kb = salida.stat().st_size / 1024
     print(
         f"  Risk layer exported: {salida} "
@@ -1345,7 +1385,7 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     salida = DATA_DIR / "indice_inversion.geojson"
-    gdf_final.to_file(salida, driver="GeoJSON")
+    exportar_geojson(gdf_final, salida)
 
     tamano_kb = salida.stat().st_size / 1024
     print(f"\nFinal layer exported: {salida} ({len(gdf_final)} AGEBs, {tamano_kb:.1f} KB)")
@@ -1383,7 +1423,7 @@ def exportar_capa_servicios_basicos(gdf_ageb_servicios: gpd.GeoDataFrame) -> gpd
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     salida = DATA_DIR / "servicios_basicos.geojson"
-    gdf_final.to_file(salida, driver="GeoJSON")
+    exportar_geojson(gdf_final, salida)
 
     tamano_kb = salida.stat().st_size / 1024
     print(f"\nFinal layer exported: {salida} ({len(gdf_final)} AGEBs, {tamano_kb:.1f} KB)")
@@ -1481,7 +1521,7 @@ if __name__ == "__main__":
     gdf_agebs = filtrar_agebs_por_municipio()
 
     salida = PROCESSED_DIR / "ageb_filtrado.geojson"
-    gdf_agebs.to_file(salida, driver="GeoJSON")
+    exportar_geojson(gdf_agebs, salida)
     print(f"\nSaved (intermediate, not the final layer): {salida}")
 
     print("\nProcessing basic-services data from the 2020 Census...")
@@ -1497,7 +1537,7 @@ if __name__ == "__main__":
     gdf_ageb_servicios = integrar_censo_a_ageb(gdf_agebs, df_servicios, df_colonias)
 
     salida_servicios = PROCESSED_DIR / "ageb_con_servicios.geojson"
-    gdf_ageb_servicios.to_file(salida_servicios, driver="GeoJSON")
+    exportar_geojson(gdf_ageb_servicios, salida_servicios)
     print(f"Saved (intermediate, not the final layer): {salida_servicios}")
 
     exportar_capa_servicios_basicos(gdf_ageb_servicios)
