@@ -19,11 +19,15 @@ from __future__ import annotations
 import re
 import urllib.parse
 import urllib.request
-# nosec B405 - see the note on ET.fromstring below; stdlib ElementTree is used
-# deliberately rather than adding defusedxml for a one-off local script.
+# See the note on ET.fromstring below; stdlib ElementTree is used deliberately
+# rather than adding defusedxml for a one-off local script. The marker stays
+# bare: bandit reads every word after the ID as a test name and warns per word.
 import xml.etree.ElementTree as ET  # nosec B405
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+
+from comun import (LIMITE_LISTADO, MAX_PAGINAS, MAX_TESELAS, abrir_url,
+                   leer_acotado)
 
 BUCKET = "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
 PREFIJO = "tge-labs/aef/v1/annual/{anio}/14N/"
@@ -55,17 +59,18 @@ def listar_vrts(anio: int) -> list[str]:
     prefijo = PREFIJO.format(anio=anio)
     claves: list[str] = []
     token = None
-    while True:
+    for _ in range(MAX_PAGINAS):
         url = f"{BUCKET}?list-type=2&prefix={prefijo}&max-keys=1000"
         if token:
             url += "&continuation-token=" + urllib.parse.quote(token, safe="")
-        with urllib.request.urlopen(url, timeout=60) as r:  # nosec B310 - fixed https host
-            # nosec B314 - this is AWS S3's own ListObjectsV2 response, fetched
-            # over TLS from a hard-coded host. stdlib ElementTree resolves no
-            # external entities, so XXE does not apply; the residual risk is
+        # Redirects out of the bucket are refused before they are followed.
+        with abrir_url(url, BUCKET, timeout=60) as r:
+            # This is AWS S3's own ListObjectsV2 response, fetched over TLS from
+            # a hard-coded host. stdlib ElementTree resolves no external
+            # entities, so XXE does not apply; the residual risk is
             # entity-expansion DoS from a hostile response, whose blast radius
             # is a local one-off analysis script. Not worth a dependency.
-            arbol = ET.fromstring(r.read())  # nosec B314
+            arbol = ET.fromstring(leer_acotado(r, LIMITE_LISTADO))  # nosec B314
         for contenido in arbol.iter():
             if contenido.tag.endswith("}Contents"):
                 for hijo in contenido:
@@ -75,6 +80,10 @@ def listar_vrts(anio: int) -> list[str]:
                       if e.tag.endswith("}NextContinuationToken")), None)
         if not token:
             return claves
+    raise RuntimeError(
+        f"el listado sigue paginando tras {MAX_PAGINAS} paginas y "
+        f"{len(claves):,} claves; 14N deberia caber en una."
+    )
 
 
 def leer_cabecera(clave: str, bytes_cabecera: int = 1400) -> Tesela | None:
@@ -82,8 +91,11 @@ def leer_cabecera(clave: str, bytes_cabecera: int = 1400) -> Tesela | None:
     peticion = urllib.request.Request(
         BUCKET + clave, headers={"Range": f"bytes=0-{bytes_cabecera}"}
     )
-    with urllib.request.urlopen(peticion, timeout=60) as r:  # nosec B310 - fixed https host
-        texto = r.read().decode("utf-8", "replace")
+    # Redirects out of the bucket are refused before they are followed.
+    with abrir_url(peticion, BUCKET, timeout=60) as r:
+        # Range: asks, it does not oblige -- a server may answer 200 with the
+        # whole 27 KB file, or more. Bound the read to what was requested.
+        texto = leer_acotado(r, bytes_cabecera + 1).decode("utf-8", "replace")
 
     dims = re.search(r'rasterXSize="(\d+)"\s+rasterYSize="(\d+)"', texto)
     gt = re.search(r"<GeoTransform>([^<]+)</GeoTransform>", texto)
@@ -114,6 +126,11 @@ def main(anio: int = 2024) -> None:
     print(f"  ({(este - oeste) / 1000:.1f} x {(norte - sur) / 1000:.1f} km)")
 
     claves = listar_vrts(anio)
+    if len(claves) > MAX_TESELAS:
+        raise RuntimeError(
+            f"{len(claves):,} claves supera el tope de {MAX_TESELAS:,}; "
+            "14N tenia 520 y cada una cuesta una peticion."
+        )
     print(f"\n{len(claves)} VRTs en {anio}/14N; leyendo cabeceras...")
     with ThreadPoolExecutor(max_workers=12) as pool:
         teselas = [t for t in pool.map(leer_cabecera, claves) if t]

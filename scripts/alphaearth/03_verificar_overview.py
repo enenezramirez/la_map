@@ -20,25 +20,26 @@ from __future__ import annotations
 
 import os
 
-os.environ.update({
-    "AWS_NO_SIGN_REQUEST": "YES",
-    "AWS_REGION": "us-west-2",
-    "AWS_DEFAULT_REGION": "us-west-2",
-    "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
-    "GDAL_HTTP_MAX_RETRY": "2",
-})
+from comun import (ENTORNO_GDAL, a_vsicurl, abrir_tesela, bordes_north_up,
+                   exigir_fuentes_del_espejo, exigir_sin_overview_externo,
+                   leer_ventana_north_up)
+
+# Second layer, not the enforcement: `abrir_tesela` wraps every open in
+# rasterio.Env(**ENTORNO_GDAL), which is what actually guarantees these are in
+# force. This stays because it covers any rasterio call that does NOT go
+# through it, and it is set before rasterio pulls in GDAL so the timeouts hold
+# for the requests the driver makes at open(), not just at read().
+os.environ.update(ENTORNO_GDAL)
 
 import sys
 from pathlib import Path
 
 import numpy as np
-import rasterio
-from rasterio.windows import Window
 
 DATOS = Path(__file__).resolve().parents[2] / "raw_data" / "alphaearth"
 NPZ = DATOS / "aef_overview_2024.npz"
-BASE = ("/vsicurl/https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
-        "tge-labs/aef/v1/annual/2024/14N/")
+BASE_HTTPS = ("https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
+              "tge-labs/aef/v1/annual/2024/14N/")
 TESELA_OESTE = "xluefwwtrb3tded2n-0000000000-0000008192.vrt"
 FACTOR = 16
 
@@ -49,6 +50,12 @@ def dequantizar(bruto: np.ndarray) -> np.ndarray:
 
 
 def main() -> None:
+    # Same as step 2: validate the VRT, then open the .tiff it declares, with
+    # the driver pinned -- GDAL opens one document and nothing chooses another.
+    fuentes = exigir_fuentes_del_espejo(BASE_HTTPS + TESELA_OESTE)
+    ruta = a_vsicurl(fuentes[0])
+    exigir_sin_overview_externo(ruta)
+
     d = np.load(NPZ)
     bruto, cubierto = d["bruto"], d["cubierto"]
     origen_e, origen_n, res = float(d["origen_e"]), float(d["origen_n"]), float(d["res"])
@@ -80,16 +87,12 @@ def main() -> None:
     print(f"\n=== B. contraste contra resolucion plena ===")
     print(f"  pixel de overview [{iy},{ix}] -> centro E {e_px:,.0f} N {n_px:,.0f}")
 
-    with rasterio.open(BASE + TESELA_OESTE) as ds:
-        # A raise, not an assert: `python -O` strips asserts, and this is the
-        # guard against the bottom-up storage -- the one failure mode here that
-        # yields a plausible wrong answer rather than an error.
-        if ds.bounds.top <= ds.bounds.bottom:
-            raise RuntimeError(f"{TESELA_OESTE}: vino bottom-up, no north-up")
-        col = int((e_px - ds.bounds.left) / ds.res[0])
-        fila = int((ds.bounds.top - n_px) / ds.res[1])
+    with abrir_tesela(ruta) as ds:
+        oeste_t, norte_t, _, _ = bordes_north_up(ds)
+        col = int((e_px - oeste_t) / ds.res[0])
+        fila = int((norte_t - n_px) / ds.res[1])
         c0, f0 = (col // FACTOR) * FACTOR, (fila // FACTOR) * FACTOR
-        plena = ds.read(window=Window(c0, f0, FACTOR, FACTOR))
+        plena = leer_ventana_north_up(ds, c0, f0, FACTOR, FACTOR)
         print(f"  leidos {FACTOR}x{FACTOR} px a 10 m bajo ese pixel "
               f"(cols {c0}..{c0 + FACTOR}, filas {f0}..{f0 + FACTOR})")
 
@@ -106,9 +109,11 @@ def main() -> None:
     print(f"  coseno( overview , media renormalizada de los 10 m ) = {coseno:.6f}")
 
     # Control: the same overview pixel against the vertically mirrored location.
-    with rasterio.open(BASE + TESELA_OESTE) as ds:
+    # Still addressed north-up, so this is a real place on the map and not an
+    # artefact of the file's row order -- which is the whole point of the test.
+    with abrir_tesela(ruta) as ds:
         f_espejo = ds.height - f0 - FACTOR
-        espejo = ds.read(window=Window(c0, f_espejo, FACTOR, FACTOR))
+        espejo = leer_ventana_north_up(ds, c0, f_espejo, FACTOR, FACTOR)
     ve = dequantizar(espejo)
     ve = ve[:, ~(espejo == -128).all(axis=0)]
     if ve.shape[1]:

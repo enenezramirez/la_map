@@ -10,9 +10,11 @@ called "us-west-2.opendata.source.coop", not a hostname. The HTTPS form is
 path-style against the regional S3 endpoint.
 """
 
-import urllib.request
-# nosec B405 - same justification as the ET.fromstring call below.
+# Same justification as the ET.fromstring call below. The marker stays bare:
+# bandit reads every word after the ID as a test name and warns once per word.
 import xml.etree.ElementTree as ET  # nosec B405
+
+from comun import LIMITE_LISTADO, abrir_url, leer_acotado
 
 BUCKET = "us-west-2.opendata.source.coop"
 ENDPOINTS = [
@@ -26,17 +28,18 @@ def listar(url: str, prefix: str, delimiter: str = "/", max_keys: int = 30):
     full = f"{url}?list-type=2&prefix={prefix}&delimiter={delimiter}&max-keys={max_keys}"
     print(f"\n--- {full}")
     try:
-        with urllib.request.urlopen(full, timeout=30) as r:  # nosec B310 - fixed https host
-            cuerpo = r.read()
+        # Redirects out of this endpoint are refused before they are followed.
+        with abrir_url(full, url, timeout=30) as r:
+            cuerpo = leer_acotado(r, LIMITE_LISTADO)
     except Exception as e:  # noqa: BLE001 - probing, any failure is informative
         print(f"    FALLO: {type(e).__name__}: {e}")
         return None
 
     try:
-        # nosec B314 - AWS S3's own ListObjectsV2 XML, over TLS from a
-        # hard-coded host. stdlib ElementTree resolves no external entities, so
-        # XXE does not apply; the residual entity-expansion DoS would take down
-        # a local one-off script. Not worth adding defusedxml.
+        # AWS S3's own ListObjectsV2 XML, over TLS from a hard-coded host.
+        # stdlib ElementTree resolves no external entities, so XXE does not
+        # apply; the residual entity-expansion DoS would take down a local
+        # one-off script. Not worth adding defusedxml.
         raiz = ET.fromstring(cuerpo)  # nosec B314
     except ET.ParseError:
         print(f"    no es XML: {cuerpo[:200]!r}")
