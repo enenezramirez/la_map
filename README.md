@@ -55,7 +55,13 @@ Open `http://localhost:8000` in your browser.
 > under `Microsoft-Windows-CodeIntegrity/Operational` as
 > `An Application Control policy has blocked this file`. **0.12.0 loads.** Same story for
 > `rasterio` (used only by the archived AlphaEarth scripts): pin **1.5.0**, not 1.5.1.
-> This is a reputation gate, not a code defect: nothing here needs GDAL 0.13.
+> This is a reputation gate, not a code defect: nothing here needs `pyogrio` 0.13.
+>
+> **Retry before concluding a version is blocked.** Reputation is not a stable verdict: on
+> 2026-09-16 the pinned `rasterio` 1.5.0 was blocked once (`libpng16-*.dll`, same log) and
+> imported normally a few minutes later, with nothing changed. And do not test a build by
+> copying its DLLs elsewhere and loading them: that day the copies of the blocked DLLs
+> loaded fine, so the test cannot tell a blocked build from a good one.
 
 ## Structure
 
