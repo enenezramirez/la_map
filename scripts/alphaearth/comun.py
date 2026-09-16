@@ -403,7 +403,6 @@ def abrir_tesela(url: str, prefijo: str = PREFIJO_HTTPS, **opciones):
     """
     import rasterio
     from rasterio.abc import FileContainer
-    from rasterio.errors import RasterioIOError
 
     FileContainer.register(_TeselaDelEspejo)
     if not url.startswith(prefijo):
@@ -425,8 +424,12 @@ def abrir_tesela(url: str, prefijo: str = PREFIJO_HTTPS, **opciones):
             with rasterio.open(NOMBRE_TESELA, driver="GTiff", opener=tesela,
                                **opciones) as ds:
                 yield ds
-    except RasterioIOError as e:
-        if tesela.fallo is not None:
+    # Any failure, not only RasterioIOError: a review found a refused range
+    # during an OVERVIEW_LEVEL open surfacing as a bare SystemError ("returned a
+    # result with an exception set"), because the callback's exception stays
+    # pending inside GDAL. It still failed closed, but said nothing useful.
+    except Exception as e:
+        if tesela.fallo is not None and e is not tesela.fallo:
             raise tesela.fallo from e
         raise
 

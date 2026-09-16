@@ -158,7 +158,7 @@ each guard has a control showing the test can see the attack:
 | mirror 302s the `.tiff`, **opener** | **0** | refused, naming the redirect |
 | absolute `Location` with `/../` under the prefix, **opener** | **0** | refused |
 | mirror serves the `.tiff` directly (control) | 0 | opens, correct pixel |
-| sibling probing re-enabled, **opener** | **0** | GDAL asked for `.aux.xml`, `.msk`, `.xml`, `.XML` — all answered "no such file" locally |
+| sibling probing re-enabled, **opener** | **0** | GDAL asked for sidecar names (`.aux.xml`, `.aux`, `.msk`, `.xml`… four in one run, eight in the review's) — all answered "no such file" locally |
 | server ignores `Range` and answers 200 | 0 | refused before reading a body |
 | file changes size between two ranges | 0 | refused |
 
