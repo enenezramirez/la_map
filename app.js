@@ -302,7 +302,14 @@ function crearEstiloRiesgo() {
         // not less: there are 1,358 flood zones and 2,136 chemical ones against
         // 431 AGEBs, so far more outline per screen.
         weight: pesoBorde(),
-        color: 'rgba(255, 255, 255, 0.25)',
+        // Was rgba(255,255,255,0.25), and that failed on BOTH basemaps -- 1.47:1
+        // over the dark one, 1.07 over the light -- because a translucent border
+        // blends toward its own fill. The opaque-white fix that closed this for
+        // the AGEB outline never reached here. Same rule now: 3.80 dark, 5.18
+        // light. It does make the outline read harder at z>=13, where the weight
+        // stops being 0; that is a visible change, not a silent one.
+        color: colorBorde(),
+        opacity: 1,
         fillOpacity: 0.6
     });
 }
@@ -330,22 +337,35 @@ const AYUDA_RIESGO = {
         omite: 'Se omite el nivel «Muy bajo», que es el fondo del modelo y cubre casi toda la mancha urbana.',
         indice: 'Es la única capa de riesgo que penaliza el Índice de Inversión.',
         // The most serious caveat attached to any layer in this project, and it
-        // is measured rather than inferred (DATOS.md 2.4). It is split in two on
-        // purpose. The short half is pinned to the legend, because the reader it
-        // protects is the one comparing zones who never opens the help and takes
-        // a blank map for a safe one; the long half — the episode itself, and
-        // what it does and does not establish — lives inside the disclosure,
-        // where there is room to say it without overstating it.
+        // is measured rather than inferred (DATOS.md 2.4; 3.8 for the cause). It
+        // is split in two on purpose. The short half is pinned to the legend,
+        // because the reader it protects is the one comparing zones who never
+        // opens the help and takes a blank map for a safe one; the long half —
+        // the episode itself, and what it does and does not establish — lives
+        // in its own disclosure below, where there is room to say it without
+        // overstating it. The pinned half now names which chapter this layer is:
+        // "pluvial, not arroyo" is what changes the conclusion a reader draws
+        // from an unmarked zone, so it cannot wait behind a click.
         advertencia: {
             lead: 'La ausencia de zona marcada no es evidencia de ausencia de inundación.',
-            cuerpo: 'En julio de 2025 se inundaron colonias que esta capa deja limpias.'
+            cuerpo: 'Esta capa es solo la inundación pluvial: el desbordamiento de arroyos va en otro capítulo del Atlas que aquí no se publica. En julio de 2025 se inundaron colonias que esta capa deja limpias.'
         },
-        limitacion: [
-            'En julio de 2025 se inundaron colonias que este mismo Atlas 2024 clasifica en sus niveles más bajos: Omega llegó a 1.30 m de agua y en esta capa no tiene ni una zona marcada; Terranova, con 1 m, aparece solo como «Bajo» en el 13% de su superficie.',
-            'Ninguna de las 16 colonias reportadas alcanza un solo metro clasificado «Alto» ni «Muy alto». Y como se omite «Muy bajo», una colonia clasificada así se dibuja completamente limpia — que es exactamente lo que le ocurre a Omega.',
-            'Esto establece que la clasificación publicada subrepresenta inundaciones ocurridas en lugares concretos; no establece por qué. El periodo de retorno modelado, las obras o construcciones posteriores y la diferencia entre inundación pluvial y por arroyo son todas candidatas, y nada aquí las distingue.',
-            'Episodio reportado por Vanguardia el 24 de julio de 2025; el cruce contra esta capa está documentado en la bitácora de datos del proyecto.'
-        ]
+        // Its own disclosure, not a tail on the levels one. Measured before
+        // splitting: the levels disclosure ran 1,083 px — 1.56 viewports — and
+        // 59% of it was this episode, under a label that promises what «Medio»
+        // means. The reader who came for the scale got an essay on something
+        // else, and the reader who came for the episode had to scroll past the
+        // scale. Two labels, each answering the question it asks.
+        limitacion: {
+            resumen: '¿Por qué esta capa deja limpias colonias que sí se inundaron?',
+            parrafos: [
+                'En julio de 2025 se inundaron colonias que este mismo Atlas 2024 clasifica en sus niveles más bajos: Omega llegó a 1.30 m de agua y en esta capa no tiene ni una zona marcada; Terranova, con 1 m, aparece solo como «Bajo» en el 13% de su superficie.',
+                'Ninguna de las 16 colonias reportadas alcanza un solo metro clasificado «Alto» ni «Muy alto». Y como se omite «Muy bajo», una colonia clasificada así se dibuja completamente limpia — que es exactamente lo que le ocurre a Omega.',
+                'Esto establece que la clasificación publicada subrepresenta inundaciones ocurridas en lugares concretos, y el Atlas mismo explica buena parte de por qué: modela el desbordamiento de arroyos en un capítulo aparte, «Inundaciones fluviales», que clasifica por tirante de agua y corre periodos de retorno desde 5 años — el escenario más frecuente. Lo que se publica en esta capa es el capítulo pluvial y de encharcamientos.',
+                'Dos de las colonias inundadas están sobre el Arroyo del Pueblo o junto a él — Nazario Ortiz Garza a 0 m del cauce mapeado por INEGI y Omega a 417 m —, y es una de las corrientes que ese otro capítulo modela; el Atlas atribuye estos desastres a «la invasión y alteración de los cauces». Country Club y Terranova, a 2 km o más del arroyo con nombre más cercano, no quedan explicadas por esta vía.',
+                'Episodio reportado por Vanguardia el 24 de julio de 2025; el cruce contra esta capa y la lectura de los documentos del Atlas están documentados en la bitácora de datos del proyecto.'
+            ]
+        }
     },
     deslizamientos: {
         mide: 'Movimiento de material ladera abajo sobre una superficie de falla (traslacional).',
@@ -366,6 +386,19 @@ const AYUDA_RIESGO = {
 // — and here it would throw inside cargarCapaRiesgo's `.then()`, whose `.catch`
 // only logs: the switch would stay checked and do nothing, with one console
 // line to show for it. A half-filled entry degrades to no caveat instead.
+// The episode disclosure reads `limitacion.resumen` and `limitacion.parrafos`,
+// so this checks those and nothing else. Deliberately independent of
+// `advertenciaDeRiesgo`: coupling a block to a field it never renders is the
+// shape that already cost this repo a Medium finding, when counting risk layers
+// per group could silently drop the shared-ramp notice. A half-filled entry
+// renders no second disclosure instead of one labelled with an empty string.
+function limitacionDeRiesgo(clave) {
+    const ayuda = AYUDA_RIESGO[clave];
+    const lim = ayuda && ayuda.limitacion;
+    return lim && typeof lim.resumen === 'string' && lim.resumen
+        && Array.isArray(lim.parrafos) && lim.parrafos.length ? lim : null;
+}
+
 function advertenciaDeRiesgo(clave) {
     const ayuda = AYUDA_RIESGO[clave];
     const adv = ayuda && ayuda.advertencia;
@@ -385,13 +418,18 @@ function htmlAyudaRiesgo(clave, conteos) {
     // the mildest one shown for chemical risk.
     const peor = presentes[0];
     // Only a layer whose blank areas have been measured against a real event
-    // earns this block; the rest render nothing here.
-    const adv = advertenciaDeRiesgo(clave);
-    const limitacion = adv && Array.isArray(a.limitacion) && a.limitacion.length
-        ? `<div class="help-caveat">
-               <p><strong>${esc(adv.lead)}</strong></p>
-               ${a.limitacion.map(p => `<p>${esc(p)}</p>`).join('')}
-           </div>`
+    // earns this block; the rest render nothing here. It gets its own
+    // disclosure so neither label has to promise what the other one answers.
+    const lim = limitacionDeRiesgo(clave);
+    const limitacion = lim
+        ? `<details class="legend-help">
+               <summary>${esc(lim.resumen)}</summary>
+               <div class="legend-help-body">
+                   <div class="help-caveat">
+                       ${lim.parrafos.map(p => `<p>${esc(p)}</p>`).join('')}
+                   </div>
+               </div>
+           </details>`
         : '';
     return `
         <details class="legend-help">
@@ -407,11 +445,11 @@ function htmlAyudaRiesgo(clave, conteos) {
                    al «Medio» de otra.</p>
                 <p>${esc(a.omite)}</p>
                 <p>${esc(a.indice)}</p>
-                ${limitacion}
                 <p>Es un modelo a escala urbana para comparar zonas, <strong>no un estudio de sitio</strong>:
                    no sustituye un dictamen para un predio concreto. Cubre solo el municipio de Saltillo.</p>
             </div>
         </details>
+        ${limitacion}
     `;
 }
 
@@ -584,6 +622,23 @@ function crearFuncionColor(obtenerEscalones) {
    zoom where a sector is a few pixels across there is nothing to delimit, so it
    thins out and then goes. These weights hold the outline near 12-18% of the
    shape at every zoom where it is drawn at all. */
+// Border colour is a function of the basemap under it, for the same kind of
+// measured reason the weight is a function of zoom. Every opaque grey was swept
+// against all 16 fills actually on the map, each composited over its basemap:
+// over the dark one only SEVEN clear 3:1 (#f9 through #ff), so white was very
+// nearly forced; over the light one FIFTY do (#00 through #31) -- and white is
+// not among them. It lands at 1.26:1 there, which is to say the border stops
+// delimiting anything the moment a reader switches base, which is exactly what
+// it is for. #1a1a1a over pure black (4.86 worst case) because 4.03 already
+// clears 3:1 with room, and a black hairline reads heavier on near-white than a
+// white one does on near-black.
+const BORDE_POR_TEMA = { oscuro: '#ffffff', claro: '#1a1a1a' };
+let temaBase = 'oscuro';
+
+function colorBorde() {
+    return BORDE_POR_TEMA[temaBase];
+}
+
 function pesoBorde() {
     const z = map.getZoom();
     if (z >= 13) return 1;
@@ -598,17 +653,12 @@ function crearEstiloCapa(campoValor, funcionColor) {
         return {
             fillColor: funcionColor(valor),
             weight: pesoBorde(),
-            // Opaque white, and that is the measured answer rather than a taste
-            // call. Sweeping every opaque grey against all 16 fills actually on
-            // the map -- three ramps composited at 0.65 over the basemap, plus
-            // the no-data grey -- white is the best possible flat border, worst
-            // case 3.17:1. It is also the ONLY value that clears 3:1 everywhere:
-            // at 0.25 alpha the worst case was 1.40:1 and at 0.75 still 2.47,
-            // because a translucent white blends toward whatever is under it and
-            // so vanishes against the LIGHT end of the ramps. The earlier note
-            // proposing 0.45 had measured against the dark fill only, where the
-            // border was never the problem.
-            color: '#ffffff',
+            // Opaque, and the colour comes from the basemap: see colorBorde().
+            // Opacity is the older half of that measurement -- at 0.25 alpha the
+            // worst case was 1.40:1 and at 0.75 still 2.47, because a
+            // translucent white blends toward whatever is under it and so
+            // vanishes against the LIGHT end of the ramps.
+            color: colorBorde(),
             opacity: 1,
             // AGEBs with no data are drawn fainter: present and
             // clickable (the card explains why there's no data), but
@@ -945,6 +995,21 @@ map.on('zoomend', () => {
     }
 });
 
+// The style functions read colorBorde() when Leaflet calls them, so switching
+// the basemap has to make the layers ask again -- exactly what zoomend already
+// does for pesoBorde(). Without this the border keeps whatever colour it was
+// painted with and the switch silently leaves it at 1.26:1.
+//
+// Compared against the layer object, not `e.name`: the name is the label
+// rendered in the control, i.e. UI text, and hanging the palette off a Spanish
+// string would break the map the day that control gets translated.
+map.on('baselayerchange', e => {
+    temaBase = e.layer === lightBaseLayer ? 'claro' : 'oscuro';
+    for (const { capa } of capasEnVista) {
+        if (capa && typeof capa.resetStyle === 'function') capa.resetStyle();
+    }
+});
+
 // A missing value is shown as a dash, not as 0: "I don't know" and "it
 // is zero" are different statements and the map must not confuse them.
 const SIN_VALOR = '—';
@@ -1073,7 +1138,7 @@ function cargarCapaChoropleth({ archivo, checkbox, clave, campoValor, configEsca
                 style: funcionEstilo,
                 onEachFeature: (feature, layer) => {
                     layer.on({
-                        mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
+                        mouseover: e => e.target.setStyle({ weight: 2, color: colorBorde(), fillOpacity: 0.8 }),
                         mouseout: e => capa.resetStyle(e.target),
                         click: e => {
                             resaltarGeometrias([e.target.feature.geometry]);
@@ -1130,7 +1195,7 @@ function cargarCapaRiesgo({ archivo, checkbox, clave, titulo }) {
                 style: crearEstiloRiesgo(),
                 onEachFeature: (feature, layer) => {
                     layer.on({
-                        mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.75 }),
+                        mouseover: e => e.target.setStyle({ weight: 2, color: colorBorde(), fillOpacity: 0.75 }),
                         mouseout: e => capa.resetStyle(e.target),
                         click: e => {
                             resaltarGeometrias([e.target.feature.geometry]);
@@ -1314,14 +1379,14 @@ function cargarCapaCatastro(checkbox) {
         capa = L.geoJSON({ type: 'FeatureCollection', features }, {
             style: f => ({
                 fillColor: colorCatastro(f.properties.CATASTRO && f.properties.CATASTRO.valor),
-                // Same opaque white as crearEstiloCapa, for the same measured
+                // Same border rule as crearEstiloCapa, for the same measured
                 // reason: this ramp reaches #f2d79c, the lightest fill on the
                 // map and the one a translucent border disappears against.
-                weight: pesoBorde(), opacity: 1, color: '#ffffff', fillOpacity: 0.65
+                weight: pesoBorde(), opacity: 1, color: colorBorde(), fillOpacity: 0.65
             }),
             onEachFeature: (feature, layer) => {
                 layer.on({
-                    mouseover: e => e.target.setStyle({ weight: 2, color: '#ffffff', fillOpacity: 0.8 }),
+                    mouseover: e => e.target.setStyle({ weight: 2, color: colorBorde(), fillOpacity: 0.8 }),
                     mouseout: e => capa.resetStyle(e.target),
                     click: e => {
                         resaltarGeometrias([e.target.feature.geometry]);
