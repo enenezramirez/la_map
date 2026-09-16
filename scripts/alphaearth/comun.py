@@ -45,7 +45,7 @@ GTiff honours the `OVERVIEWS/OVERVIEW_FILE` metadata item, and carries that
 domain **inside the file's own `GDAL_METADATA` tag**. So a hostile `.tiff` names
 a second dataset from within itself, GDAL opens that one **with no driver
 pinned**, and it was chained from there to a third host. `GDAL_DISABLE_READDIR_ON_OPEN`
-does not suppress it, because this is not a sibling probe. `exigir_sin_overview_externo`
+does not suppress it, because this is not a sibling probe. `abrir_tesela`
 refuses it, read off a flat open at no extra cost -- a rule about the content
 of the one document we allow, rather than about the name of a second one.
 
@@ -53,23 +53,36 @@ That is the third time a claim here outran what was verified. The pattern is
 always the same: the fix is checked against the attacks that were known when it
 was written.
 
+**And the fourth.** Refusing redirects in `abrir_url` was written up as closing
+them, and it closed them for urllib only -- a few KB of XML. The raster's bytes
+were fetched by GDAL's `/vsicurl/`, which follows a redirect on its own and has
+no setting to stop it: the GDAL 3.12 build here carries no FOLLOWLOCATION or
+MAX_REDIRECTS option at all. Reproduced 2026-09-16: the mirror answered 302,
+GDAL followed, and the pixel read was the attacker's. So GDAL no longer touches
+the network for a tile. `abrir_tesela` serves it through a rasterio opener that
+fetches every byte range with `abrir_url`, and GDAL sees one file name and
+nothing else.
+
 That trades one problem for another, honestly: the `.tiff` is stored bottom-up,
 so reading it directly is exactly the mirrored-image trap this screening was
 built to avoid. `leer_ventana_north_up` handles it explicitly, in both
 directions, and it is tested in both -- against the `.vrt`'s own north-up
 reading of the same window.
 
-**What is still not closed, stated first:** the mirror can tell this check and
-GDAL apart trivially. The two requests carry different user agents
-(`Python-urllib/…` versus `GDAL/…`), so a server that wants to serve one body
-here and another to GDAL can. This was previously written up as the expensive
-attack; it is not expensive. What the design does buy is that a hostile body
-now has to arrive through the single pinned-driver GTiff open, rather than
-through any document GDAL might be led to open next.
+**What is still not closed, stated first:** the mirror decides the bytes. A
+hostile one can serve a VRT that passes the source rules and a `.tiff` whose
+pixels are wrong, and nothing here can tell -- that is the trust the README
+names. What it can no longer do is make this machine connect anywhere else:
+urllib and GDAL now fetch through the same guard. An earlier version of this
+paragraph said a server could serve one body to the check and another to GDAL by
+their user agents; both requests now come from urllib, but a server can still
+tell a VRT request from a tile request by the path, so that is not closed
+either, only no longer free.
 """
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import re
 import urllib.error
@@ -84,8 +97,8 @@ import xml.etree.ElementTree as ET  # nosec B405
 # each VRT carries exactly one <SourceDataset>, pointing at its own .tiff here.
 PREFIJO_ESPEJO = "/vsis3/us-west-2.opendata.source.coop/tge-labs/aef/"
 
-# The same rule for the VRT's own URL, enforced by `abrir_url` on the redirect
-# itself rather than on the response. The earlier note here said checking `r.url`
+# The same rule for the VRT's own URL and the tile's, enforced by `abrir_url`
+# before the request is made. The earlier note here said checking `r.url`
 # covered redirects; a review measured that it does not -- see `abrir_url`.
 PREFIJO_HTTPS = ("https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
                  "tge-labs/aef/")
@@ -107,6 +120,27 @@ MAX_PAGINAS = 20
 # pool fires, and that list also comes from the server.
 MAX_TESELAS = 2_000
 
+# The only name GDAL is given for a tile. The real URL stays on the Python side,
+# so there is nothing in the path for GDAL to resolve siblings or overviews
+# against except this opener, which knows one file.
+NOMBRE_TESELA = "tesela.tiff"
+
+# How much one ranged request asks for when GDAL reads small. The opener
+# interface buffers nothing, and GDAL walks a COG's header 8 bytes to a few KB at
+# a time -- 712 reads per tile open, measured -- so without a cache each is its
+# own HTTPS round trip. A read at least this big is a compressed block and is
+# fetched exactly instead (`_LecturaDeTesela.read`).
+BLOQUE_TESELA = 128 * 1024
+BLOQUES_EN_CACHE = 64
+
+# Everything one tile open may fetch. GDAL's /vsicurl/ used to read whatever the
+# file's own offsets told it to, and the file comes from the mirror; a tile is
+# 3.49 GB, so "the header said so" is not a bound. The largest real open is
+# step 3's full-resolution read, 40.02 MB measured -- 64 compressed blocks of
+# ~630 KB, one per band. A first cap of 64 MB fired on it while reads were still
+# rounded to blocks, which is how that rounding was caught.
+LIMITE_TESELA = 128 * 1024 * 1024
+
 # GDAL's own network guards. Without a timeout a stalled read hangs forever,
 # since GDAL_HTTP_MAX_RETRY only bounds retries, not the wait for each one.
 ENTORNO_GDAL = {
@@ -123,6 +157,9 @@ ENTORNO_GDAL = {
     # and on what siblings exist, and a review measured 48 in its own setup --
     # so what is being claimed here is that the probing stops, not a number.
     # `abrir_tesela` is what puts this in force; it used to be convention.
+    # Since the tile is served through an opener, a probe that slips past this
+    # lands in `_TeselaDelEspejo`, which answers "no such file" without a
+    # request -- so this is now the first of two layers, not the only one.
     "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
     "GDAL_HTTP_MAX_RETRY": "2",
     "GDAL_HTTP_RETRY_DELAY": "1",
@@ -138,70 +175,264 @@ ENTORNO_GDAL = {
 
 
 def abrir_url(peticion, prefijo: str, timeout: int = 60):
-    """GET, refusing any redirect that leaves `prefijo` BEFORE it is followed.
+    """GET a URL under `prefijo`, refusing every redirect BEFORE it is followed.
 
     This replaces a check on `r.url` after `urlopen` returned, which read as if
     it covered redirects and does not. `urlopen` FOLLOWS them: by the time a
     response object exists, this machine has already issued the request to
     whatever host the mirror named -- `127.0.0.1` and the rest of the intranet
     included, over plain http, since a Location is not bound by the scheme of
-    the request that got it. The body was refused, which is why nothing hostile
-    ever reached the parser, but the request itself is precisely the capability
-    the module docstring says this exists to remove. Measured: one request to
-    the attacker before, none after.
+    the request that got it. Measured: one request to the attacker before, none
+    after.
+
+    The next version allowed a redirect that stayed under `prefijo`, and a
+    review showed that comparison is text: an absolute Location with dot
+    segments starts with the prefix and resolves outside it. It is not repaired
+    here but removed, because there is nothing for it to decide -- measured
+    2026-09-16, the mirror answers the VRT, the .tiff and the listing directly
+    (206, 206, 200) and redirects none of them. A redirect is therefore refused
+    whatever it names.
 
     `redirect_request` is the only hook that runs BEFORE the connection, so the
-    decision has to live there. Raising HTTPError rather than returning None is
+    decision has to live there. Raising rather than returning None is
     deliberate: None makes urllib return the 302 to the caller as if it were the
     answer, and a caller that then parses the body is reading the redirect page.
+    The redirect's socket is closed first, and the error is a URLError rather
+    than an HTTPError because HTTPError is itself a file object: built around
+    the response, it kept the socket open for as long as the exception lived
+    (20 refusals kept by a caller, 20 open sockets; now 0), and even built empty
+    it warns when it is collected.
     """
+    # Without the slash, "…/aef" would admit "…/aef-something-else/".
+    if not prefijo.endswith("/"):
+        raise ValueError(f"{prefijo!r}: el prefijo debe terminar en '/'")
     url = peticion.full_url if isinstance(peticion, urllib.request.Request) else peticion
     if not url.startswith(prefijo):
         raise ValueError(f"{url}: la URL no esta bajo {prefijo!r}")
 
-    class _SinSalida(urllib.request.HTTPRedirectHandler):
+    class _SinRedireccion(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
-            if not newurl.startswith(prefijo):
-                raise urllib.error.HTTPError(
-                    newurl, code,
-                    f"redireccion fuera del espejo, a {newurl!r}", headers, fp)
-            return super().redirect_request(req, fp, code, msg, headers, newurl)
+            fp.close()
+            raise urllib.error.URLError(f"redireccion {code} rechazada, a {newurl!r}")
 
-    return urllib.request.build_opener(_SinSalida).open(peticion, timeout=timeout)
+    return urllib.request.build_opener(_SinRedireccion).open(peticion, timeout=timeout)
+
+
+class _LecturaDeTesela:
+    """A seekable, read-only file object over `_TeselaDelEspejo`'s block cache."""
+
+    def __init__(self, tesela: "_TeselaDelEspejo"):
+        self._tesela = tesela
+        self._pos = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def close(self) -> None:
+        pass
+
+    def tell(self) -> int:
+        return self._pos
+
+    def seek(self, desplazamiento: int, desde: int = 0) -> int:
+        base = {0: 0, 1: self._pos, 2: self._tesela.tamano()}[desde]
+        if base + desplazamiento < 0:
+            raise ValueError(f"seek a una posicion negativa: {base + desplazamiento}")
+        self._pos = base + desplazamiento
+        return self._pos
+
+    def read(self, n: int = -1) -> bytes:
+        tamano = self._tesela.tamano()
+        fin = tamano if n is None or n < 0 else min(tamano, self._pos + n)
+        # A read this size is one compressed block, which GDAL asks for once:
+        # fetched exactly, since rounding it to blocks nearly doubled step 3.
+        if fin - self._pos >= BLOQUE_TESELA:
+            datos = self._tesela._rango(self._pos, fin - 1)
+            self._pos = fin
+            return datos
+        partes = []
+        while self._pos < fin:
+            indice, desde = divmod(self._pos, BLOQUE_TESELA)
+            trozo = self._tesela.bloque(indice)[desde:desde + fin - self._pos]
+            partes.append(trozo)
+            self._pos += len(trozo)
+        return b"".join(partes)
+
+
+class _TeselaDelEspejo:
+    """Serves GDAL exactly one file, NOMBRE_TESELA, every byte through `abrir_url`.
+
+    Implements rasterio's FileContainer interface; `abrir_tesela` registers it.
+    Any other name GDAL asks about -- a sibling `.ovr`, an `.aux.xml`, an
+    overview named relative to the tile -- is answered "no such file" here,
+    without a request.
+    """
+
+    def __init__(self, url: str, prefijo: str, timeout: int = 60):
+        self.url, self.prefijo, self.timeout = url, prefijo, timeout
+        self._tamano: int | None = None
+        self._bloques: collections.OrderedDict[int, bytes] = collections.OrderedDict()
+        self.bajado = 0
+        # rasterio's callbacks swallow the exception and GDAL reports the tile as
+        # "not recognized as being in a supported file format" -- which is what a
+        # refused redirect looked like. Kept so `abrir_tesela` can say why.
+        self.fallo: Exception | None = None
+
+    def _exigir_nombre(self, path: str) -> None:
+        if path != NOMBRE_TESELA:
+            raise FileNotFoundError(path)
+
+    def isfile(self, path: str) -> bool:
+        return path == NOMBRE_TESELA
+
+    def isdir(self, path: str) -> bool:
+        return False
+
+    def ls(self, path: str) -> list[str]:
+        return []
+
+    def mtime(self, path: str) -> int:
+        return 0
+
+    def rm(self, path: str) -> None:
+        raise PermissionError(f"{path}: la tesela es de solo lectura")
+
+    def size(self, path: str) -> int:
+        self._exigir_nombre(path)
+        return self.tamano()
+
+    def open(self, path: str, mode: str = "rb", **kwds) -> _LecturaDeTesela:
+        self._exigir_nombre(path)
+        if mode != "rb":
+            raise PermissionError(f"{path}: modo {mode!r}, la tesela es de solo lectura")
+        return _LecturaDeTesela(self)
+
+    def tamano(self) -> int:
+        if self._tamano is None:
+            self._rango(0, 0)
+        return self._tamano
+
+    def bloque(self, indice: int) -> bytes:
+        if indice in self._bloques:
+            self._bloques.move_to_end(indice)
+            return self._bloques[indice]
+        inicio = indice * BLOQUE_TESELA
+        datos = self._rango(inicio, min(inicio + BLOQUE_TESELA, self.tamano()) - 1)
+        self._bloques[indice] = datos
+        if len(self._bloques) > BLOQUES_EN_CACHE:
+            self._bloques.popitem(last=False)
+        return datos
+
+    def _rango(self, inicio: int, fin: int) -> bytes:
+        """One Range GET, refused unless the server answers exactly that range.
+
+        A 200 would be the whole 3.49 GB file, and a Content-Range for other
+        bytes would be read into the wrong offsets without anything looking
+        wrong. The total is pinned on first sight, so a file that changes size
+        between requests stops the read instead of mixing two versions.
+        """
+        try:
+            return self._rango_sin_registro(inicio, fin)
+        except Exception as e:
+            self.fallo = self.fallo or e
+            raise
+
+    def _rango_sin_registro(self, inicio: int, fin: int) -> bytes:
+        n = fin - inicio + 1
+        if self.bajado + n > LIMITE_TESELA:
+            raise ValueError(
+                f"{self.url}: la lectura supera el tope de {LIMITE_TESELA:,} B por tesela")
+        peticion = urllib.request.Request(self.url, headers={"Range": f"bytes={inicio}-{fin}"})
+        with abrir_url(peticion, self.prefijo, self.timeout) as r:
+            m = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", r.headers.get("Content-Range") or "")
+            if r.status != 206 or not m or (int(m[1]), int(m[2])) != (inicio, fin):
+                raise ValueError(
+                    f"{self.url}: se pidio bytes={inicio}-{fin} y el servidor respondio "
+                    f"{r.status} con Content-Range {r.headers.get('Content-Range')!r}")
+            if self._tamano is None:
+                self._tamano = int(m[3])
+            elif int(m[3]) != self._tamano:
+                raise ValueError(
+                    f"{self.url}: el archivo cambio de tamano entre peticiones "
+                    f"({self._tamano:,} -> {int(m[3]):,} B)")
+            datos = leer_acotado(r, n)
+        if len(datos) != n:
+            raise ValueError(f"{self.url}: se pidieron {n:,} B y llegaron {len(datos):,}")
+        self.bajado += n
+        return datos
 
 
 @contextlib.contextmanager
-def abrir_tesela(ruta: str, **opciones):
-    """The only way this pipeline opens a tile: driver pinned, environment in force.
+def abrir_tesela(url: str, prefijo: str = PREFIJO_HTTPS, **opciones):
+    """The only way this pipeline opens a tile, and GDAL makes no request in it.
 
-    Two review findings meet here, and both are the same shape: an invariant
-    that was true when written and optional afterwards.
+    Every review finding on this module has had the same shape: an invariant
+    that was true when written and optional afterwards. So each one lives here,
+    where no caller can leave it out.
 
-    The driver pin is what the whole design rests on -- a nested VRT named
-    `.tiff` is *deliberately* accepted by the source rules, because every real
-    source is called that, so an open without `driver="GTiff"` anywhere brings
-    back every bypass this module closed. It was retyped at five call sites and
-    enforced at none.
+    **The driver pin** is what the design rests on -- a nested VRT named `.tiff`
+    is *deliberately* accepted by the source rules, because every real source is
+    called that, so an open without `driver="GTiff"` brings back every bypass
+    this module closed. It was retyped at five call sites and enforced at none.
 
-    ENTORNO_GDAL was documented as the thing that stops sibling probing, but only
-    two scripts applied it, by convention. Measured with it absent: the guard
-    passed a tile, GDAL probed 48 sibling paths, found a hostile `.ovr` and
-    opened it WITHOUT a pinned driver -- `exigir_sin_overview_externo` never saw
-    it, because it arrived by sibling probe rather than by OVERVIEW_FILE.
+    **ENTORNO_GDAL**, applied through `rasterio.Env` so it covers the reads that
+    happen inside the `with`, and so importing this module does not rewrite the
+    caller's environment. It used to be applied by convention in two scripts.
 
-    Applied through `rasterio.Env` rather than `os.environ`, so it covers the
-    lazy /vsicurl reads that happen inside the `with`, and so importing this
-    module does not rewrite the caller's environment as a side effect.
+    **The bytes.** GDAL is handed NOMBRE_TESELA and an opener, never the URL.
+    Through `/vsicurl/` it followed a redirect with no setting to stop it -- the
+    pixel came from the attacker, reproduced -- and it probed siblings next to
+    the URL. Now every range goes through `abrir_url`, which refuses redirects,
+    and every other name ends at the opener. What the opener cannot stop is an
+    ABSOLUTE path GDAL decides to open, which is why the last rule stays.
+
+    **No external overviews.** GTiff reads OVERVIEWS/OVERVIEW_FILE out of the
+    file's own GDAL_METADATA tag and opens whatever it names, unpinned -- and an
+    absolute `/vsicurl/…` there goes around the opener. The flat open sees the
+    item without fetching it, so it is refused before any open that would follow
+    it. It used to be a separate function the scripts had to remember to call
+    first; a review pointed out this was the one guard still left to memory.
+
+    Cost against the real run, measured 2026-09-16: 25.1 MB for step 2 and
+    77.0 MB for step 3, less than `/vsicurl/` fetched for the same reads (39.8
+    and 78.8), and slower, since each range is its own HTTPS request. See the
+    README.
     """
     import rasterio
+    from rasterio.abc import FileContainer
+    from rasterio.errors import RasterioIOError
 
-    with rasterio.Env(**ENTORNO_GDAL):
-        with rasterio.open(ruta, driver="GTiff", **opciones) as ds:
-            yield ds
+    FileContainer.register(_TeselaDelEspejo)
+    if not url.startswith(prefijo):
+        raise ValueError(f"{url}: la URL no esta bajo {prefijo!r}")
+    tesela = _TeselaDelEspejo(url, prefijo)
+
+    try:
+        with rasterio.Env(**ENTORNO_GDAL):
+            with rasterio.open(NOMBRE_TESELA, driver="GTiff", opener=tesela) as ds:
+                etiquetas = ds.tags(ns="OVERVIEWS")
+                if etiquetas:
+                    raise ValueError(
+                        f"{url}: el .tiff declara overviews externas {etiquetas!r}. "
+                        "GDAL abriria ese segundo dataset sin driver fijado."
+                    )
+                if not opciones:
+                    yield ds
+                    return
+            with rasterio.open(NOMBRE_TESELA, driver="GTiff", opener=tesela,
+                               **opciones) as ds:
+                yield ds
+    except RasterioIOError as e:
+        if tesela.fallo is not None:
+            raise tesela.fallo from e
+        raise
 
 
-def a_vsicurl(fuente: str) -> str:
-    """Turn a validated /vsis3/<bucket>/<key> source into a /vsicurl/ URL.
+def a_https(fuente: str) -> str:
+    """Turn a validated /vsis3/<bucket>/<key> source into the tile's HTTPS URL.
 
     Anonymous HTTPS rather than S3 protocol, so the read path is the same one
     the guard already checked, against the same hard-coded host.
@@ -209,25 +440,7 @@ def a_vsicurl(fuente: str) -> str:
     if not fuente.startswith("/vsis3/"):
         raise ValueError(f"{fuente!r}: no es una fuente /vsis3/")
     bucket, _, clave = fuente[len("/vsis3/"):].partition("/")
-    return f"/vsicurl/https://s3.us-west-2.amazonaws.com/{bucket}/{clave}"
-
-
-def exigir_sin_overview_externo(ruta: str) -> None:
-    """Refuse a .tiff that names another dataset for GDAL to open as overviews.
-
-    Pinning the driver bounds the top-level open and nothing after it. GTiff
-    reads OVERVIEWS/OVERVIEW_FILE out of the file's own GDAL_METADATA tag and
-    opens whatever it names, unpinned -- so the tile can hand GDAL a second
-    document from inside itself. A flat open sees the item without fetching it,
-    so refusing costs nothing.
-    """
-    with abrir_tesela(ruta) as ds:
-        etiquetas = ds.tags(ns="OVERVIEWS")
-    if etiquetas:
-        raise ValueError(
-            f"{ruta}: el .tiff declara overviews externas {etiquetas!r}. "
-            "GDAL abriria ese segundo dataset sin driver fijado."
-        )
+    return f"https://s3.us-west-2.amazonaws.com/{bucket}/{clave}"
 
 
 def bordes_north_up(ds):
@@ -261,13 +474,21 @@ def leer_ventana_north_up(ds, col: int, fila: int, ancho: int, alto: int):
     # order is a guard with a precondition nobody reads.
     bordes_north_up(ds)
 
-    # Bounds in BOTH branches: rasterio silently clips an over-long window, so
-    # the north-up branch used to truncate where the bottom-up one raised.
-    if fila < 0 or alto <= 0 or ancho <= 0:
-        raise RuntimeError(f"ventana invalida: fila={fila} alto={alto} ancho={ancho}")
+    # Bounds in BOTH branches and on BOTH axes: rasterio silently clips an
+    # over-long window. The north-up branch used to truncate where the bottom-up
+    # one raised, and columns were never checked at all -- a review found an
+    # overflowing `col` clipped in silence, feeding step 3's cosine a narrower
+    # window than the one it reports.
+    if fila < 0 or col < 0 or alto <= 0 or ancho <= 0:
+        raise RuntimeError(
+            f"ventana invalida: col={col} fila={fila} ancho={ancho} alto={alto}")
     if fila + alto > ds.height:
         raise RuntimeError(
             f"ventana fuera del raster: fila {fila}+{alto} sobre alto {ds.height}"
+        )
+    if col + ancho > ds.width:
+        raise RuntimeError(
+            f"ventana fuera del raster: col {col}+{ancho} sobre ancho {ds.width}"
         )
 
     if ds.bounds.top > ds.bounds.bottom:            # north-up

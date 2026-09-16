@@ -21,20 +21,37 @@ venv/Scripts/pip install rasterio
 Run in order. Each writes its intermediate to `raw_data/alphaearth/`, which is
 gitignored — these are working files, not published data.
 
-| script | what it does | cost |
+| script | what it does | transfer, measured 2026-09-16 |
 |---|---|---|
 | `00_sondear_bucket.py` | learns the mirror's layout | a few KB |
 | `01_localizar_teselas.py` | finds the zone-14N tiles covering the project | 711 KB |
-| `02_bajar_overview.py` | reads the 160 m overview over the extent | ~3.8 MB |
-| `03_verificar_overview.py` | checks unit norm and georeferencing | ~1 MB |
+| `02_bajar_overview.py` | reads the 160 m overview over the extent | 25.1 MB, ~45 s |
+| `03_verificar_overview.py` | checks unit norm and georeferencing | 77.0 MB, ~65 s |
 | `04_agregar_ageb.py` | builds the 431 × 64 AGEB table | local |
 | `05_tamizaje.py` | the two cosine questions, plus sensitivity | local |
 | `comun.py` | guards shared by the steps that touch the network | — |
 
-Total transfer is about **4.5 MB**, against the **1.20 GB** a full-resolution
-year over this extent would cost. The screening as run on 2026-08-11 cost
-**4.4 MB**; the extra ~82 KB is the VRT each of steps 2 and 3 now fetches to
-check where it points before GDAL opens it.
+Total transfer is about **103 MB**. **This corrects a figure published here
+and in `DATOS.md §3.6` for a month: "~4.4 MB", with ~3.8 MB and ~1 MB for
+steps 2 and 3.** None of those was a transfer measurement. They match the
+size of the arrays read (a 4.55 MB `int8` grid for step 2), and a COG cannot
+be read by the pixel: each band of the level-3 overview is one compressed
+block of ~200 KB, so step 2 has to fetch 64 of them per tile whatever
+transport it uses, and step 3's 16 × 16 px at full resolution sits in 64
+blocks of ~630 KB. Measured both ways — the old GDAL `/vsicurl/` path through
+a byte-counting proxy, the current one at the opener:
+
+| step | old `/vsicurl/` | current opener | bytes GDAL actually asked for |
+|---|---|---|---|
+| 2 | 39.8 MB | 25.1 MB | 25.1 MB |
+| 3 | 78.8 MB | 77.0 MB | — |
+
+The old path spent the difference on read-ahead. The output is unchanged:
+the regenerated overview has the same SHA-256 as the published intermediate,
+and step 3 reproduces cosine 0.999934 against the mirrored control's 0.460602.
+The current path is slower (46 s against 8 s for step 2), because each range is
+its own HTTPS request; for a one-off script that is the cheaper side of the
+trade, and the reason is below.
 
 ## Three traps, and why the code asserts rather than assumes
 
@@ -47,10 +64,12 @@ check where it points before GDAL opens it.
 2. **De-quantization is `((v/127.5)**2) * sign(v)`** — squared and
    sign-preserving, not a linear rescale. A linear one leaves the vectors off
    the unit sphere and distorts every cosine similarity computed from them.
-3. **The VRTs reference their sources over `/vsis3/`**, so anonymous S3 access
-   must be enabled or GDAL retries without credentials until it gives up. Steps
-   2 and 3 now rewrite that to `/vsicurl/https://`, so `AWS_NO_SIGN_REQUEST`
-   only still matters to step 1's listings.
+3. **The VRTs reference their sources over `/vsis3/`**, which GDAL would open
+   with S3 credentials and retry until it gave up. Nothing here opens it that
+   way any more: steps 2 and 3 rewrite the source to its HTTPS URL and fetch
+   the bytes themselves (`comun.a_https`, `comun.abrir_tesela`), and step 1
+   reads VRT headers with urllib. The `AWS_*` keys left in `ENTORNO_GDAL` are
+   inert today.
 
 The STAC index is deliberately not used: reading it needs `pyarrow`, and each
 tile's `.vrt` already carries its SRS and GeoTransform in the first 1.2 KB, so
@@ -109,14 +128,45 @@ fires when the tile ships no internal overviews — which the attacker decides,
 since the attacker publishes the file — and `GDAL_DISABLE_READDIR_ON_OPEN` does
 not suppress it, because this is not a sibling probe.
 
-`comun.exigir_sin_overview_externo` refuses it, read off a flat open before any
+`comun.abrir_tesela` refuses it, read off a flat open before any
 `OVERVIEW_LEVEL` open, at no extra request. It is a rule about the content of
-the one document we allow rather than about the name of a second one:
+the one document we allow rather than about the name of a second one. It began
+as a separate function each script had to remember to call first; a review
+pointed out it was the one guard still left to memory, so it now lives inside
+the only function that opens a tile:
 
 | tile declaring an external overview | requests to the attacker's host |
 |---|---|
 | no guard, `OVERVIEW_LEVEL=3` | 3 at `open()`, 4 after `read()` — and the pixels come from there |
 | **guard in place** | **0, and the run stops** |
+
+**Then the fix for redirects turned out to cover the wrong half.** A review
+found urllib following a mirror's redirect to whatever host it named, so
+`abrir_url` began refusing them before the connection. That covered the four
+urllib calls — a few KB of XML. The raster's bytes were fetched by GDAL's
+`/vsicurl/`, which follows redirects on its own, and the GDAL 3.12 build here
+has no option to stop it: no `FOLLOWLOCATION` or `MAX_REDIRECTS` exists in the
+library at all, and a review measured `GDAL_HTTP_MAX_REDIRECTS=0` doing nothing.
+So **GDAL no longer touches the network for a tile.** `abrir_tesela` hands it a
+bare name and a rasterio opener, and the opener fetches every byte range through
+`abrir_url`. Each case below ran in its own process against local servers, and
+each guard has a control showing the test can see the attack:
+
+| case | requests to the attacker | result |
+|---|---|---|
+| mirror 302s the `.tiff`, old `/vsicurl/` path | 2 | the pixel read is the attacker's |
+| mirror 302s the `.tiff`, **opener** | **0** | refused, naming the redirect |
+| absolute `Location` with `/../` under the prefix, **opener** | **0** | refused |
+| mirror serves the `.tiff` directly (control) | 0 | opens, correct pixel |
+| sibling probing re-enabled, **opener** | **0** | GDAL asked for `.aux.xml`, `.msk`, `.xml`, `.XML` — all answered "no such file" locally |
+| server ignores `Range` and answers 200 | 0 | refused before reading a body |
+| file changes size between two ranges | 0 | refused |
+
+`abrir_url` now refuses **every** redirect rather than those that leave the
+prefix. The narrower rule compared text, and an absolute `Location` with dot
+segments starts with the prefix and resolves outside it. There was nothing for
+the rule to decide: the mirror answers the VRT, the `.tiff` and the listing
+directly (206, 206, 200) and redirects none of them.
 
 **Also from that review, and both cheap:** the `..` rule was evaded with
 `%2e%2e`, because curl percent-decodes before normalising dot segments — the
@@ -129,7 +179,9 @@ on the caller having called `bordes_north_up` first.
 **One config value earns a note:** `GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR` is
 a security guard, not a performance one. Removing it, GDAL probes eight sibling
 paths on open and a hostile `.ovr` next to a tile reaches a foreign host **even
-with the driver pinned**. Measured both ways.
+with the driver pinned**. Measured both ways. Since the opener, a probe that
+slips past it ends at the opener instead of on the network, so it is the first
+of two layers rather than the only one.
 
 **And the trade has a cost, which is the trap this screening exists to avoid.**
 The `.tiff` is stored bottom-up, so reading it directly is exactly the mirrored
@@ -140,14 +192,17 @@ at two overview levels, with a negative control confirming that an unflipped
 read really does differ. The whole screening was then re-run: the regenerated
 overview is byte-identical to the published intermediate in all five arrays.
 
-**What is still not closed, stated first this time.** The mirror can tell this
-check and GDAL apart trivially: the two requests carry different user agents
-(`Python-urllib/…` versus `GDAL/…`), so a server can serve one body here and
-another to GDAL. An earlier version of this section called that the expensive
-attack while two one-line mutations were live; it is not expensive. What the
-design buys is that a hostile body now has to arrive through the single
-pinned-driver GTiff open, instead of through whatever document GDAL could be
-led to open next.
+**What is still not closed, stated first this time.** The mirror decides the
+bytes: it can serve a VRT that passes every source rule and a `.tiff` whose
+pixels are wrong, and nothing here can tell. That is the trust named at the top
+of this section. What it can no longer do is make this machine connect anywhere
+else, since urllib and GDAL now fetch through the same guard. This paragraph
+used to say the mirror could serve one body to the check and another to GDAL by
+their user agents; both requests now come from urllib, but a server can still
+tell a VRT request from a tile request by the path. So that split is not closed
+either, only no longer free. And the opener stops relative names, not absolute
+ones: an absolute path GDAL decides to open goes around it, which is why the
+external-overview rule stays.
 
 **`CPL_VSIL_CURL_ALLOWED_EXTENSIONS` was measured and rejected** for the same
 reason the `.vrt` rule failed — it is a rule about names. With `.vrt,.tiff`
@@ -159,11 +214,14 @@ ending in `.tiff` goes straight through (2 requests), and the pipeline needs
 obligation: a server may answer `200` with a body of any size, so every read is
 capped and every cap raises rather than truncating. Same for the two loops the
 server steers — pagination stops at `MAX_PAGINAS`, and the key list is refused
-past `MAX_TESELAS` before it becomes that many requests. GDAL gets
-`GDAL_HTTP_TIMEOUT` and `GDAL_HTTP_CONNECTTIMEOUT`, because
-`GDAL_HTTP_MAX_RETRY` bounds how many times it retries, not how long it waits;
-and `GDAL_VRT_ENABLE_PYTHON` and `GDAL_VRT_ENABLE_RAWRASTERBAND` are pinned to
-`NO` rather than inherited from the environment.
+past `MAX_TESELAS` before it becomes that many requests. A tile used to be
+the exception, because GDAL read whatever the file's own offsets told it to:
+one tile open may now fetch at most `LIMITE_TESELA` (128 MB, about 3× the
+largest real read), every range must come back as exactly the range asked for,
+and every request has urllib's timeout. `GDAL_HTTP_TIMEOUT` and
+`GDAL_HTTP_CONNECTTIMEOUT` stay for any request GDAL still makes itself, and
+`GDAL_VRT_ENABLE_PYTHON` and `GDAL_VRT_ENABLE_RAWRASTERBAND` are pinned to `NO`
+rather than inherited from the environment.
 
 **What this is not.** These are one-off scripts run by hand on a laptop, and
 the guards are sized for that: they keep a hostile mirror from steering this

@@ -698,10 +698,18 @@ atlas, because there is nobody to appeal to behind it.
 #### Screening result, 2026-08-11: (a) passes decisively, (b) fails, use 1 is dropped
 
 Run exactly as specified above, with the decision rule fixed beforehand. Nothing was trained.
-Total transfer **~4.4 MB** against the 1.20 GB a full-resolution year would have cost, and
-**one** new dependency (`rasterio` 1.5.1), not two — see the note on the index below.
-Re-running it today costs ~82 KB more than that: the scripts were hardened afterwards and now
-fetch each VRT to check where it points before GDAL opens it — see the folder's `README.md`.
+**One** new dependency (`rasterio` 1.5.1), not two — see the note on the index below.
+
+**Correction, 2026-09-16: the transfer was ~103 MB, not "~4.4 MB".** That figure stood here for
+a month and was never a transfer measurement. It matches the size of the arrays read (a 4.55 MB
+`int8` grid), and a COG is not read by the pixel: each band of the overview used is a single
+compressed block, so step 2 fetches 64 of them per tile whatever the transport. Measured both
+ways, the original GDAL `/vsicurl/` path through a byte-counting proxy and the current one at
+its opener: step 2 **39.8 MB → 25.1 MB**, step 3 **78.8 MB → 77.0 MB**, step 1 unchanged at
+711 KB. The results are unaffected, re-derived the same day: the overview intermediate has the
+same SHA-256, and step 3 reproduces cosine 0.999934 against the mirrored control's 0.460602.
+The comparison that motivated reading an overview still holds — 4.7 MB of array instead of
+1.20 GB — but it compares array sizes, and should not have been quoted as a download.
 
 **The scripts are archived in `scripts/alphaearth/`** so every number here can be re-derived
 rather than trusted. They are a one-off analysis, not pipeline: `scripts/process_data.py`

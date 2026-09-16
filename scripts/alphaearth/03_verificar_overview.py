@@ -19,22 +19,13 @@ through anywhere, the overview pixel would match a MIRRORED location instead.
 from __future__ import annotations
 
 import os
-
-from comun import (ENTORNO_GDAL, a_vsicurl, abrir_tesela, bordes_north_up,
-                   exigir_fuentes_del_espejo, exigir_sin_overview_externo,
-                   leer_ventana_north_up)
-
-# Second layer, not the enforcement: `abrir_tesela` wraps every open in
-# rasterio.Env(**ENTORNO_GDAL), which is what actually guarantees these are in
-# force. This stays because it covers any rasterio call that does NOT go
-# through it, and it is set before rasterio pulls in GDAL so the timeouts hold
-# for the requests the driver makes at open(), not just at read().
-os.environ.update(ENTORNO_GDAL)
-
 import sys
 from pathlib import Path
 
 import numpy as np
+
+from comun import (a_https, abrir_tesela, bordes_north_up,
+                   exigir_fuentes_del_espejo, leer_ventana_north_up)
 
 DATOS = Path(__file__).resolve().parents[2] / "raw_data" / "alphaearth"
 NPZ = DATOS / "aef_overview_2024.npz"
@@ -50,11 +41,10 @@ def dequantizar(bruto: np.ndarray) -> np.ndarray:
 
 
 def main() -> None:
-    # Same as step 2: validate the VRT, then open the .tiff it declares, with
-    # the driver pinned -- GDAL opens one document and nothing chooses another.
+    # Same as step 2: validate the VRT, then open the .tiff it declares through
+    # comun.abrir_tesela, which pins the driver and fetches the bytes itself.
     fuentes = exigir_fuentes_del_espejo(BASE_HTTPS + TESELA_OESTE)
-    ruta = a_vsicurl(fuentes[0])
-    exigir_sin_overview_externo(ruta)
+    ruta = a_https(fuentes[0])
 
     d = np.load(NPZ)
     bruto, cubierto = d["bruto"], d["cubierto"]

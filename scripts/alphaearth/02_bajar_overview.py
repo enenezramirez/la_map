@@ -1,8 +1,10 @@
 """Read the 160 m overview of the AlphaEarth embeddings over the project extent.
 
 Step 2 of the screening approved in DATOS.md 3.6: read a COG overview rather
-than full resolution -- ~4.7 MB instead of the 1.20 GB a full-resolution year
-over this extent would cost.
+than full resolution -- a 4.7 MB int8 array instead of the 1.20 GB a
+full-resolution year over this extent would be. The transfer is larger than the
+array, 25.1 MB, because each band's overview is one compressed block; see the
+README.
 
 Two corrections to what 3.6 assumed, both from the mirror's own README and both
 verified here rather than taken on faith:
@@ -19,31 +21,22 @@ verified here rather than taken on faith:
   cosine similarity computed downstream.
 
 Where each VRT points is checked before anything is opened, and then the .tiff
-it declares is what GDAL opens, with its driver pinned -- see comun. GDAL never
-opens a second document here, which is what stops a nested one from redirecting
-it; reading the .tiff directly is why leer_ventana_north_up exists.
+it declares is what GDAL opens, with its driver pinned and its bytes fetched by
+comun rather than by GDAL -- see comun.abrir_tesela. Reading the .tiff directly
+is why leer_ventana_north_up exists.
 """
 
 from __future__ import annotations
 
 import os
-
-from comun import (ENTORNO_GDAL, a_vsicurl, abrir_tesela, bordes_north_up,
-                   exigir_fuentes_del_espejo, exigir_sin_overview_externo,
-                   leer_ventana_north_up)
-
-# Second layer, not the enforcement: `abrir_tesela` wraps every open in
-# rasterio.Env(**ENTORNO_GDAL), which is what actually guarantees these are in
-# force. This stays because it covers any rasterio call that does NOT go
-# through it, and it is set before rasterio pulls in GDAL so the timeouts hold
-# for the requests the driver makes at open(), not just at read().
-os.environ.update(ENTORNO_GDAL)
-
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
+
+from comun import (a_https, abrir_tesela, bordes_north_up,
+                   exigir_fuentes_del_espejo, leer_ventana_north_up)
 
 BASE_HTTPS = ("https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
               "tge-labs/aef/v1/annual/{anio}/14N/")
@@ -81,10 +74,7 @@ def main(anio: int = 2024) -> None:
     rutas = {}
     for nombre in TESELAS:
         fuentes = exigir_fuentes_del_espejo(base_https + nombre)
-        rutas[nombre] = a_vsicurl(fuentes[0])
-        # The .tiff can name a second dataset for GDAL to open as its
-        # overviews, unpinned. Checked here, before any OVERVIEW_LEVEL open.
-        exigir_sin_overview_externo(rutas[nombre])
+        rutas[nombre] = a_https(fuentes[0])
         print(f"  fuente verificada: {fuentes[0].split('/')[-1]}")
 
     # A global 160 m grid anchored on the western tile's top-left corner, so
