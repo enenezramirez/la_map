@@ -9,10 +9,18 @@ amanzanadas y números exteriores 2023" (NOT the Marco Geoestadístico: that is
 just one of its base layers, December 2022 edition). The full provenance of
 this and the other datasets is in DATOS.md.
 
-For now, AGEB data is only downloaded for Saltillo. The MUNICIPIOS_AGEB config
-is ready so that, as soon as the localities for Ramos Arizpe and Arteaga are
-downloaded (same INEGI format: one folder per locality with
-conjunto_de_datos/<locality_key>a.shp), it is enough to add their paths here.
+Adding a city is a MUNICIPIOS_AGEB entry plus the download (same INEGI format:
+one folder per locality, with conjunto_de_datos/<locality_key>a.shp). A folder
+that is not there yet is skipped with a message rather than failing, so a
+partial run says what it left out. That now holds ACROSS STATES too: the
+Census and DENUE paths are built per state from the locality keys, which
+already carry the state code, instead of the two constants that used to spell
+Coahuila's 05 into the path.
+
+What is still single-state is nothing in this file -- it is the risk data. The
+IMPLAN Atlas covers Saltillo only, and the Investment Index refuses to publish
+a score where its 30% flood weight was never measured, so today the index is a
+Saltillo-only layer whatever else is configured.
 
 Phase 2, Task 2: Process the basic-services data from the 2020 Population and
 Housing Census (INEGI, urban AGEB level) and join it to the AGEB polygons by
@@ -78,15 +86,55 @@ DATA_DIR = Path("data")
 # the AGEB polygons at the map's zoom levels.
 TOLERANCIA_SIMPLIFICACION = 0.00005
 
-CENSO_CSV = (
-    RAW_DATA
-    / "ageb_mza_urbana_05_cpv2020_csv"
-    / "ageb_mza_urbana_05_cpv2020"
-    / "conjunto_de_datos"
-    / "conjunto_de_datos_ageb_urbana_05_cpv2020.csv"
-)
+# Decimal places kept for coordinates on export. GDAL writes the full float64
+# precision when this is not set, which is ~15 decimals: sub-nanometre detail on
+# geometry that was just simplified to ~5 m above. Trimming it removes about a
+# quarter of every layer's bytes -- worth having in a file the browser downloads
+# whole on every visit. data/ goes from 4.42 MB to 3.54 MB. Written through
+# `exportar_geojson` so a new export cannot forget it.
+#
+# Do not read "6" as "11 cm". GDAL's COORDINATE_PRECISION is not a plain round:
+# it picks the shortest representation it considers within tolerance, so a value
+# sitting near a round number moves further than the decimal count implies.
+# Measured: -100.999995009 is written as -101.0, which is 4.99e-06 deg -- about
+# 55 cm, ten times the 5 cm a naive reading predicts. Across all five layers the
+# worst genuine vertex shift is 55.6 cm, on 2 of 2136 chemical-risk polygons;
+# every other vertex stays under 7.7 cm.
+#
+# It also drops vertices that collide once rounded, and that is worth knowing
+# before raising it back: AGEB 0503000013740 (EL DIVISADERO) carried a spike --
+# two vertices 3.3 cm apart, each ~26 m from its neighbours, so the boundary ran
+# out 26 m, turned around within 3.3 cm and came back. Rounding merged the pair
+# and the needle went with it: 2.86 m2 of a 1,288,112 m2 sector, and 52 m off a
+# perimeter that was tracing a digitising artefact.
+#
+# Both effects sit an order of magnitude inside TOLERANCIA_SIMPLIFICACION, which
+# already moves every boundary by up to 5 m and is documented as acceptable, so
+# 6 stands. If a future layer needs the guarantee rather than the bytes, 7 caps
+# the worst shift at 7.5 cm and keeps the spike, for 100 KB more.
+DECIMALES_COORDENADA = 6
 
-DENUE_CSV = RAW_DATA / "denue_05_csv" / "conjunto_de_datos" / "denue_inegi_05_.csv"
+# The Census and DENUE files are published per state, and these used to be two
+# constants spelling Coahuila's code (05) into the path. That was the single
+# thing keeping the pipeline in one state: everything else already derives from
+# configuration, and CVEGEO was already built from ENTIDAD + MUN + LOC + AGEB.
+# Adding a city in another state is now a MUNICIPIOS_AGEB entry and a download.
+
+
+def censo_csv(entidad: str) -> Path:
+    """The 2020 Census urban-AGEB CSV for one state, by its two-digit INEGI code."""
+    return (
+        RAW_DATA
+        / f"ageb_mza_urbana_{entidad}_cpv2020_csv"
+        / f"ageb_mza_urbana_{entidad}_cpv2020"
+        / "conjunto_de_datos"
+        / f"conjunto_de_datos_ageb_urbana_{entidad}_cpv2020.csv"
+    )
+
+
+def denue_csv(entidad: str) -> Path:
+    """The DENUE CSV for one state, by its two-digit INEGI code."""
+    return RAW_DATA / f"denue_{entidad}_csv" / "conjunto_de_datos" / f"denue_inegi_{entidad}_.csv"
 
 # Urban amenity categories for the "Comercios" component of the Investment
 # Index. "escuela" and "salud" are identified by their SCIAN
@@ -285,6 +333,44 @@ MUNICIPIOS_AGEB: dict[str, list[Path]] = {
         RAW_DATA / "marco_geoestadistico" / "arteaga_map_ageb" / "050040107",  # San Antonio de las Alazanas (sierra)
     ],
 }
+
+
+def exportar_geojson(gdf: gpd.GeoDataFrame, salida: Path) -> None:
+    """
+    Write a GeoDataFrame to GeoJSON with the project's coordinate precision.
+
+    Every GeoJSON this pipeline produces goes through here rather than calling
+    `to_file` directly: `COORDINATE_PRECISION` is a driver option, so a plain
+    `to_file` silently falls back to full float64 precision and inflates the
+    layer by ~20% without failing or warning. See `DECIMALES_COORDENADA`.
+    """
+    gdf.to_file(salida, driver="GeoJSON", COORDINATE_PRECISION=DECIMALES_COORDENADA)
+
+
+def municipios_por_entidad() -> dict[str, set[str]]:
+    """{state code: municipality codes} read off the configured locality keys.
+
+    A locality folder is named ENTIDAD(2) + MUN(3) + LOC(4), so MUNICIPIOS_AGEB
+    already says which state each municipality belongs to and nothing has to be
+    declared twice -- the same reason the risk coverage is deduced from the
+    model's real extent instead of `if municipio == "Saltillo"`.
+
+    Filtering downstream by these CODES rather than by municipality NAME is
+    deliberate and only starts to matter with a second state: names repeat
+    across states in Mexico, so a name filter applied to two state files would
+    quietly pull in a namesake municipality from the wrong one.
+    """
+    por_entidad: dict[str, set[str]] = {}
+    for nombre_municipio, carpetas in MUNICIPIOS_AGEB.items():
+        for carpeta in carpetas:
+            clave = carpeta.name
+            if len(clave) != 9 or not clave.isdigit():
+                raise ValueError(
+                    f"{nombre_municipio}: {carpeta.name!r} no es una clave de localidad "
+                    "ENTIDAD+MUN+LOC de 9 digitos"
+                )
+            por_entidad.setdefault(clave[:2], set()).add(clave[2:5])
+    return por_entidad
 
 
 def cargar_ageb_municipio(nombre_municipio: str, carpetas_localidad: list[Path]) -> gpd.GeoDataFrame | None:
@@ -859,15 +945,30 @@ def exportar_valor_catastral(sectores: dict) -> None:
 
 def cargar_censo_servicios() -> pd.DataFrame:
     """
-    Load the 2020 Census CSV by urban AGEB (all of Coahuila) and keep only the
-    AGEB-level rows (excluding state/municipality/locality totals and the
-    per-block detail) of the municipalities in MUNICIPIOS_AGEB.
-    """
-    df = pd.read_csv(CENSO_CSV, dtype=str, low_memory=False)
+    Load the 2020 Census CSV by urban AGEB, one file per configured state, and
+    keep only the AGEB-level rows (excluding state/municipality/locality totals
+    and the per-block detail) of the municipalities in MUNICIPIOS_AGEB.
 
-    filas_ageb = (df["MZA"] == "000") & (df["AGEB"] != "0000")
-    df = df[filas_ageb].copy()
-    df = df[df["NOM_MUN"].isin(MUNICIPIOS_AGEB.keys())]
+    A state whose file has not been downloaded is skipped with a message rather
+    than failing, the same way MUNICIPIOS_AGEB skips a municipality whose AGEB
+    folder is missing: a partial run should say what it left out, not stop.
+    """
+    partes = []
+    for entidad, municipios in sorted(municipios_por_entidad().items()):
+        ruta = censo_csv(entidad)
+        if not ruta.exists():
+            print(f"  [censo {entidad}] {ruta} not found, skipping this state.")
+            continue
+        df_entidad = pd.read_csv(ruta, dtype=str, low_memory=False)
+        filas_ageb = (df_entidad["MZA"] == "000") & (df_entidad["AGEB"] != "0000")
+        df_entidad = df_entidad[filas_ageb]
+        partes.append(df_entidad[df_entidad["MUN"].isin(municipios)])
+
+    if not partes:
+        raise RuntimeError(
+            "No se cargo ningun censo. Revisa las rutas que arma censo_csv()."
+        )
+    df = pd.concat(partes, ignore_index=True).copy()
 
     df["CVEGEO"] = df["ENTIDAD"] + df["MUN"] + df["LOC"] + df["AGEB"]
 
@@ -979,12 +1080,26 @@ def integrar_censo_a_ageb(
 
 def cargar_denue() -> gpd.GeoDataFrame:
     """
-    Load DENUE (all of Coahuila), filter it to the configured municipalities
-    and classify each establishment into an urban amenity category (escuela,
-    salud, supermercado) according to CATEGORIAS_DENUE.
+    Load DENUE one file per configured state, filter it to the configured
+    municipalities by code, and classify each establishment into an urban
+    amenity category (escuela, salud, supermercado) per CATEGORIAS_DENUE.
+
+    A state whose file is missing is skipped with a message, as in the census.
     """
-    df = pd.read_csv(DENUE_CSV, dtype=str, low_memory=False, encoding="latin-1")
-    df = df[df["municipio"].isin(MUNICIPIOS_AGEB.keys())].copy()
+    partes = []
+    for entidad, municipios in sorted(municipios_por_entidad().items()):
+        ruta = denue_csv(entidad)
+        if not ruta.exists():
+            print(f"  [DENUE {entidad}] {ruta} not found, skipping this state.")
+            continue
+        df_entidad = pd.read_csv(ruta, dtype=str, low_memory=False, encoding="latin-1")
+        partes.append(df_entidad[df_entidad["cve_mun"].isin(municipios)])
+
+    if not partes:
+        raise RuntimeError(
+            "No se cargo ningun DENUE. Revisa las rutas que arma denue_csv()."
+        )
+    df = pd.concat(partes, ignore_index=True).copy()
 
     categorias = pd.Series(pd.NA, index=df.index, dtype="object")
     for nombre_categoria, condicion in CATEGORIAS_DENUE.items():
@@ -1109,7 +1224,7 @@ def exportar_capa_riesgo(
     gdf["FECHA"] = IMPLAN_FECHA_CORTE
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    gdf.to_file(salida, driver="GeoJSON")
+    exportar_geojson(gdf, salida)
     tamano_kb = salida.stat().st_size / 1024
     print(
         f"  Risk layer exported: {salida} "
@@ -1270,7 +1385,7 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     salida = DATA_DIR / "indice_inversion.geojson"
-    gdf_final.to_file(salida, driver="GeoJSON")
+    exportar_geojson(gdf_final, salida)
 
     tamano_kb = salida.stat().st_size / 1024
     print(f"\nFinal layer exported: {salida} ({len(gdf_final)} AGEBs, {tamano_kb:.1f} KB)")
@@ -1308,7 +1423,7 @@ def exportar_capa_servicios_basicos(gdf_ageb_servicios: gpd.GeoDataFrame) -> gpd
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     salida = DATA_DIR / "servicios_basicos.geojson"
-    gdf_final.to_file(salida, driver="GeoJSON")
+    exportar_geojson(gdf_final, salida)
 
     tamano_kb = salida.stat().st_size / 1024
     print(f"\nFinal layer exported: {salida} ({len(gdf_final)} AGEBs, {tamano_kb:.1f} KB)")
@@ -1406,7 +1521,7 @@ if __name__ == "__main__":
     gdf_agebs = filtrar_agebs_por_municipio()
 
     salida = PROCESSED_DIR / "ageb_filtrado.geojson"
-    gdf_agebs.to_file(salida, driver="GeoJSON")
+    exportar_geojson(gdf_agebs, salida)
     print(f"\nSaved (intermediate, not the final layer): {salida}")
 
     print("\nProcessing basic-services data from the 2020 Census...")
@@ -1422,7 +1537,7 @@ if __name__ == "__main__":
     gdf_ageb_servicios = integrar_censo_a_ageb(gdf_agebs, df_servicios, df_colonias)
 
     salida_servicios = PROCESSED_DIR / "ageb_con_servicios.geojson"
-    gdf_ageb_servicios.to_file(salida_servicios, driver="GeoJSON")
+    exportar_geojson(gdf_ageb_servicios, salida_servicios)
     print(f"Saved (intermediate, not the final layer): {salida_servicios}")
 
     exportar_capa_servicios_basicos(gdf_ageb_servicios)

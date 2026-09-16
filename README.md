@@ -36,7 +36,7 @@ A sector shown in **gray** is not a bad sector: it is a sector **without data**.
 ```bash
 # 1. Python environment (only if you are going to reprocess the data)
 python -m venv venv
-venv\Scripts\pip install pandas geopandas jupyter shapely pyproj
+venv\Scripts\pip install pandas geopandas jupyter shapely pyproj "pyogrio==0.12.0"
 
 # 2. Regenerate the GeoJSON files in data/ (optional, they are already included in the repo)
 venv\Scripts\python scripts/process_data.py
@@ -46,6 +46,22 @@ python -m http.server 8000
 ```
 
 Open `http://localhost:8000` in your browser.
+
+> **Why `pyogrio` is pinned.** GeoPandas reads shapefiles and writes GeoJSON through
+> `pyogrio`, which ships GDAL as bundled DLLs. Those DLLs are unsigned, so on Windows with
+> **Smart App Control** enforcing, the loader admits them only once they have reputation.
+> The DLLs in **0.13.0 do not have it yet and are blocked** — `pyogrio` then reports the
+> misleading `GDAL DLL could not be found`, while the real cause appears in Event Viewer
+> under `Microsoft-Windows-CodeIntegrity/Operational` as
+> `An Application Control policy has blocked this file`. **0.12.0 loads.** Same story for
+> `rasterio` (used only by the archived AlphaEarth scripts): pin **1.5.0**, not 1.5.1.
+> This is a reputation gate, not a code defect: nothing here needs `pyogrio` 0.13.
+>
+> **Retry before concluding a version is blocked.** Reputation is not a stable verdict: on
+> 2026-09-16 the pinned `rasterio` 1.5.0 was blocked once (`libpng16-*.dll`, same log) and
+> imported normally a few minutes later, with nothing changed. And do not test a build by
+> copying its DLLs elsewhere and loading them: that day the copies of the blocked DLLs
+> loaded fine, so the test cannot tell a blocked build from a good one.
 
 ## Structure
 
