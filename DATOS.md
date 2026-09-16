@@ -11,7 +11,7 @@ shapefiles' `*.shp.xml`), not from memory. Download dates come from the timestam
 folders under `raw_data/`. When a value could not be verified, that is stated explicitly
 instead of estimating it.
 
-**Last updated:** 2026-07-22
+**Last updated:** 2026-09-16
 
 ---
 
@@ -33,6 +33,7 @@ instead of estimating it.
 | 12 | Satellite Embedding (AlphaEarth Foundations) | Google / Google DeepMind | 2017–2025, annual | Not downloaded | Evaluated, screening pending |
 | 13 | Vulnerabilidad socio organizativa (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | Not downloaded | Discarded |
 | 14 | Vulnerabilidad sanitario ecológica (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-08-03 (PDF) | Discarded |
+| 15 | Property listings (Mercado Libre, EasyBroker, portals, SNIIV/RUV, SHF) | Various | — | Not downloaded | Evaluated, no usable source (§3.9) |
 
 ---
 
@@ -908,8 +909,6 @@ where the vulnerable population lives is the point of the map rather than a haza
 **For the sanitary-ecological layer:** a future edition of the Atlas that actually classifies
 some part of the city above `Bajo`.
 
----
-
 ### 3.8 Historical stream courses — investigated 2026-08-17, and it moved the flood layer's caveat
 
 Opened to ask whether anything records where water naturally runs through Saltillo, to
@@ -1214,6 +1213,81 @@ layer. **It is present, spelled `NAZARIO S. ORTIZ GARZA`** (with the middle init
 `NAZARIO S. ORTIZ GARZA I`. The screening's k was therefore 8, not 7. It does not change that
 verdict — §3.6 records the test failing even with all 16 colonias resolved — but the layer
 does carry the colonia, and a name match that fails on a middle initial is worth remembering.
+
+### 3.9 Property listings, and an AI agent to search them — evaluated 2026-09-16, not viable
+
+The backlog asked whether an AI agent could find properties by a user's criteria — budget,
+tolerated risk, services, nearness to schools and health care — on top of the indices this
+project already computes, and asked for a decision: viable or not, and a minimum product.
+**Nothing was downloaded.**
+
+**Verdict: not viable, and what blocks it is data, not models.** Searching properties needs an
+inventory of properties: each one located precisely enough to fall in an AGEB, with a price.
+No source this project can use openly and lawfully provides that for Saltillo. Without it an
+agent can only recommend **zones**, and for zones every criterion above is already a published
+field — a filter, not an agent.
+
+**Sources checked:**
+
+| Source | What it holds | Why it does not serve | How it was checked |
+|---|---|---|---|
+| Mercado Libre Inmuebles (API, category `MLM1459`) | Listings with location and price | Search needs an authenticated user token — reported since April 2025, by a developer blog rather than Mercado Libre's own docs, which refuse a plain fetch. Measured from this machine: `/sites/MLM/search` answers **403** without one, while `/categories/MLM1459` answers **200** — so the 403 is policy, not network. Access is through an OAuth app acting for a logged-in user, under Mercado Libre's terms | Requests, 2026-09-16 |
+| EasyBroker API | Brokerages' listings | A key reaches the account's own listings; other brokers' shared listings need the paid "API MLS" plan. Its docs say never to put the key in a web app — so it means a partnership with a brokerage **and** a server | Developer docs |
+| Portals — Inmuebles24, Lamudi, Vivanuncios, Propiedades.com | Listings | No public API. Using them means extracting a third party's content outside any licence; not pursued. Inmuebles24's `robots.txt` allows search pages to be crawled within limits, but that governs indexing, not republishing — and its terms page does not render for a plain fetch, so the terms were not read clause by clause | `robots.txt` read |
+| SEDATU/CONAVI — SNIIV, *Registro de Vivienda* (RUV) open data | New housing registered by developers | Finest location is **municipality plus urban-containment perimeter** (U1–U3); value only as a CONAVI segment in UMA ranges; counts of units, not units | Data dictionary read |
+| SHF — *Índice SHF de Precios de la Vivienda* | Price index | Aggregated by metro area, municipality, typology and new/used: a trend, not an inventory | SHF bulletins |
+| Tesorería de Saltillo — cadastral tables (§2.8) | Fiscal land value per colonia class | Already published, for 246 of 431 AGEBs. A tax base, not a market price, and no listings | §2.8 |
+
+**What an AI layer would add over a filter, if an inventory existed: little, at a real risk.**
+The criteria are five or six structured fields over 431 sectors. What a language model adds is
+turning a sentence into those fields — one structured-output call, not an agent — and the error
+it can make is the expensive kind here: a tolerance read too loosely shows exposed sectors as
+acceptable, in an app whose first rule is that every value on screen traces to a source
+(`SPEC.md §1.2`). A mistyped slider is visible; a misread sentence is not.
+
+**Deployment is where it fails a second time.** The site is static on GitHub Pages, with no
+backend, and this project puts no credentials in the repository. That leaves two shapes, and
+neither fits:
+
+1. **Calls straight from the browser with the visitor's own key.** Anthropic's TypeScript SDK
+   refuses to run in a browser unless `dangerouslyAllowBrowser: true` is set, to keep keys out
+   of pages. The audience — buyers and investors — does not have an API key, and the SDK would
+   also have to be vendored (no build step, no CDN: `SPEC.md §3`) and allowed in the CSP's
+   `connect-src`.
+2. **A proxy that holds a key.** A server to run, and a quota anyone who finds the endpoint can
+   spend.
+
+**Cost is not the blocker.** Estimated, not measured — no call was made: with ~1,500 input
+tokens (instructions plus the filter schema) and ~150 output tokens per query, at list prices
+as cached on 2026-06-24, a query costs about **$0.011** on Claude Opus 5 ($5 / $25 per million
+input / output tokens), **$0.0045** on Claude Sonnet 5 ($2 / $10) and **$0.0023** on Claude
+Haiku 4.5 ($1 / $5), before any thinking tokens.
+
+**Minimum product instead: a deterministic "find zones by criteria" panel.** No new data, no
+network, no key. It filters on fields already published per AGEB:
+
+| Criterion | Field | What the panel must not get wrong |
+|---|---|---|
+| Services | `SERVICIOS_INDEX` (and `PCT_*`) | 21 sectors have no value (no inhabited dwellings, masked by INEGI, or absent from the Census) — they do not match, they are "no data" |
+| Flood exposure | `RIESGO_INDEX`, `RIESGO_EVALUADO` | **90 sectors are not evaluated** (61 Ramos Arizpe, 28 Arteaga, 1 Saltillo) and carry `null`, not 0. A "no flood risk" filter that lets them through says something the data never said |
+| Schools / health / supermarket | `SCORE_ESCUELA`, `SCORE_SALUD`, `SCORE_SUPERMERCADO` | DENUE 05_2026; nearness, not quality |
+| Budget, as a proxy | `valor_catastral.json` | Fiscal reference value, not price, for 246 sectors — label it as that |
+| Landslide / chemical risk | none per AGEB today | Needs a pipeline step like `RIESGO_INDEX`, or stays out of the first version |
+
+The result would highlight and list the matching sectors, each with **why** it matched and the
+source and date of every value used, in native form controls (WCAG 2.2 AA).
+
+**A guardrail carried over from §3.4 and §3.7:** the criteria describe the **place** — hazard,
+services, amenities, land value — never the people who live there. "Sectors without vulnerable
+population" is the redlining mechanism §3.7 refused to publish as a layer, and a search box
+would be a more direct route to it than a layer ever was.
+
+**Reactivation criteria for the agent — all three:** a lawful inventory with location and price
+(for example, a partnership with a brokerage through its own API, server-side); a backend that
+can hold a key; and evidence from the deterministic panel that typing criteria in words is what
+its users are missing.
+
+---
 
 ## 4. Traceability of the published layers
 
