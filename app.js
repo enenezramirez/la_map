@@ -923,6 +923,10 @@ function actualizarLeyenda() {
 
 function marcarCapaActiva(clave) {
     capasActivas.add(clave);
+    // A polygon layer switched on after the stream courses is brought to the
+    // front and would paint over them. They share its canvas on purpose (see
+    // cargarCapaCauces), so they are lifted back above it here instead.
+    if (clave !== 'cauces' && capaCauces && map.hasLayer(capaCauces)) capaCauces.bringToFront();
     actualizarLeyenda();
 }
 
@@ -1483,12 +1487,17 @@ function mostrarDetalleCauce(props) {
     abrirFicha();
 }
 
+// Drawn in the default overlay pane, sharing the polygons' canvas, and NOT in a
+// pane of its own above them. That was tried: with preferCanvas a pane gets a
+// canvas the size of the map, Leaflet leaves it in place after the layer is
+// switched off, and it took every click meant for the sectors underneath --
+// from the first time the layer was turned on until reload. One canvas
+// hit-tests top-down and falls through to the polygon when no line is hit.
+let capaCauces = null;
+
 function cargarCapaCauces(checkbox) {
     let capa = null;
     registrarClaveDeCapa('cauces', checkbox);
-    // Its own pane above the polygons, so a choropleth switched on later does
-    // not paint over the lines; the default overlay pane sits at 400.
-    map.createPane('cauces').style.zIndex = 450;
 
     fetch('data/cauces_inegi.geojson', { cache: 'no-cache' })
         .then(respuesta => respuesta.json())
@@ -1512,25 +1521,24 @@ function cargarCapaCauces(checkbox) {
             // lets pointer events through to it.
             let casco = null;
             casco = L.geoJSON(geojson, {
-                pane: 'cauces',
                 style: f => ({ color: CASCO_CAUCE, weight: ANCHO_CAUCE(f.properties.ORDEN) + 3, opacity: 1 }),
                 onEachFeature: (feature, layer) => {
                     layer.on({
                         mouseover: e => e.target.setStyle({ weight: ANCHO_CAUCE(feature.properties.ORDEN) + 6 }),
                         mouseout: e => casco.resetStyle(e.target),
                         click: e => {
-                            resaltarGeometrias([feature.geometry], 'cauces');
+                            resaltarGeometrias([feature.geometry]);
                             mostrarDetalleCauce(feature.properties);
                         }
                     });
                 }
             });
             const nucleo = L.geoJSON(geojson, {
-                pane: 'cauces',
                 interactive: false,
                 style: f => ({ color: COLOR_CAUCE, weight: ANCHO_CAUCE(f.properties.ORDEN), opacity: 1 })
             });
             capa = L.featureGroup([casco, nucleo]);
+            capaCauces = capa;
 
             if (checkbox.checked) {
                 capa.addTo(map);
@@ -1544,6 +1552,7 @@ function cargarCapaCauces(checkbox) {
         if (!capa) return;
         if (checkbox.checked) {
             capa.addTo(map);
+            capa.bringToFront();
             marcarCapaActiva('cauces');
         } else {
             map.removeLayer(capa);
@@ -1830,11 +1839,7 @@ function renderSugerencias(lista) {
 // against the light ones (1.22-1.51:1). Casing puts the contrast inside
 // the line: core against casing is 7.16:1 whatever it is drawn over, and
 // no fill can hide both at once since the two are 7.16:1 apart.
-//
-// `pane` is for a selection that must sit above its own layer: the stream
-// courses live in a pane over the overlay one, so an outline drawn in the
-// default pane would be painted over by the very line it selects.
-function resaltarGeometrias(geometrias, pane) {
+function resaltarGeometrias(geometrias) {
     limpiarSeleccion();
     const coleccion = {
         type: 'FeatureCollection',
@@ -1844,7 +1849,6 @@ function resaltarGeometrias(geometrias, pane) {
     // non-interactive so it never intercepts a click meant for a layer.
     const contorno = (color, weight) => L.geoJSON(coleccion, {
         interactive: false,
-        ...(pane ? { pane } : {}),
         style: { color, weight, fill: false }
     });
     capaSeleccion = L.layerGroup([
