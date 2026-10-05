@@ -85,6 +85,7 @@ data/
   riesgo_inundacion.png          ANRI severity raster (backup) + its _meta.json
   calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
   valor_catastral.json           Cadastral land value per AGEB (informational, not in the index)
+  cauces_inegi.geojson           Main stream courses, INEGI 1:50 000 (context, not a risk layer)
 DATOS.md             Data log: provenance of each dataset
 ```
 
@@ -99,6 +100,7 @@ All are official, publicly accessible sources. The complete provenance —publis
 - [INEGI — DENUE 05_2026](https://www.inegi.org.mx/app/mapa/denue/default.aspx) (schools, healthcare, supermarkets)
 - [IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024](https://implansaltillo.mx/perfil/) (pluvial flood, translational landslide and chemical-technological risk)
 - [CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI)](https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer) (severity raster, Tr = 100 years; kept as an IMPLAN backup)
+- [INEGI — Red Hidrográfica escala 1:50 000, edición 2.0](https://www.inegi.org.mx/temas/hidrografia/) (main stream courses, as context only)
 
 ## Project status
 

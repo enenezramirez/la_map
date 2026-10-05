@@ -86,7 +86,7 @@
          server sends no Cache-Control or ETag at all, only Last-Modified, so
          browsers cache it heuristically and never revalidate. Bump this
          whenever a stylesheet change is one the markup depends on. -->
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -212,6 +212,20 @@
                     <p class="layer-desc">Valor de referencia por m² que el municipio usa para el predial (Tesorería · 2026). No es precio de mercado.</p>
                 </div>
             </div>
+
+            <div class="layer-group" id="group-contexto" role="group" aria-labelledby="group-contexto-title">
+                <h3 class="layer-group-title" id="group-contexto-title">Contexto</h3>
+                <p class="layer-group-desc">Dibujado tal cual; no clasifica riesgo.</p>
+
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-streams">
+                        <span class="slider"></span>
+                        <span class="layer-name">Cauces Mapeados</span>
+                    </label>
+                    <p class="layer-desc">Arroyos principales como los trazó INEGI entre 1998 y 2008, antes de buena parte del crecimiento urbano (Red Hidrográfica 1:50 000).</p>
+                </div>
+            </div>
         </section>
 
         <!-- Dynamic legends section -->
@@ -225,7 +239,8 @@
         <footer class="panel-footer">
             <p>FUENTES OFICIALES<br>
                INEGI · CENSO 2020 · DENUE 05_2026<br>
-               IMPLAN · ATLAS DE RIESGOS 2024</p>
+               IMPLAN · ATLAS DE RIESGOS 2024<br>
+               INEGI · RED HIDROGRÁFICA 1:50 000</p>
         </footer>
     </div>
 
@@ -256,6 +271,6 @@
          Leaflet and after the markup above, exactly as the inline block did.
          The ?v= is the same cache buster as styles.css and matters for the
          same reason: markup and script have to move together. -->
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=12"></script>
 </body>
 </html>

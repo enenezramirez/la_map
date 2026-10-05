@@ -464,6 +464,16 @@ body {
     flex-shrink: 0;
 }
 
+/* A line layer gets a line swatch, cased like the line on the map
+   (CASCO_CAUCE in app.js), and as much thicker as the map's line is. */
+.legend-swatch.legend-line {
+    width: 22px;
+    border: 1.5px solid #0b0c0e;
+    border-radius: 3px;
+}
+.legend-swatch.legend-line-fina { height: 5px; }
+.legend-swatch.legend-line-gruesa { height: 6.5px; }
+
 /* Data source and cutoff date (traceability).
    Monospaced on purpose: if the project's promise is that the index can be
    traced back to its source, provenance is not legal fine print — it is part

@@ -249,6 +249,24 @@ INEGI_VECTORIAL_FUENTE = (
 )
 INEGI_VECTORIAL_FECHA_CORTE = "2023"
 
+# INEGI's 1:50 000 stream network, published as CONTEXT and nothing else: it
+# is not a risk classification, it does not touch the Investment Index, and
+# nothing here validates it as a predictor of flooding (DATOS.md §3.8). The
+# subbasin is RH24Be, which holds 429 of our 431 AGEBs; the other two sit in
+# the Arteaga sierra, in RH37A, and are simply not drawn.
+INEGI_CAUCES_SHP = (
+    RAW_DATA / "inegi_red_hidrografica" / "RH24" / "RH24B" / "RH24Be" / "RH24Be_hl.shp"
+)
+CAUCES_GEOJSON = DATA_DIR / "cauces_inegi.geojson"
+INEGI_CAUCES_FUENTE = "INEGI — Red Hidrográfica escala 1:50 000"
+INEGI_CAUCES_EDICION = "edición 2.0, 2010"
+# Strahler order 5 and up. Not a size picked by eye: it is the cut the
+# municipality's own consultants used -- the 2014 Atlas ran its hydraulic
+# model "en los cauces de orden 5, 6 y 7" (DATOS.md §3.8). Measured cost,
+# clipped to the AGEBs: >=5 is 68 lines, 54 km, 32 KB; >=4 would be 130 lines,
+# 106 km, 63 KB.
+CAUCES_ORDEN_MINIMO = 5
+
 # Traffic-light order of intensity and its 0-100 score for the penalty.
 NIVELES_INTENSIDAD = ["Muy bajo", "Bajo", "Medio", "Alto", "Muy alto"]
 PUNTAJE_INTENSIDAD = {"Muy bajo": 0, "Bajo": 25, "Medio": 50, "Alto": 75, "Muy alto": 100}
@@ -1233,6 +1251,52 @@ def exportar_capa_riesgo(
     return gdf
 
 
+def exportar_cauces(gdf_agebs: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """
+    Clip INEGI's stream network to the AGEB footprint, keep the main channels
+    and export them as a context layer.
+
+    The capture date is the reason the layer is worth showing -- the published
+    lines were captured 1998-2008, before much of the current urban expansion,
+    so they show channels that may since have been built over -- and it is read
+    through an OGR SQL cast because pyogrio 0.12.0 returns NaT for every value
+    of this file's date field. The bytes are valid YYYYMMDD (`20010228`); the
+    per-year counts read back as text match a raw DBF read exactly, so the cast
+    is the faithful path and the datetime one is the broken instrument.
+    """
+    capa = INEGI_CAUCES_SHP.stem
+    gdf = gpd.read_file(
+        INEGI_CAUCES_SHP,
+        sql=f"SELECT ORDER_1, CONDICION, CAST(FECHA AS character(10)) AS CAPTURA FROM {capa}",
+    )
+    gdf = gdf[gdf["ORDER_1"] >= CAUCES_ORDEN_MINIMO].to_crs(epsg=4326)
+    gdf = gpd.clip(gdf, gdf_agebs.to_crs(epsg=4326).union_all())
+    # The clip can leave points where a line only grazes the footprint.
+    gdf = gdf[gdf.geom_type.isin(["LineString", "MultiLineString"])].copy()
+    gdf["geometry"] = gdf["geometry"].simplify(TOLERANCIA_SIMPLIFICACION)
+
+    anio = gdf["CAPTURA"].str[:4]
+    if not anio.str.fullmatch(r"(19|20)\d\d").all():
+        raise ValueError(f"Stream capture year not readable: {sorted(anio.unique())}")
+    gdf = gdf.assign(
+        ORDEN=gdf["ORDER_1"].astype(int),
+        CONDICION=gdf["CONDICION"].str.strip().str.capitalize(),
+        ANIO_CAPTURA=anio.astype(int),
+        FUENTE=INEGI_CAUCES_FUENTE,
+        FECHA=INEGI_CAUCES_EDICION,
+    )[["ORDEN", "CONDICION", "ANIO_CAPTURA", "FUENTE", "FECHA", "geometry"]]
+    gdf = gdf.sort_values("ORDEN").reset_index(drop=True)
+
+    exportar_geojson(gdf, CAUCES_GEOJSON)
+    km = gdf.to_crs(CRS_METRICO).length.sum() / 1000
+    tamano_kb = CAUCES_GEOJSON.stat().st_size / 1024
+    print(
+        f"  Stream layer exported: {CAUCES_GEOJSON} "
+        f"({len(gdf)} lines, {km:.1f} km, order >= {CAUCES_ORDEN_MINIMO}, {tamano_kb:.1f} KB)"
+    )
+    return gdf
+
+
 def agebs_evaluados_por_riesgo(
     gdf_agebs: gpd.GeoDataFrame, gdf_riesgo_completo: gpd.GeoDataFrame
 ) -> set[str]:
@@ -1576,6 +1640,9 @@ if __name__ == "__main__":
         gdf_quimico, RIESGO_QUIMICO_GEOJSON,
         "Riesgo Químico-Tecnológico", "Químico-Tecnológico",
     )
+
+    print("\nClipping INEGI stream network (context layer, not a risk)...")
+    exportar_cauces(gdf_agebs)
 
     print("\nComputing flood exposure per AGEB (penalty)...")
     df_riesgo = calcular_riesgo_inundacion_por_ageb(

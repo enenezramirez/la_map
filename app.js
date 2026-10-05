@@ -757,7 +757,9 @@ const LEYENDAS = {
     quimico: () => leyendasRiesgo.quimico || '<p class="empty-legend">Cargando…</p>',
     // Replaced by cargarCapaCatastro once the lookup arrives, since its class
     // counts are only known then.
-    catastro: () => '<p class="empty-legend">Cargando…</p>'
+    catastro: () => '<p class="empty-legend">Cargando…</p>',
+    // Same: replaced by cargarCapaCauces with the orders and years it found.
+    cauces: () => '<p class="empty-legend">Cargando…</p>'
 };
 
 // Which risk layers share the single-hue brick ramp: their swatches are
@@ -1416,6 +1418,137 @@ function cargarCapaCatastro(checkbox) {
     });
 }
 
+// --- Stream courses (INEGI Red Hidrográfica 1:50 000) ----------------
+// Context, not risk: drawn as INEGI mapped it, never classified, and kept out
+// of every index. Nothing validates proximity to a channel as a flood
+// predictor -- two thirds of the city's AGEBs touch one of some order
+// (DATOS.md §3.8). What it adds is WHERE the arroyos ran when they were
+// captured, 1998-2008, which is the half of the flood story the pluvial
+// layer leaves out.
+//
+// Cased like the selection outline and for the same measured reason: no single
+// colour stays visible over every fill on this map, and the services ramp —
+// on by default — sits at the blue's own luminance (#2a7d75 against #3d7fd6 is
+// ~1.2:1). The core reads against its casing at ~4.8:1 whatever is beneath,
+// and against either basemap on its own (4.9:1 dark, 3.6-3.9:1 light), so the
+// casing is fixed and does not follow the basemap switch.
+const COLOR_CAUCE = '#3d7fd6';
+const CASCO_CAUCE = '#0b0c0e';
+// Core width by Strahler order: higher order, more water gathered upstream.
+const ANCHO_CAUCE = orden => (orden >= 6 ? 3.5 : 2);
+
+function htmlLeyendaCauces(conteos, anios, fuente, edicion) {
+    const filas = Array.from(conteos.keys()).sort((a, b) => a - b).map(orden => `
+        <div class="legend-row">
+            <span class="legend-swatch legend-line legend-line-${orden >= 6 ? 'gruesa' : 'fina'}" data-swatch="${COLOR_CAUCE}"></span>
+            <span>Orden ${orden} — ${conteos.get(orden).toLocaleString('es-MX')} tramos</span>
+        </div>
+    `).join('');
+    const periodo = anios.min === anios.max ? `${anios.min}` : `${anios.min} y ${anios.max}`;
+    return `
+        <p class="legend-title">Cauces mapeados (INEGI)</p>
+        ${filas}
+        <p class="legend-source">Trazados entre ${esc(periodo)}; no es una capa de riesgo y no entra en ningún índice.
+           Fuente: ${esc(fuente)} · ${esc(edicion)}.</p>
+        <details class="legend-help">
+            <summary>¿Qué muestran los Cauces?</summary>
+            <div class="legend-help-body">
+                <p><strong>Qué son:</strong> las corrientes que INEGI trazó en su red hidrográfica.
+                   Dentro de la mancha urbana casi todas son intermitentes: llevan agua solo cuando llueve.</p>
+                <p><strong>Por qué solo orden 5 y mayor:</strong> el orden de Strahler mide la jerarquía de un
+                   cauce — dos de orden 4 que se unen forman uno de orden 5. El Atlas de Riesgos 2014 del
+                   municipio modeló el desbordamiento justo en los cauces de orden 5, 6 y 7; aquí se usa el
+                   mismo corte.</p>
+                <p><strong>Por qué importa la fecha:</strong> las líneas se capturaron entre ${esc(periodo)},
+                   antes de buena parte del crecimiento actual. Donde una cruza hoy calles y casas, el cauce
+                   puede estar entubado, desviado o construido encima: el mapa muestra por dónde corría el agua,
+                   no por dónde corre hoy.</p>
+                <p><strong>Lo que no es:</strong> no clasifica riesgo ni modela inundación. Estar cerca de un
+                   cauce no prueba que una zona se inunde, ni lo contrario. Sirve para leer junto a la capa de
+                   inundación, que es solo pluvial y deja fuera el desbordamiento de arroyos.</p>
+            </div>
+        </details>
+    `;
+}
+
+function mostrarDetalleCauce(props) {
+    document.getElementById('sector-title').textContent = `Cauce de orden ${props.ORDEN}`;
+    document.getElementById('sector-info').innerHTML = `
+        <p class="detail-row"><span>Condición</span><strong>${esc(props.CONDICION)}</strong></p>
+        <p class="detail-row"><span>Capturado en</span><strong>${esc(String(props.ANIO_CAPTURA))}</strong></p>
+        <p class="detail-note">Es la línea que INEGI cartografió ese año. Hoy el cauce puede estar
+           entubado, desviado o construido encima, y su cercanía no indica riesgo por sí sola.</p>
+        <p class="detail-source">Fuente: ${esc(props.FUENTE)} · ${esc(props.FECHA)}.</p>
+    `;
+    abrirFicha();
+}
+
+function cargarCapaCauces(checkbox) {
+    let capa = null;
+    registrarClaveDeCapa('cauces', checkbox);
+    // Its own pane above the polygons, so a choropleth switched on later does
+    // not paint over the lines; the default overlay pane sits at 400.
+    map.createPane('cauces').style.zIndex = 450;
+
+    fetch('data/cauces_inegi.geojson', { cache: 'no-cache' })
+        .then(respuesta => respuesta.json())
+        .then(geojson => {
+            const conteos = new Map();
+            const anios = { min: Infinity, max: -Infinity };
+            for (const f of geojson.features) {
+                const p = f.properties;
+                conteos.set(p.ORDEN, (conteos.get(p.ORDEN) || 0) + 1);
+                anios.min = Math.min(anios.min, p.ANIO_CAPTURA);
+                anios.max = Math.max(anios.max, p.ANIO_CAPTURA);
+            }
+            const p0 = geojson.features.length ? geojson.features[0].properties : {};
+            LEYENDAS.cauces = () => htmlLeyendaCauces(conteos, anios, p0.FUENTE, p0.FECHA);
+
+            // The casing is the interactive half: it is the wider of the two, so
+            // a thin channel is not a pixel-perfect click target. The core on top
+            // lets pointer events through to it.
+            let casco = null;
+            casco = L.geoJSON(geojson, {
+                pane: 'cauces',
+                style: f => ({ color: CASCO_CAUCE, weight: ANCHO_CAUCE(f.properties.ORDEN) + 3, opacity: 1 }),
+                onEachFeature: (feature, layer) => {
+                    layer.on({
+                        mouseover: e => e.target.setStyle({ weight: ANCHO_CAUCE(feature.properties.ORDEN) + 6 }),
+                        mouseout: e => casco.resetStyle(e.target),
+                        click: e => {
+                            resaltarGeometrias([feature.geometry], 'cauces');
+                            mostrarDetalleCauce(feature.properties);
+                        }
+                    });
+                }
+            });
+            const nucleo = L.geoJSON(geojson, {
+                pane: 'cauces',
+                interactive: false,
+                style: f => ({ color: COLOR_CAUCE, weight: ANCHO_CAUCE(f.properties.ORDEN), opacity: 1 })
+            });
+            capa = L.featureGroup([casco, nucleo]);
+
+            if (checkbox.checked) {
+                capa.addTo(map);
+                marcarCapaActiva('cauces');
+            }
+            registrarCapaEnVista(checkbox, capa);
+        })
+        .catch(error => console.error('Error loading stream courses:', error));
+
+    checkbox.addEventListener('change', () => {
+        if (!capa) return;
+        if (checkbox.checked) {
+            capa.addTo(map);
+            marcarCapaActiva('cauces');
+        } else {
+            map.removeLayer(capa);
+            marcarCapaInactiva('cauces');
+        }
+    });
+}
+
 // --- Colonia search ------------------------------------------------
 // Jump to a colonia by name. The colonia names and geometries already
 // live in the services GeoJSON (indexed as AGEBs on load), so the search
@@ -1694,7 +1827,11 @@ function renderSugerencias(lista) {
 // against the light ones (1.22-1.51:1). Casing puts the contrast inside
 // the line: core against casing is 7.16:1 whatever it is drawn over, and
 // no fill can hide both at once since the two are 7.16:1 apart.
-function resaltarGeometrias(geometrias) {
+//
+// `pane` is for a selection that must sit above its own layer: the stream
+// courses live in a pane over the overlay one, so an outline drawn in the
+// default pane would be painted over by the very line it selects.
+function resaltarGeometrias(geometrias, pane) {
     limpiarSeleccion();
     const coleccion = {
         type: 'FeatureCollection',
@@ -1704,6 +1841,7 @@ function resaltarGeometrias(geometrias) {
     // non-interactive so it never intercepts a click meant for a layer.
     const contorno = (color, weight) => L.geoJSON(coleccion, {
         interactive: false,
+        ...(pane ? { pane } : {}),
         style: { color, weight, fill: false }
     });
     capaSeleccion = L.layerGroup([
@@ -2012,6 +2150,9 @@ cargarCapaRiesgo({
 // it does not enter the Investment Index. Borrows the AGEB polygons from the
 // services layer, so it declares no file of its own.
 cargarCapaCatastro(document.getElementById('layer-cadastral'));
+
+// Stream courses (INEGI, 1:50 000). Context only: no index reads it.
+cargarCapaCauces(document.getElementById('layer-streams'));
 
 // Backup (ANRI - CONAGUA): the flood layer by Tr=100 severity is kept
 // as a raster in data/riesgo_inundacion.png (+_meta.json). To reactivate
