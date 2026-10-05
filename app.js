@@ -1497,6 +1497,9 @@ function cargarCapaCauces(checkbox) {
             const anios = { min: Infinity, max: -Infinity };
             for (const f of geojson.features) {
                 const p = f.properties;
+                // The order reaches innerHTML and a class name, so only an
+                // integer is let through to either.
+                if (!Number.isInteger(p.ORDEN)) continue;
                 conteos.set(p.ORDEN, (conteos.get(p.ORDEN) || 0) + 1);
                 anios.min = Math.min(anios.min, p.ANIO_CAPTURA);
                 anios.max = Math.max(anios.max, p.ANIO_CAPTURA);
