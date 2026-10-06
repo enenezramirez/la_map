@@ -2143,16 +2143,20 @@ function formatoDistancia(km) {
 const formatoPesos = valor => `$${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // Every criterion reads its value through `leer`, and null there means "no
-// figure", whatever the reason. `umbral` parses the select's value and returns
-// null for "any", so an unexpected option value disables a criterion rather
-// than filtering on NaN, which would silently match nothing.
-const umbralNumerico = texto => {
-    const n = Number(texto);
-    return texto !== '' && Number.isFinite(n) ? n : null;
-};
+// figure", whatever the reason.
+//
+// The values a criterion accepts are declared HERE, in `opciones`, and the
+// select's options are generated from them -- the markup only holds "any".
+// Checking the submitted value against the markup's own options was tried and
+// proved worthless: tampering edits exactly those options. The thresholds mean
+// what these entries say and nothing else -- a proximity score of 0 only says
+// "3 km or more", so a value of 5 would have matched every sector that far
+// out, 10 km away or not. A value not declared here reads as "any".
+const OPCIONES_CERCANIA = [[0.5, 'A 500 m o menos'], [1, 'A 1 km o menos'], [2, 'A 2 km o menos']];
+
 const cercania = (id, campo, etiqueta) => ({
     id, etiqueta, fuente: 'INEGI · DENUE 05_2026',
-    umbral: umbralNumerico,
+    opciones: OPCIONES_CERCANIA,
     leer: s => distanciaKm(s.props[campo]),
     cumple: (km, max) => km <= max,
     pide: max => `a ${formatoDistancia(max)} o menos`,
@@ -2163,7 +2167,7 @@ const cercania = (id, campo, etiqueta) => ({
 const CRITERIOS = [
     {
         id: 'servicios', etiqueta: 'Servicios básicos', fuente: 'INEGI · Censo 2020',
-        umbral: umbralNumerico,
+        opciones: [[80, 'Índice de 80 o más'], [90, 'Índice de 90 o más'], [95, 'Índice de 95 o más']],
         leer: s => s.props.SERVICIOS_INDEX,
         cumple: (v, min) => v >= min,
         pide: min => `índice de ${min} o más`,
@@ -2172,7 +2176,7 @@ const CRITERIOS = [
     },
     {
         id: 'inundacion', etiqueta: 'Inundación pluvial', fuente: 'IMPLAN · Atlas de Riesgos 2024',
-        umbral: texto => (texto === 'sin-zona' || texto === 'baja' ? texto : null),
+        opciones: [['sin-zona', 'Ninguna zona marcada en el sector'], ['baja', 'Exposición baja (5 de 100 o menos)']],
         // Compared against `true`, the same way the investment card tests the
         // flag: only a sector the model is known to have covered has a figure.
         leer: s => (s.props.RIESGO_EVALUADO === true ? s.props.RIESGO_INDEX : null),
@@ -2186,7 +2190,8 @@ const CRITERIOS = [
     cercania('supermercado', 'SCORE_SUPERMERCADO', 'Supermercado más cercano'),
     {
         id: 'catastro', etiqueta: 'Valor catastral', fuente: 'Tesorería Municipal de Saltillo · 2026',
-        umbral: umbralNumerico,
+        // Filled from the published figures once the lookup arrives.
+        opciones: [],
         leer: s => (s.catastro ? s.catastro.valor : null),
         cumple: (v, max) => v <= max,
         pide: max => `hasta ${formatoPesos(max)} por m²`,
@@ -2206,11 +2211,25 @@ let capaCoincidencias = null;
 const formCriterios = document.getElementById('criteria-form');
 const estadoCriterios = document.getElementById('criteria-status');
 
+// Municipalities offered, filled from the data like the cadastral options.
+let municipiosOfrecidos = [];
+
+function poblarOpciones(select, opciones) {
+    for (const [valor, texto] of opciones) select.add(new Option(texto, String(valor)));
+}
+
+// The submitted string is looked up among the declared options and the
+// declared value is what gets used, never the string parsed.
+function valorDeclarado(texto, opciones) {
+    const hallada = opciones.find(([valor]) => String(valor) === texto);
+    return hallada ? hallada[0] : null;
+}
+
 function leerFiltros() {
     const datos = new FormData(formCriterios);
-    const municipio = String(datos.get('municipio') || '');
+    const municipio = valorDeclarado(String(datos.get('municipio') || ''), municipiosOfrecidos) || '';
     const filtros = {};
-    for (const c of CRITERIOS) filtros[c.id] = c.umbral(String(datos.get(c.id) || ''));
+    for (const c of CRITERIOS) filtros[c.id] = valorDeclarado(String(datos.get(c.id) || ''), c.opciones);
     return { municipio, filtros };
 }
 
@@ -2373,9 +2392,16 @@ formCriterios.addEventListener('submit', e => {
 
 // "reset" fires before the controls are cleared, which is fine: nothing here
 // reads them.
+// Closes the card if it is one of this search's -- the results or a sector's
+// "por qué coincide" -- recognised by its own markup rather than by its title,
+// which a sector's card does not share. Left open, "back" would re-list results
+// whose outlines had just been cleared.
 formCriterios.addEventListener('reset', () => {
     limpiarCriterios();
-    if (document.getElementById('sector-title').textContent === 'Zonas que cumplen') cerrarFicha();
+    if (document.querySelector('#sector-info .criteria-summary, #sector-info .criteria-back')) {
+        cerrarFicha();
+        limpiarSeleccion();
+    }
 });
 
 Promise.all([inversionLista, catastroListo]).then(([geojson, catastro]) => {
@@ -2388,10 +2414,9 @@ Promise.all([inversionLista, catastroListo]).then(([geojson, catastro]) => {
             ? catastro.sectores[f.properties.CVEGEO] : null
     }));
 
-    const selMunicipio = document.getElementById('crit-municipio');
-    for (const m of [...new Set(sectoresBusqueda.map(s => s.props.NOM_MUN))].sort((a, b) => a.localeCompare(b, 'es'))) {
-        selMunicipio.add(new Option(m, m));
-    }
+    municipiosOfrecidos = [...new Set(sectoresBusqueda.map(s => s.props.NOM_MUN))]
+        .sort((a, b) => a.localeCompare(b, 'es')).map(m => [m, m]);
+    poblarOpciones(document.getElementById('crit-municipio'), municipiosOfrecidos);
     // One option per cadastral figure actually published, from the cheapest.
     // The value is the figure itself, so the filter reads "up to this class".
     // Classes are collected per figure, not one per figure: POPULAR (2) and
@@ -2402,11 +2427,10 @@ Promise.all([inversionLista, catastroListo]).then(([geojson, catastro]) => {
         if (!clases.has(s.catastro.valor)) clases.set(s.catastro.valor, new Set());
         clases.get(s.catastro.valor).add(s.catastro.clase);
     }
-    const selCatastro = document.getElementById('crit-catastro');
-    for (const [valor, nombres] of [...clases].sort((a, b) => a[0] - b[0])) {
-        const clase = [...nombres].sort().join(' / ');
-        selCatastro.add(new Option(`Hasta ${formatoPesos(valor)} por m² · ${clase}`, String(valor)));
-    }
+    const criterioCatastro = CRITERIOS.find(c => c.id === 'catastro');
+    criterioCatastro.opciones = [...clases].sort((a, b) => a[0] - b[0]).map(([valor, nombres]) =>
+        [valor, `Hasta ${formatoPesos(valor)} por m² · ${[...nombres].sort().join(' / ')}`]);
+    for (const c of CRITERIOS) poblarOpciones(document.getElementById(`crit-${c.id}`), c.opciones);
     document.getElementById('criteria-fieldset').disabled = false;
 }).catch(error => console.error('Error preparing the criteria search:', error));
 

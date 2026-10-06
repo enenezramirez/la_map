@@ -138,7 +138,10 @@
              filtering on change: the results open the side card, and a context
              change on input would fail SC 3.2.2. The fieldset stays disabled
              until the sectors have loaded, like the colonia search. The criteria
-             describe the place only — never the people who live there (§3.9). -->
+             describe the place only — never the people who live there (§3.9).
+             Each select holds only "any" here: the thresholds are declared in
+             app.js (CRITERIOS) and the options generated from them, so the
+             values the search accepts and the values offered cannot drift. -->
         <section class="panel-section" id="criteria-section" aria-labelledby="criteria-heading">
             <h2 id="criteria-heading">Buscar Zonas por Criterios</h2>
             <details class="criteria-details">
@@ -159,9 +162,6 @@
                             <label for="crit-servicios">Servicios básicos <span class="criteria-src">INEGI · Censo 2020</span></label>
                             <select id="crit-servicios" name="servicios">
                                 <option value="">Cualquiera</option>
-                                <option value="80">Índice de 80 o más</option>
-                                <option value="90">Índice de 90 o más</option>
-                                <option value="95">Índice de 95 o más</option>
                             </select>
                         </div>
 
@@ -169,8 +169,6 @@
                             <label for="crit-inundacion">Inundación pluvial <span class="criteria-src">IMPLAN · Atlas 2024</span></label>
                             <select id="crit-inundacion" name="inundacion" aria-describedby="crit-inundacion-aviso">
                                 <option value="">Cualquiera</option>
-                                <option value="sin-zona">Ninguna zona marcada en el sector</option>
-                                <option value="baja">Exposición baja (5 de 100 o menos)</option>
                             </select>
                             <p class="criteria-caveat" id="crit-inundacion-aviso">Solo inundación pluvial: el desbordamiento de arroyos no está en esta capa. Sin zona marcada no es sin inundación.</p>
                         </div>
@@ -179,9 +177,6 @@
                             <label for="crit-escuela">Escuela más cercana <span class="criteria-src">DENUE 05_2026</span></label>
                             <select id="crit-escuela" name="escuela" aria-describedby="crit-cercania-nota">
                                 <option value="">Cualquier distancia</option>
-                                <option value="0.5">A 500 m o menos</option>
-                                <option value="1">A 1 km o menos</option>
-                                <option value="2">A 2 km o menos</option>
                             </select>
                         </div>
 
@@ -189,9 +184,6 @@
                             <label for="crit-salud">Servicio de salud más cercano <span class="criteria-src">DENUE 05_2026</span></label>
                             <select id="crit-salud" name="salud" aria-describedby="crit-cercania-nota">
                                 <option value="">Cualquier distancia</option>
-                                <option value="0.5">A 500 m o menos</option>
-                                <option value="1">A 1 km o menos</option>
-                                <option value="2">A 2 km o menos</option>
                             </select>
                         </div>
 
@@ -199,9 +191,6 @@
                             <label for="crit-supermercado">Supermercado más cercano <span class="criteria-src">DENUE 05_2026</span></label>
                             <select id="crit-supermercado" name="supermercado" aria-describedby="crit-cercania-nota">
                                 <option value="">Cualquier distancia</option>
-                                <option value="0.5">A 500 m o menos</option>
-                                <option value="1">A 1 km o menos</option>
-                                <option value="2">A 2 km o menos</option>
                             </select>
                             <p class="criteria-note" id="crit-cercania-nota">En línea recta desde el centro del sector, no por calle. Cuenta cercanía, no calidad.</p>
                         </div>
