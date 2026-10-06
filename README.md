@@ -15,6 +15,7 @@ Covers **431 AGEBs across three municipalities**: Saltillo, Ramos Arizpe and Art
 - **Landslide Risk** — translational hillside landslide risk zones, by intensity level (2024 Risk Atlas, IMPLAN Saltillo).
 - **Chemical-Technological Risk** — zones exposed to the storage of hazardous chemical substances, relevant along the Saltillo–Ramos Arizpe industrial corridor (2024 Risk Atlas, IMPLAN Saltillo).
 - **Real-Estate Investment Index** — combines service coverage with proximity to urban amenities (schools, healthcare, supermarkets from DENUE) and penalizes flood exposure.
+- **Mapped Stream Courses** — the main arroyos (Strahler order 5 and up) as INEGI captured them in 1998–2008, before much of the current urban growth. Context only: not a risk classification and not part of any index.
 
 Click any colonia or risk zone on the map to see its detail card, with the source and cutoff date of the data you are viewing.
 
