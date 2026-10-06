@@ -1321,6 +1321,27 @@ would be a more direct route to it than a layer ever was.
 can hold a key; and evidence from the deterministic panel that typing criteria in words is what
 its users are missing.
 
+**Built, 2026-10-05, as specified above** (the user's decision). The panel reads
+`indice_inversion.geojson` and `valor_catastral.json`, both already fetched by the map, so it
+adds no request. What it does with the traps in the table:
+
+* **No figure never matches.** It is counted apart, and only where it changed the answer: the
+  card reports the sectors that meet every criterion they *do* have a figure for but lack one,
+  broken down by the missing field. Checked against an independent Python count over the same
+  files, three queries: Saltillo, services ≥ 90, no marked flood zone, school ≤ 1 km →
+  **72 of 342, plus 3 held back for missing data**; any municipality, no marked flood zone →
+  **137 of 431, plus 90** (exactly the sectors outside the Atlas); supermarket ≤ 1 km and land
+  value ≤ $866.99/m² → **92 of 431, plus 79**. All three matched exactly.
+* **Distance is recovered, not approximated.** `SCORE_*` is `100 · (1 − d / 3 km)` clipped at
+  0, so `d = 3 · (1 − score / 100)` exactly; a 0 only says "3 km or more", and the panel says
+  that. It is straight-line from the sector's centroid, and every card says so.
+* **The flood caveat travels with the filter:** under the control, in the results and in each
+  sector's card — "no marked zone" is not "no flooding" (§2.4).
+* **Land value** is offered as "up to" each published figure, labelled a tax base.
+* **Not ranked.** Results are alphabetical; ordering them would read as a score this panel does
+  not compute.
+* **Left out of the first version:** landslide and chemical risk, which have no per-AGEB field.
+
 ---
 
 ## 4. Traceability of the published layers

@@ -923,10 +923,7 @@ function actualizarLeyenda() {
 
 function marcarCapaActiva(clave) {
     capasActivas.add(clave);
-    // A polygon layer switched on after the stream courses is brought to the
-    // front and would paint over them. They share its canvas on purpose (see
-    // cargarCapaCauces), so they are lifted back above it here instead.
-    if (clave !== 'cauces' && capaCauces && map.hasLayer(capaCauces)) capaCauces.bringToFront();
+    elevarCapasDeLinea();
     actualizarLeyenda();
 }
 
@@ -1354,6 +1351,10 @@ function mostrarDetalleCatastro(props) {
     abrirFicha();
 }
 
+// Fetched once and shared: the layer and the criteria search both read it, and
+// neither should depend on the other having been switched on.
+const catastroListo = fetch('data/valor_catastral.json', { cache: 'no-cache' }).then(r => r.json());
+
 function cargarCapaCatastro(checkbox) {
     let capa = null;
     registrarClaveDeCapa('catastro', checkbox);
@@ -1361,7 +1362,7 @@ function cargarCapaCatastro(checkbox) {
     // Needs both the lookup and the AGEB polygons, which arrive from a
     // different request; whichever lands second starts the work.
     Promise.all([
-        fetch('data/valor_catastral.json', { cache: 'no-cache' }).then(r => r.json()),
+        catastroListo,
         agebsListos
     ]).then(([catastro, geojson]) => {
         catastroMeta = { fuente: catastro.fuente, edicion: catastro.edicion };
@@ -1488,6 +1489,16 @@ function mostrarDetalleCauce(props) {
         <p class="detail-source">Fuente: ${esc(props.FUENTE)} · ${esc(props.FECHA)}.</p>
     `;
     abrirFicha();
+}
+
+// A polygon layer switched on after a line layer is brought to the front and
+// would paint over it. The line layers share the polygons' canvas on purpose
+// (see below), so they are lifted back above it instead, in this order: the
+// search's outlines last, since they are what the reader just asked for.
+function elevarCapasDeLinea() {
+    for (const capa of [capaCauces, capaCoincidencias]) {
+        if (capa && map.hasLayer(capa)) capa.bringToFront();
+    }
 }
 
 // Drawn in the default overlay pane, sharing the polygons' canvas, and NOT in a
@@ -2099,6 +2110,306 @@ document.addEventListener('click', e => {
     if (!e.target.closest('#search-section')) cerrarSugerencias();
 });
 
+// --- Find zones by criteria ------------------------------------------
+// The minimum product DATOS.md §3.9 proposes in place of an AI agent: a
+// deterministic filter over fields already published per AGEB. No new data,
+// no request beyond the files the map already loads, no key. Two rules from
+// that evaluation are what this code is mostly about:
+//  · A sector with no figure for a criterion does NOT match. The 90 sectors
+//    outside the flood Atlas carry null, not 0, and a "no flood zone" filter
+//    that let them through would state something the data never said. They
+//    are counted apart instead, so the reader sees how many were left out
+//    for lack of data rather than for failing.
+//  · Criteria describe the place — hazard, services, amenities, land value —
+//    never the people who live there. Nothing about the population is offered.
+// The result is not ranked: no score is computed here, and an order would
+// read as one. Sectors are listed by colonia name.
+
+// Radius of the proximity scores, RADIO_MAX_KM in process_data.py: each
+// SCORE_* is 100 * (1 - d / 3 km), clipped at 0. Inverting it gives back the
+// straight-line distance exactly, except that a 0 only says "3 km or more".
+const RADIO_CERCANIA_KM = 3;
+
+function distanciaKm(score) {
+    return sinDato(score) ? null : RADIO_CERCANIA_KM * (1 - score / 100);
+}
+
+function formatoDistancia(km) {
+    if (km >= RADIO_CERCANIA_KM) return `${RADIO_CERCANIA_KM} km o más`;
+    if (km < 1) return `${Math.round(km * 100) * 10} m`;
+    return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
+}
+
+const formatoPesos = valor => `$${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Every criterion reads its value through `leer`, and null there means "no
+// figure", whatever the reason. `umbral` parses the select's value and returns
+// null for "any", so an unexpected option value disables a criterion rather
+// than filtering on NaN, which would silently match nothing.
+const umbralNumerico = texto => {
+    const n = Number(texto);
+    return texto !== '' && Number.isFinite(n) ? n : null;
+};
+const cercania = (id, campo, etiqueta) => ({
+    id, etiqueta, fuente: 'INEGI · DENUE 05_2026',
+    umbral: umbralNumerico,
+    leer: s => distanciaKm(s.props[campo]),
+    cumple: (km, max) => km <= max,
+    pide: max => `a ${formatoDistancia(max)} o menos`,
+    describir: km => `${formatoDistancia(km)} en línea recta`,
+    falta: 'sin dato de cercanía'
+});
+
+const CRITERIOS = [
+    {
+        id: 'servicios', etiqueta: 'Servicios básicos', fuente: 'INEGI · Censo 2020',
+        umbral: umbralNumerico,
+        leer: s => s.props.SERVICIOS_INDEX,
+        cumple: (v, min) => v >= min,
+        pide: min => `índice de ${min} o más`,
+        describir: v => `índice ${formatoIndice(v)}`,
+        falta: 'sin dato del Censo'
+    },
+    {
+        id: 'inundacion', etiqueta: 'Inundación pluvial', fuente: 'IMPLAN · Atlas de Riesgos 2024',
+        umbral: texto => (texto === 'sin-zona' || texto === 'baja' ? texto : null),
+        // Compared against `true`, the same way the investment card tests the
+        // flag: only a sector the model is known to have covered has a figure.
+        leer: s => (s.props.RIESGO_EVALUADO === true ? s.props.RIESGO_INDEX : null),
+        cumple: (v, modo) => (modo === 'sin-zona' ? v === 0 : v <= 5),
+        pide: modo => (modo === 'sin-zona' ? 'ninguna zona marcada' : 'exposición de 5 de 100 o menos'),
+        describir: v => (v === 0 ? 'ninguna zona marcada' : `exposición ${formatoIndice(v)} de 100`),
+        falta: 'fuera del Atlas de Riesgos'
+    },
+    cercania('escuela', 'SCORE_ESCUELA', 'Escuela más cercana'),
+    cercania('salud', 'SCORE_SALUD', 'Salud más cercana'),
+    cercania('supermercado', 'SCORE_SUPERMERCADO', 'Supermercado más cercano'),
+    {
+        id: 'catastro', etiqueta: 'Valor catastral', fuente: 'Tesorería Municipal de Saltillo · 2026',
+        umbral: umbralNumerico,
+        leer: s => (s.catastro ? s.catastro.valor : null),
+        cumple: (v, max) => v <= max,
+        pide: max => `hasta ${formatoPesos(max)} por m²`,
+        describir: (v, s) => `${formatoPesos(v)} por m² · ${s.catastro.clase}`,
+        falta: 'sin valor catastral publicado'
+    }
+];
+
+let anunciarInversion;
+const inversionLista = new Promise(resolver => { anunciarInversion = resolver; });
+
+// Sectors the search runs over: geometry, published properties and the
+// cadastral figure joined by CVEGEO, built once both files are in.
+let sectoresBusqueda = [];
+let capaCoincidencias = null;
+
+const formCriterios = document.getElementById('criteria-form');
+const estadoCriterios = document.getElementById('criteria-status');
+
+function leerFiltros() {
+    const datos = new FormData(formCriterios);
+    const municipio = String(datos.get('municipio') || '');
+    const filtros = {};
+    for (const c of CRITERIOS) filtros[c.id] = c.umbral(String(datos.get(c.id) || ''));
+    return { municipio, filtros };
+}
+
+function buscarZonas({ municipio, filtros }) {
+    const activos = CRITERIOS.filter(c => filtros[c.id] !== null);
+    const enAlcance = sectoresBusqueda.filter(s => !municipio || s.props.NOM_MUN === municipio);
+    const coincidencias = [];
+    // Sectors that meet every criterion they have a figure for but lack one
+    // or more: they are the ones "no data" actually kept out, so they are
+    // what gets counted -- not every sector missing a field, most of which
+    // fail another criterion anyway.
+    let posibles = 0;
+    const faltantes = new Map(activos.map(c => [c.id, 0]));
+    for (const s of enAlcance) {
+        let falla = false;
+        const sinFigura = [];
+        for (const c of activos) {
+            const v = c.leer(s);
+            if (sinDato(v)) sinFigura.push(c.id);
+            else if (!c.cumple(v, filtros[c.id])) { falla = true; break; }
+        }
+        if (falla) continue;
+        if (sinFigura.length) {
+            posibles++;
+            for (const id of sinFigura) faltantes.set(id, faltantes.get(id) + 1);
+        } else {
+            coincidencias.push(s);
+        }
+    }
+    coincidencias.sort((a, b) =>
+        String(a.props.COLONIA).localeCompare(String(b.props.COLONIA), 'es')
+        || String(a.props.CVEGEO).localeCompare(String(b.props.CVEGEO)));
+    return { municipio, filtros, activos, enAlcance: enAlcance.length, coincidencias, posibles, faltantes };
+}
+
+// Outlined, not filled, so the layer the reader has on stays readable under
+// the result. Cased like the selection and in its amber, but dashed and
+// thinner: these are candidates, the solid outline is the one being read.
+function dibujarCoincidencias(coincidencias) {
+    if (capaCoincidencias) map.removeLayer(capaCoincidencias);
+    capaCoincidencias = null;
+    if (!coincidencias.length) return;
+    const coleccion = {
+        type: 'FeatureCollection',
+        features: coincidencias.map(s => ({ type: 'Feature', geometry: s.geometria, properties: {} }))
+    };
+    const contorno = estilo => L.geoJSON(coleccion, { interactive: false, style: { fill: false, ...estilo } });
+    capaCoincidencias = L.featureGroup([
+        contorno({ color: '#0b0c0e', weight: 4 }),
+        contorno({ color: '#c8912f', weight: 1.75, dashArray: '5 4' })
+    ]).addTo(map);
+    capaCoincidencias.bringToFront();
+}
+
+function etiquetaAlcance(municipio) {
+    return municipio ? `en ${municipio}` : 'en los tres municipios';
+}
+
+function mostrarResultadosCriterios(r, enfocar = null) {
+    const n = r.coincidencias.length;
+    const pedidos = r.activos.map(c =>
+        `<li><span>${esc(c.etiqueta)}</span> ${esc(c.pide(r.filtros[c.id]))}</li>`).join('');
+    const faltan = r.activos.filter(c => r.faltantes.get(c.id) > 0)
+        .map(c => `${esc(c.falta)} (${r.faltantes.get(c.id).toLocaleString('es-MX')})`);
+    const notaFaltantes = r.posibles
+        ? `<p class="detail-note">Otros <strong>${r.posibles.toLocaleString('es-MX')}</strong>
+               ${r.posibles === 1 ? 'sector cumple' : 'sectores cumplen'} todo lo que sí se sabe de
+               ${r.posibles === 1 ? 'él' : 'ellos'}, pero les falta dato: ${faltan.join('; ')}.
+               No se cuentan como coincidencias: no tener dato no es cumplir.</p>`
+        : '';
+    const avisoInundacion = r.filtros.inundacion !== null
+        ? `<p class="detail-note detail-note-riesgo"><strong>Sin zona marcada no es sin inundación.</strong>
+               La capa es solo pluvial: el desbordamiento de arroyos va en otro capítulo del Atlas que
+               aquí no se publica, y en julio de 2025 se inundaron colonias que esta capa deja limpias.</p>`
+        : '';
+    const lista = n
+        ? `<ul class="sector-list">${r.coincidencias.map(s => `
+                <li>
+                    <button type="button" class="sector-btn">
+                        <span class="sector-btn-name">${esc(s.props.COLONIA)}</span>
+                        <span class="sector-btn-meta">${esc(s.props.NOM_MUN)} · AGEB ${esc(String(s.props.CVEGEO).slice(-4))}</span>
+                    </button>
+                </li>`).join('')}</ul>`
+        : '<p class="sector-hint">Ningún sector cumple todos los criterios. Prueba relajando alguno.</p>';
+
+    document.getElementById('sector-title').textContent = 'Zonas que cumplen';
+    document.getElementById('sector-info').innerHTML = `
+        <p class="detail-row"><span>Sectores que cumplen</span><strong>${n.toLocaleString('es-MX')} de ${r.enAlcance.toLocaleString('es-MX')}</strong></p>
+        <p class="sector-hint">${esc(etiquetaAlcance(r.municipio))}, con todos estos criterios:</p>
+        <ul class="criteria-summary">${pedidos}</ul>
+        ${notaFaltantes}
+        ${avisoInundacion}
+        ${n ? '<h3>Elige un sector para ver por qué coincide</h3><p class="sector-hint">En orden alfabético: no es un ranking. En el mapa, contorno ámbar punteado.</p>' : ''}
+        ${lista}
+    `;
+    // Paired by position, as in the colonia chooser: a key round-tripped
+    // through the DOM that missed would show another sector's figures.
+    document.getElementById('sector-info').querySelectorAll('.sector-btn').forEach((btn, i) => {
+        btn.addEventListener('click', () => mostrarPorQueCoincide(r.coincidencias[i], r, i));
+    });
+    abrirFicha();
+    // Coming back from a sector, focus returns to the button that opened it;
+    // replacing the card's markup would otherwise drop it to <body> and send
+    // a keyboard user back to the top of the page.
+    if (enfocar !== null) {
+        const btn = document.getElementById('sector-info').querySelectorAll('.sector-btn')[enfocar];
+        if (btn) btn.focus();
+    }
+}
+
+function mostrarPorQueCoincide(s, r, indice) {
+    encuadrarYResaltar([s]);
+    const filas = r.activos.map(c => `
+        <p class="detail-row"><span>${esc(c.etiqueta)}</span><strong>${esc(c.describir(c.leer(s), s))}</strong></p>
+        <p class="criteria-row-src">Se pidió ${esc(c.pide(r.filtros[c.id]))} · ${esc(c.fuente)}</p>
+    `).join('');
+    const usaCercania = r.activos.some(c => ['escuela', 'salud', 'supermercado'].includes(c.id));
+    const notas = [
+        usaCercania ? 'Las distancias son en línea recta desde el centro del sector hasta el establecimiento más cercano del DENUE, no por calle.' : '',
+        r.filtros.catastro !== null ? 'El valor catastral es la base del predial, asignado a toda la colonia: no es precio de mercado ni avalúo del predio.' : '',
+        r.filtros.inundacion !== null ? 'La inundación es solo pluvial: no incluye el desbordamiento de arroyos.' : ''
+    ].filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('');
+
+    document.getElementById('sector-title').textContent = s.props.COLONIA;
+    document.getElementById('sector-info').innerHTML = `
+        <button type="button" class="criteria-back">← Volver a los resultados</button>
+        <p class="detail-row"><span>Municipio</span><strong>${esc(s.props.NOM_MUN)}</strong></p>
+        <h3>Por qué coincide</h3>
+        ${filas}
+        ${notas ? `<div class="detail-source">${notas}</div>` : ''}
+    `;
+    const volver = document.querySelector('#sector-info .criteria-back');
+    volver.addEventListener('click', () => {
+        limpiarSeleccion();
+        mostrarResultadosCriterios(r, indice);
+    });
+    abrirFicha();
+    // The button that was pressed no longer exists, so focus goes to the way back.
+    volver.focus();
+}
+
+function limpiarCriterios() {
+    if (capaCoincidencias) map.removeLayer(capaCoincidencias);
+    capaCoincidencias = null;
+    estadoCriterios.textContent = '';
+}
+
+formCriterios.addEventListener('submit', e => {
+    e.preventDefault();
+    const pedido = leerFiltros();
+    if (!CRITERIOS.some(c => pedido.filtros[c.id] !== null)) {
+        estadoCriterios.textContent = 'Elige al menos un criterio.';
+        return;
+    }
+    const r = buscarZonas(pedido);
+    dibujarCoincidencias(r.coincidencias);
+    estadoCriterios.textContent = `${r.coincidencias.length.toLocaleString('es-MX')} de ${r.enAlcance.toLocaleString('es-MX')} sectores cumplen.`;
+    mostrarResultadosCriterios(r);
+});
+
+// "reset" fires before the controls are cleared, which is fine: nothing here
+// reads them.
+formCriterios.addEventListener('reset', () => {
+    limpiarCriterios();
+    if (document.getElementById('sector-title').textContent === 'Zonas que cumplen') cerrarFicha();
+});
+
+Promise.all([inversionLista, catastroListo]).then(([geojson, catastro]) => {
+    sectoresBusqueda = geojson.features.filter(f => f.geometry).map(f => ({
+        geometria: f.geometry,
+        props: f.properties,
+        // hasOwn for the same reason as the cadastral layer: a key such as
+        // "constructor" would otherwise return an inherited function.
+        catastro: Object.hasOwn(catastro.sectores, f.properties.CVEGEO)
+            ? catastro.sectores[f.properties.CVEGEO] : null
+    }));
+
+    const selMunicipio = document.getElementById('crit-municipio');
+    for (const m of [...new Set(sectoresBusqueda.map(s => s.props.NOM_MUN))].sort((a, b) => a.localeCompare(b, 'es'))) {
+        selMunicipio.add(new Option(m, m));
+    }
+    // One option per cadastral figure actually published, from the cheapest.
+    // The value is the figure itself, so the filter reads "up to this class".
+    // Classes are collected per figure, not one per figure: POPULAR (2) and
+    // INDUSTRIAL (2) are both 464.45, and keying by value alone dropped one.
+    const clases = new Map();
+    for (const s of sectoresBusqueda) {
+        if (!s.catastro || !Number.isFinite(s.catastro.valor)) continue;
+        if (!clases.has(s.catastro.valor)) clases.set(s.catastro.valor, new Set());
+        clases.get(s.catastro.valor).add(s.catastro.clase);
+    }
+    const selCatastro = document.getElementById('crit-catastro');
+    for (const [valor, nombres] of [...clases].sort((a, b) => a[0] - b[0])) {
+        const clase = [...nombres].sort().join(' / ');
+        selCatastro.add(new Option(`Hasta ${formatoPesos(valor)} por m² · ${clase}`, String(valor)));
+    }
+    document.getElementById('criteria-fieldset').disabled = false;
+}).catch(error => console.error('Error preparing the criteria search:', error));
+
 cargarCapaChoropleth({
     archivo: 'data/servicios_basicos.geojson',
     checkbox: document.getElementById('layer-services'),
@@ -2133,7 +2444,10 @@ cargarCapaChoropleth({
         asignar: escalones => { ESCALONES_INVERSION = escalones; }
     },
     funcionEstilo: crearEstiloCapa('INVERSION_INDEX', crearFuncionColor(() => ESCALONES_INVERSION)),
-    funcionDetalle: mostrarDetalleInversion
+    funcionDetalle: mostrarDetalleInversion,
+    // Every field the criteria search filters on is in this file, so it is
+    // what the search reads, loaded whether or not the layer is on.
+    alCargarGeojson: geojson => anunciarInversion(geojson)
 });
 
 // Layer 1 — Flood Risk (IMPLAN CARTO, 2024 Atlas): vector.

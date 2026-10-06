@@ -86,7 +86,7 @@
          server sends no Cache-Control or ETag at all, only Last-Modified, so
          browsers cache it heuristically and never revalidate. Bump this
          whenever a stylesheet change is one the markup depends on. -->
-    <link rel="stylesheet" href="styles.css?v=6">
+    <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 
@@ -131,6 +131,97 @@
                 <ul id="colonia-suggestions" class="search-suggestions" role="listbox"
                     aria-labelledby="search-heading" tabindex="-1" hidden></ul>
             </div>
+        </section>
+
+        <!-- Find zones by criteria: the deterministic panel DATOS.md §3.9 proposes
+             in place of an AI agent. Native controls and an explicit submit, not
+             filtering on change: the results open the side card, and a context
+             change on input would fail SC 3.2.2. The fieldset stays disabled
+             until the sectors have loaded, like the colonia search. The criteria
+             describe the place only — never the people who live there (§3.9). -->
+        <section class="panel-section" id="criteria-section" aria-labelledby="criteria-heading">
+            <h2 id="criteria-heading">Buscar Zonas por Criterios</h2>
+            <details class="criteria-details">
+                <summary>Filtrar sectores por lo que ofrece el lugar</summary>
+                <form id="criteria-form" class="criteria-form" novalidate>
+                    <fieldset id="criteria-fieldset" disabled>
+                        <legend class="visually-hidden">Criterios de búsqueda</legend>
+                        <p class="criteria-hint">Un sector sin dato en un criterio no coincide: se cuenta aparte, porque no tener dato no es cumplir.</p>
+
+                        <div class="criteria-field">
+                            <label for="crit-municipio">Municipio</label>
+                            <select id="crit-municipio" name="municipio">
+                                <option value="">Los tres municipios</option>
+                            </select>
+                        </div>
+
+                        <div class="criteria-field">
+                            <label for="crit-servicios">Servicios básicos <span class="criteria-src">INEGI · Censo 2020</span></label>
+                            <select id="crit-servicios" name="servicios">
+                                <option value="">Cualquiera</option>
+                                <option value="80">Índice de 80 o más</option>
+                                <option value="90">Índice de 90 o más</option>
+                                <option value="95">Índice de 95 o más</option>
+                            </select>
+                        </div>
+
+                        <div class="criteria-field">
+                            <label for="crit-inundacion">Inundación pluvial <span class="criteria-src">IMPLAN · Atlas 2024</span></label>
+                            <select id="crit-inundacion" name="inundacion" aria-describedby="crit-inundacion-aviso">
+                                <option value="">Cualquiera</option>
+                                <option value="sin-zona">Ninguna zona marcada en el sector</option>
+                                <option value="baja">Exposición baja (5 de 100 o menos)</option>
+                            </select>
+                            <p class="criteria-caveat" id="crit-inundacion-aviso">Solo inundación pluvial: el desbordamiento de arroyos no está en esta capa. Sin zona marcada no es sin inundación.</p>
+                        </div>
+
+                        <div class="criteria-field">
+                            <label for="crit-escuela">Escuela más cercana <span class="criteria-src">DENUE 05_2026</span></label>
+                            <select id="crit-escuela" name="escuela" aria-describedby="crit-cercania-nota">
+                                <option value="">Cualquier distancia</option>
+                                <option value="0.5">A 500 m o menos</option>
+                                <option value="1">A 1 km o menos</option>
+                                <option value="2">A 2 km o menos</option>
+                            </select>
+                        </div>
+
+                        <div class="criteria-field">
+                            <label for="crit-salud">Servicio de salud más cercano <span class="criteria-src">DENUE 05_2026</span></label>
+                            <select id="crit-salud" name="salud" aria-describedby="crit-cercania-nota">
+                                <option value="">Cualquier distancia</option>
+                                <option value="0.5">A 500 m o menos</option>
+                                <option value="1">A 1 km o menos</option>
+                                <option value="2">A 2 km o menos</option>
+                            </select>
+                        </div>
+
+                        <div class="criteria-field">
+                            <label for="crit-supermercado">Supermercado más cercano <span class="criteria-src">DENUE 05_2026</span></label>
+                            <select id="crit-supermercado" name="supermercado" aria-describedby="crit-cercania-nota">
+                                <option value="">Cualquier distancia</option>
+                                <option value="0.5">A 500 m o menos</option>
+                                <option value="1">A 1 km o menos</option>
+                                <option value="2">A 2 km o menos</option>
+                            </select>
+                            <p class="criteria-note" id="crit-cercania-nota">En línea recta desde el centro del sector, no por calle. Cuenta cercanía, no calidad.</p>
+                        </div>
+
+                        <div class="criteria-field">
+                            <label for="crit-catastro">Valor catastral del suelo <span class="criteria-src">Tesorería · 2026</span></label>
+                            <select id="crit-catastro" name="catastro" aria-describedby="crit-catastro-nota">
+                                <option value="">Cualquiera</option>
+                            </select>
+                            <p class="criteria-note" id="crit-catastro-nota">Base del predial, no precio de mercado. Solo Saltillo lo publica.</p>
+                        </div>
+
+                        <div class="criteria-actions">
+                            <button type="submit" class="criteria-submit">Buscar zonas</button>
+                            <button type="reset" class="criteria-reset">Limpiar</button>
+                        </div>
+                        <p id="criteria-status" class="criteria-status" role="status"></p>
+                    </fieldset>
+                </form>
+            </details>
         </section>
 
         <!-- Layers are grouped because the panel mixes three kinds of claim, and
@@ -271,6 +362,6 @@
          Leaflet and after the markup above, exactly as the inline block did.
          The ?v= is the same cache buster as styles.css and matters for the
          same reason: markup and script have to move together. -->
-    <script src="app.js?v=13"></script>
+    <script src="app.js?v=17"></script>
 </body>
 </html>
