@@ -15,6 +15,7 @@ Covers **431 AGEBs across three municipalities**: Saltillo, Ramos Arizpe and Art
 - **Landslide Risk** — translational hillside landslide risk zones, by intensity level (2024 Risk Atlas, IMPLAN Saltillo).
 - **Chemical-Technological Risk** — zones exposed to the storage of hazardous chemical substances, relevant along the Saltillo–Ramos Arizpe industrial corridor (2024 Risk Atlas, IMPLAN Saltillo).
 - **Real-Estate Investment Index** — combines service coverage with proximity to urban amenities (schools, healthcare, supermarkets from DENUE) and penalizes flood exposure.
+- **Mapped Stream Courses** — the main arroyos (Strahler order 5 and up) as INEGI captured them in 1998–2008, before much of the current urban growth. Context only: not a risk classification and not part of any index.
 
 Click any colonia or risk zone on the map to see its detail card, with the source and cutoff date of the data you are viewing.
 
@@ -85,6 +86,7 @@ data/
   riesgo_inundacion.png          ANRI severity raster (backup) + its _meta.json
   calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
   valor_catastral.json           Cadastral land value per AGEB (informational, not in the index)
+  cauces_inegi.geojson           Main stream courses, INEGI 1:50 000 (context, not a risk layer)
 DATOS.md             Data log: provenance of each dataset
 ```
 
@@ -99,6 +101,7 @@ All are official, publicly accessible sources. The complete provenance —publis
 - [INEGI — DENUE 05_2026](https://www.inegi.org.mx/app/mapa/denue/default.aspx) (schools, healthcare, supermarkets)
 - [IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024](https://implansaltillo.mx/perfil/) (pluvial flood, translational landslide and chemical-technological risk)
 - [CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI)](https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer) (severity raster, Tr = 100 years; kept as an IMPLAN backup)
+- [INEGI — Red Hidrográfica escala 1:50 000, edición 2.0](https://www.inegi.org.mx/temas/hidrografia/) (main stream courses, as context only)
 
 ## Project status
 
