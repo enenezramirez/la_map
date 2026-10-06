@@ -1448,11 +1448,14 @@ function htmlLeyendaCauces(conteos, anios, fuente, edicion) {
             <span>Orden ${orden} — ${conteos.get(orden).toLocaleString('es-MX')} tramos</span>
         </div>
     `).join('');
-    const periodo = anios.min === anios.max ? `${anios.min}` : `${anios.min} y ${anios.max}`;
+    const conFechas = Number.isFinite(anios.min);
+    const periodo = !conFechas ? '' : anios.min === anios.max ? `${anios.min}` : `${anios.min} y ${anios.max}`;
+    const trazados = conFechas ? `Trazados entre ${periodo}` : 'Fecha de captura no disponible';
+    const capturadas = conFechas ? `se capturaron entre ${periodo}` : 'son de la captura del INEGI';
     return `
         <p class="legend-title">Cauces mapeados (INEGI)</p>
         ${filas}
-        <p class="legend-source">Trazados entre ${esc(periodo)}; no es una capa de riesgo y no entra en ningún índice.
+        <p class="legend-source">${esc(trazados)}; no es una capa de riesgo y no entra en ningún índice.
            Fuente: ${esc(fuente)} · ${esc(edicion)}.</p>
         <details class="legend-help">
             <summary>¿Qué muestran los Cauces?</summary>
@@ -1463,7 +1466,7 @@ function htmlLeyendaCauces(conteos, anios, fuente, edicion) {
                    cauce — dos de orden 4 que se unen forman uno de orden 5. El Atlas de Riesgos 2014 del
                    municipio modeló el desbordamiento justo en los cauces de orden 5, 6 y 7; aquí se usa el
                    mismo corte.</p>
-                <p><strong>Por qué importa la fecha:</strong> las líneas se capturaron entre ${esc(periodo)},
+                <p><strong>Por qué importa la fecha:</strong> las líneas ${esc(capturadas)},
                    antes de buena parte del crecimiento actual. Donde una cruza hoy calles y casas, el cauce
                    puede estar entubado, desviado o construido encima: el mapa muestra por dónde corría el agua,
                    no por dónde corre hoy.</p>
@@ -1479,7 +1482,7 @@ function mostrarDetalleCauce(props) {
     document.getElementById('sector-title').textContent = `Cauce de orden ${props.ORDEN}`;
     document.getElementById('sector-info').innerHTML = `
         <p class="detail-row"><span>Condición</span><strong>${esc(props.CONDICION)}</strong></p>
-        <p class="detail-row"><span>Capturado en</span><strong>${esc(String(props.ANIO_CAPTURA))}</strong></p>
+        <p class="detail-row"><span>Capturado en</span><strong>${Number.isInteger(props.ANIO_CAPTURA) ? props.ANIO_CAPTURA : SIN_VALOR}</strong></p>
         <p class="detail-note">Es la línea que INEGI cartografió ese año. Hoy el cauce puede estar
            entubado, desviado o construido encima, y su cercanía no indica riesgo por sí sola.</p>
         <p class="detail-source">Fuente: ${esc(props.FUENTE)} · ${esc(props.FECHA)}.</p>
@@ -1510,8 +1513,13 @@ function cargarCapaCauces(checkbox) {
                 // integer is let through to either.
                 if (!Number.isInteger(p.ORDEN)) continue;
                 conteos.set(p.ORDEN, (conteos.get(p.ORDEN) || 0) + 1);
-                anios.min = Math.min(anios.min, p.ANIO_CAPTURA);
-                anios.max = Math.max(anios.max, p.ANIO_CAPTURA);
+                // A year that is not an integer is left out of the range rather
+                // than turning the whole legend into "entre NaN". The pipeline
+                // already refuses to publish one; this is the fallback.
+                if (Number.isInteger(p.ANIO_CAPTURA)) {
+                    anios.min = Math.min(anios.min, p.ANIO_CAPTURA);
+                    anios.max = Math.max(anios.max, p.ANIO_CAPTURA);
+                }
             }
             const p0 = geojson.features.length ? geojson.features[0].properties : {};
             LEYENDAS.cauces = () => htmlLeyendaCauces(conteos, anios, p0.FUENTE, p0.FECHA);
