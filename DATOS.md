@@ -1372,6 +1372,16 @@ polygons the services layer already fetched. A third copy of the AGEB geometry w
 edition and the "tax base, not market price" warning in the file itself, so the caveat travels
 with the data rather than living only in the frontend.
 
+**The basemap is not a dataset of this project, and since at least late August 2026 it needs a key.** CARTO
+serves `dark_nolabels` and `light_nolabels` with an "API KEY REQUIRED" watermark unless a key
+is passed as `?key=`. Measured 2026-10-05: the same watermark tile (`ETag: wm-…-dark`, 2,513
+bytes) comes back with no referer, with the GitHub Pages referer and with a made-up key — so
+that probe cannot tell whether a key is read on these tile paths, and the path with a valid
+key is **not yet verified**. No key is committed: the repository is public and the site is
+served as it is. A visitor can paste their own key in the panel; it lives only in their
+browser's `localStorage` (`traza.cartoKey`) and travels only to CARTO, in the tile URLs (see
+`README.md`). Without one, the basemap shows the watermark and every data layer is unchanged.
+
 The risk layers carry provenance embedded in each feature's `FUENTE` and `FECHA` fields,
 and the app shows it in the detail card on click, satisfying the project's traceability
 requirement.

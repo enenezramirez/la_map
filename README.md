@@ -50,6 +50,12 @@ python -m http.server 8000
 
 Open `http://localhost:8000` in your browser.
 
+### Basemap and your own CARTO key
+
+CARTO now requires an API key for its basemaps; without one, every basemap tile carries an **"API KEY REQUIRED" watermark**. The data layers are not affected. **This repository ships no key and never will** — it is public, and anything served to the browser is published — so out of the box the basemap shows the watermark.
+
+To see the clean basemap, get your own free key at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey) (no account needed; at the time of writing, up to 5M requests a month for non-commercial use) and paste it in the panel under **Mapa base → Usar mi propia llave de CARTO**. It is kept only in your browser's `localStorage` (key `traza.cartoKey`), sent only to CARTO as `?key=` on the tile requests, and removed with **Quitar**. Anyone using the same browser profile — and any page served from the same origin, which on GitHub Pages is every project site of the same account — can read it, so treat it as your own quota, not as a secret.
+
 > **Why `pyogrio` is pinned.** GeoPandas reads shapefiles and writes GeoJSON through
 > `pyogrio`, which ships GDAL as bundled DLLs. Those DLLs are unsigned, so on Windows with
 > **Smart App Control** enforcing, the loader admits them only once they have reputation.

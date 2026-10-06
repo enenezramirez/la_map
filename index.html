@@ -86,7 +86,7 @@
          server sends no Cache-Control or ETag at all, only Last-Modified, so
          browsers cache it heuristically and never revalidate. Bump this
          whenever a stylesheet change is one the markup depends on. -->
-    <link rel="stylesheet" href="styles.css?v=9">
+    <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 
@@ -316,6 +316,36 @@
             </div>
         </section>
 
+        <!-- The visitor's own CARTO key. No key ships with this public repo —
+             anything served to the browser is published — so without one the
+             basemap degrades to CARTO's watermark and the data is unaffected.
+             The key stays in the visitor's browser (see app.js). A plain text
+             field, not type="password": it is not a login secret, and a
+             password manager offering to save it would be the wrong cue. -->
+        <section class="panel-section" id="basemap-section" aria-labelledby="basemap-heading">
+            <h2 id="basemap-heading">Mapa Base</h2>
+            <details class="criteria-details">
+                <summary>Usar mi propia llave de CARTO</summary>
+                <form id="carto-key-form" class="criteria-form" novalidate>
+                    <p class="criteria-hint">CARTO ahora exige una llave para sus mapas base; sin ella, el fondo
+                       sale con la marca «API KEY REQUIRED». Los datos del mapa no cambian. Este sitio no trae
+                       llave propia: puedes pedir una gratuita en
+                       <a href="https://carto.com/basemaps/apikey" target="_blank" rel="noopener noreferrer">carto.com/basemaps/apikey</a>.</p>
+                    <div class="criteria-field">
+                        <label for="carto-key">Llave de CARTO</label>
+                        <input type="text" id="carto-key" name="llave" autocomplete="off" spellcheck="false"
+                               autocapitalize="off" aria-describedby="carto-key-nota">
+                        <p class="criteria-note" id="carto-key-nota">Se guarda solo en este navegador y solo viaja a CARTO, en las peticiones del mapa base. Quien use este mismo navegador puede leerla.</p>
+                    </div>
+                    <div class="criteria-actions">
+                        <button type="submit" class="criteria-submit">Guardar llave</button>
+                        <button type="button" id="carto-key-clear" class="criteria-reset">Quitar</button>
+                    </div>
+                    <p id="carto-key-status" class="criteria-status" role="status"></p>
+                </form>
+            </details>
+        </section>
+
         <footer class="panel-footer">
             <p>FUENTES OFICIALES<br>
                INEGI · CENSO 2020 · DENUE 05_2026<br>
@@ -351,6 +381,6 @@
          Leaflet and after the markup above, exactly as the inline block did.
          The ?v= is the same cache buster as styles.css and matters for the
          same reason: markup and script have to move together. -->
-    <script src="app.js?v=17"></script>
+    <script src="app.js?v=18"></script>
 </body>
 </html>
