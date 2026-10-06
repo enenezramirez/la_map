@@ -18,13 +18,46 @@ const REGION_BOUNDS = L.latLngBounds([
 ]);
 map.fitBounds(REGION_BOUNDS, { padding: [20, 20] });
 
+// --- The visitor's own CARTO key (optional) -------------------------------
+// CARTO now serves its basemaps with an "API KEY REQUIRED" watermark unless a
+// key is passed as ?key= -- measured: same watermark tile (ETag wm-…) with no
+// referer and with the GitHub Pages one. This repository is public and served
+// as it is, and anything sent to the browser is published, so no key ships with
+// it: without one the basemap degrades to the watermark and every data layer
+// works the same. A visitor who wants the clean basemap pastes their own free
+// key. It stays in THEIR browser (localStorage) and only travels to CARTO, in
+// the tile URLs.
+const ALMACEN_LLAVE_CARTO = 'traza.cartoKey';
+// The key is spliced into a URL, so only URL-unreserved characters get through
+// (letters, digits, - . _ ~): that covers hex, UUID and JWT-style tokens, and
+// leaves nothing for encodeURIComponent to change or for a template to read.
+const FORMATO_LLAVE_CARTO = /^[A-Za-z0-9._~-]{8,2048}$/;
+
+function urlTeselasCarto(estilo, llave) {
+    const base = `https://{s}.basemaps.cartocdn.com/${estilo}/{z}/{x}/{y}{r}.png`;
+    return llave ? `${base}?key=${encodeURIComponent(llave)}` : base;
+}
+
+// Read and written in try/catch: in a private window or with site data blocked
+// the accessor itself THROWS, and the map must load all the same.
+function leerLlaveCarto() {
+    try {
+        const llave = localStorage.getItem(ALMACEN_LLAVE_CARTO);
+        return llave && FORMATO_LLAVE_CARTO.test(llave) ? llave : null;
+    } catch {
+        return null;
+    }
+}
+
+let llaveCarto = leerLlaveCarto();
+
 // Add base layer - CartoDB Dark Matter, label-free variant.
 // `dark_nolabels` rather than `dark_all` because the basemap's street labels
 // render UNDER the choropleth: inside an AGEB they sit beneath a 0.65 fill, so
 // they are noise without being readable, and outside the AGEBs they were
 // labelling territory the app makes no claim about. Same tile host, so the CSP
 // (which lists the host, not the path) is unaffected.
-const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+const darkBaseLayer = L.tileLayer(urlTeselasCarto('dark_nolabels', llaveCarto), {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
     maxZoom: 20
@@ -34,7 +67,7 @@ const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabe
 // Kept symmetric on purpose: with one variant labelled and the other not,
 // switching base changed the theme AND the information density at once, so the
 // control stopped being a single choice.
-const lightBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+const lightBaseLayer = L.tileLayer(urlTeselasCarto('light_nolabels', llaveCarto), {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
     maxZoom: 20
@@ -56,6 +89,65 @@ contenedorMapaBase.querySelector('.leaflet-control-layers-list')
     .setAttribute('aria-label', 'Mapa base');
 contenedorMapaBase.querySelector('.leaflet-control-layers-toggle')
     .setAttribute('title', 'Mapa base');
+
+// Both styles take the key, so switching base never drops back to the
+// watermark. setUrl redraws the layer on the map and only stores the URL on
+// the other one.
+function aplicarLlaveCarto(llave) {
+    llaveCarto = llave;
+    darkBaseLayer.setUrl(urlTeselasCarto('dark_nolabels', llave));
+    lightBaseLayer.setUrl(urlTeselasCarto('light_nolabels', llave));
+}
+
+const formLlaveCarto = document.getElementById('carto-key-form');
+const campoLlaveCarto = document.getElementById('carto-key');
+const estadoLlaveCarto = document.getElementById('carto-key-status');
+
+// Only the last four characters are ever shown back: enough to tell two keys
+// apart, not enough to copy one off a shared screen.
+const finDeLlave = llave => `…${llave.slice(-4)}`;
+
+function describirLlaveCarto() {
+    estadoLlaveCarto.textContent = llaveCarto
+        ? `Usando tu llave guardada en este navegador (termina en ${finDeLlave(llaveCarto)}).`
+        : 'Sin llave: el mapa base se ve con la marca de agua de CARTO.';
+}
+
+formLlaveCarto.addEventListener('submit', e => {
+    e.preventDefault();
+    const llave = campoLlaveCarto.value.trim();
+    if (!FORMATO_LLAVE_CARTO.test(llave)) {
+        estadoLlaveCarto.textContent = llave
+            ? 'Eso no parece una llave de CARTO: lleva caracteres que una llave no usa. No se guardó.'
+            : 'Pega tu llave en el campo antes de guardar.';
+        return;
+    }
+    aplicarLlaveCarto(llave);
+    campoLlaveCarto.value = '';
+    let guardada = true;
+    try {
+        localStorage.setItem(ALMACEN_LLAVE_CARTO, llave);
+    } catch {
+        guardada = false;
+    }
+    estadoLlaveCarto.textContent = (guardada
+        ? `Llave guardada y aplicada (termina en ${finDeLlave(llave)}).`
+        : `Llave aplicada solo a esta visita: este navegador no permite guardarla (termina en ${finDeLlave(llave)}).`)
+        + ' Si el fondo sigue con la marca de agua, CARTO no la aceptó.';
+});
+
+document.getElementById('carto-key-clear').addEventListener('click', () => {
+    try {
+        localStorage.removeItem(ALMACEN_LLAVE_CARTO);
+    } catch {
+        // Nothing stored to remove; the key in use is dropped below anyway.
+    }
+    aplicarLlaveCarto(null);
+    campoLlaveCarto.value = '';
+    estadoLlaveCarto.textContent = 'Llave quitada de este navegador. El mapa base vuelve a la marca de agua.';
+});
+
+describirLlaveCarto();
 
 // Detail sidebar: open/close
 const detailsSidebar = document.getElementById('details-sidebar');
