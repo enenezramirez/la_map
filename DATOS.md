@@ -1321,6 +1321,27 @@ would be a more direct route to it than a layer ever was.
 can hold a key; and evidence from the deterministic panel that typing criteria in words is what
 its users are missing.
 
+**Built, 2026-10-05, as specified above** (the user's decision). The panel reads
+`indice_inversion.geojson` and `valor_catastral.json`, both already fetched by the map, so it
+adds no request. What it does with the traps in the table:
+
+* **No figure never matches.** It is counted apart, and only where it changed the answer: the
+  card reports the sectors that meet every criterion they *do* have a figure for but lack one,
+  broken down by the missing field. Checked against an independent Python count over the same
+  files, three queries: Saltillo, services ≥ 90, no marked flood zone, school ≤ 1 km →
+  **72 of 342, plus 3 held back for missing data**; any municipality, no marked flood zone →
+  **137 of 431, plus 90** (exactly the sectors outside the Atlas); supermarket ≤ 1 km and land
+  value ≤ $866.99/m² → **92 of 431, plus 79**. All three matched exactly.
+* **Distance is recovered, not approximated.** `SCORE_*` is `100 · (1 − d / 3 km)` clipped at
+  0, so `d = 3 · (1 − score / 100)` exactly; a 0 only says "3 km or more", and the panel says
+  that. It is straight-line from the sector's centroid, and every card says so.
+* **The flood caveat travels with the filter:** under the control, in the results and in each
+  sector's card — "no marked zone" is not "no flooding" (§2.4).
+* **Land value** is offered as "up to" each published figure, labelled a tax base.
+* **Not ranked.** Results are alphabetical; ordering them would read as a score this panel does
+  not compute.
+* **Left out of the first version:** landslide and chemical risk, which have no per-AGEB field.
+
 ---
 
 ## 4. Traceability of the published layers
@@ -1350,6 +1371,20 @@ polygons the services layer already fetched. A third copy of the AGEB geometry w
 ~640 KB against a budget already at 4.41 MB; as a lookup it costs 19 KB. It carries its source,
 edition and the "tax base, not market price" warning in the file itself, so the caveat travels
 with the data rather than living only in the frontend.
+
+**The basemap is not a dataset of this project, and since at least late August 2026 it needs a key.** CARTO
+serves `dark_nolabels` and `light_nolabels` with an "API KEY REQUIRED" watermark unless a key
+is passed as `?key=`. Measured 2026-10-05: the same watermark tile (`ETag: wm-…-dark`, 2,513
+bytes) comes back with no referer, with the GitHub Pages referer and with a made-up key, so a
+made-up key cannot tell whether the parameter is read at all. **The discriminating test used
+a real key** (the user's own, used only for this test and written to no file): on the exact
+paths the app requests — `dark_nolabels` and `light_nolabels`, standard and `@2x` — it
+returned real basemap tiles (13–23 KB, ordinary ETags), while no key and the made-up one, on
+the same tiles at the same moment, still returned the watermark. CARTO reads `?key=` on these
+paths. No key is committed: the repository is public and the site is
+served as it is. A visitor can paste their own key in the panel; it lives only in their
+browser's `localStorage` (`traza.cartoKey`) and travels only to CARTO, in the tile URLs (see
+`README.md`). Without one, the basemap shows the watermark and every data layer is unchanged.
 
 The risk layers carry provenance embedded in each feature's `FUENTE` and `FECHA` fields,
 and the app shows it in the detail card on click, satisfying the project's traceability

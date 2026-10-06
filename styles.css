@@ -724,6 +724,16 @@ body {
     font-weight: 500;
 }
 
+/* The same note in the danger colour, for the one caveat about a hazard: the
+   flood filter's "no marked zone" is not "no flooding". */
+.detail-note-riesgo {
+    border-left-color: var(--tz-danger);
+}
+
+.detail-source p + p {
+    margin-top: 6px;
+}
+
 .sector-list {
     list-style: none;
     display: flex;
@@ -819,6 +829,198 @@ body {
     .sidebar-collapsed {
         transform: translateY(450px);
     }
+}
+
+/* Read by screen readers, not drawn: the fieldset's legend repeats what the
+   section heading already shows. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Find zones by criteria. Collapsed by default: the panel already scrolls,
+   and a form this tall would push the layers below the fold for everyone. */
+.criteria-details summary {
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--tz-accent);
+    list-style-position: inside;
+}
+
+.criteria-details summary:hover {
+    color: var(--tz-text);
+}
+
+.criteria-details summary:focus-visible,
+.criteria-field select:focus-visible,
+.criteria-field input:focus-visible,
+.criteria-hint a:focus-visible,
+.criteria-actions button:focus-visible,
+.criteria-back:focus-visible {
+    outline: 2px solid var(--tz-accent);
+    outline-offset: 2px;
+}
+
+.criteria-form fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.criteria-form fieldset:disabled {
+    opacity: 0.5;
+}
+
+.criteria-hint,
+.criteria-note {
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--tz-text-3);
+}
+
+.criteria-hint {
+    margin: 10px 0 12px;
+}
+
+.criteria-hint a {
+    color: var(--tz-accent);
+}
+
+.criteria-note {
+    margin-top: 5px;
+}
+
+/* The flood caveat sits under its own control, for the same reason it is
+   pinned to the flood legend: it is read at the moment of choosing. */
+.criteria-caveat {
+    margin-top: 6px;
+    padding: 6px 8px;
+    border-left: 2px solid var(--tz-danger);
+    background: var(--tz-bg);
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--tz-text-2);
+}
+
+.criteria-field + .criteria-field {
+    margin-top: 12px;
+}
+
+.criteria-field label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 2px 8px;
+    margin-bottom: 5px;
+    font-size: 0.78rem;
+    color: var(--tz-text);
+}
+
+.criteria-src {
+    font-family: var(--tz-mono);
+    font-size: 0.64rem;
+    color: var(--tz-text-3);
+}
+
+.criteria-field select,
+.criteria-field input {
+    width: 100%;
+    min-height: 36px;
+    padding: 6px 10px;
+    background: var(--tz-bg);
+    border: 1px solid var(--tz-border-ui);
+    border-radius: 8px;
+    color: var(--tz-text);
+    font-family: var(--tz-sans);
+    font-size: 0.8rem;
+}
+
+.criteria-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.criteria-actions button {
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-family: var(--tz-sans);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.criteria-submit {
+    flex: 1;
+    background: var(--tz-accent);
+    border: 1px solid var(--tz-accent);
+    color: var(--tz-bg);
+    font-weight: 600;
+}
+
+.criteria-reset {
+    background: transparent;
+    border: 1px solid var(--tz-border-ui);
+    color: var(--tz-text);
+}
+
+.criteria-status {
+    margin-top: 8px;
+    min-height: 1em;
+    font-family: var(--tz-mono);
+    font-size: 0.7rem;
+    color: var(--tz-text-2);
+}
+
+/* In the results card. */
+.criteria-summary {
+    list-style: none;
+    margin: 0 0 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.75rem;
+    color: var(--tz-text);
+}
+
+.criteria-summary span {
+    color: var(--tz-text-3);
+}
+
+.criteria-summary span::after {
+    content: ':';
+}
+
+.criteria-row-src {
+    margin: -2px 0 8px;
+    font-family: var(--tz-mono);
+    font-size: 0.64rem;
+    line-height: 1.4;
+    color: var(--tz-text-3);
+}
+
+.criteria-back {
+    min-height: 24px;
+    margin-bottom: 10px;
+    padding: 2px 0;
+    background: none;
+    border: 0;
+    color: var(--tz-accent);
+    font-family: var(--tz-sans);
+    font-size: 0.78rem;
+    cursor: pointer;
 }
 
 /* Colonia search */

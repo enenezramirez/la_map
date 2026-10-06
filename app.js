@@ -18,13 +18,46 @@ const REGION_BOUNDS = L.latLngBounds([
 ]);
 map.fitBounds(REGION_BOUNDS, { padding: [20, 20] });
 
+// --- The visitor's own CARTO key (optional) -------------------------------
+// CARTO now serves its basemaps with an "API KEY REQUIRED" watermark unless a
+// key is passed as ?key= -- measured: same watermark tile (ETag wm-…) with no
+// referer and with the GitHub Pages one. This repository is public and served
+// as it is, and anything sent to the browser is published, so no key ships with
+// it: without one the basemap degrades to the watermark and every data layer
+// works the same. A visitor who wants the clean basemap pastes their own free
+// key. It stays in THEIR browser (localStorage) and only travels to CARTO, in
+// the tile URLs.
+const ALMACEN_LLAVE_CARTO = 'traza.cartoKey';
+// The key is spliced into a URL, so only URL-unreserved characters get through
+// (letters, digits, - . _ ~): that covers hex, UUID and JWT-style tokens, and
+// leaves nothing for encodeURIComponent to change or for a template to read.
+const FORMATO_LLAVE_CARTO = /^[A-Za-z0-9._~-]{8,2048}$/;
+
+function urlTeselasCarto(estilo, llave) {
+    const base = `https://{s}.basemaps.cartocdn.com/${estilo}/{z}/{x}/{y}{r}.png`;
+    return llave ? `${base}?key=${encodeURIComponent(llave)}` : base;
+}
+
+// Read and written in try/catch: in a private window or with site data blocked
+// the accessor itself THROWS, and the map must load all the same.
+function leerLlaveCarto() {
+    try {
+        const llave = localStorage.getItem(ALMACEN_LLAVE_CARTO);
+        return llave && FORMATO_LLAVE_CARTO.test(llave) ? llave : null;
+    } catch {
+        return null;
+    }
+}
+
+let llaveCarto = leerLlaveCarto();
+
 // Add base layer - CartoDB Dark Matter, label-free variant.
 // `dark_nolabels` rather than `dark_all` because the basemap's street labels
 // render UNDER the choropleth: inside an AGEB they sit beneath a 0.65 fill, so
 // they are noise without being readable, and outside the AGEBs they were
 // labelling territory the app makes no claim about. Same tile host, so the CSP
 // (which lists the host, not the path) is unaffected.
-const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+const darkBaseLayer = L.tileLayer(urlTeselasCarto('dark_nolabels', llaveCarto), {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
     maxZoom: 20
@@ -34,7 +67,7 @@ const darkBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabe
 // Kept symmetric on purpose: with one variant labelled and the other not,
 // switching base changed the theme AND the information density at once, so the
 // control stopped being a single choice.
-const lightBaseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+const lightBaseLayer = L.tileLayer(urlTeselasCarto('light_nolabels', llaveCarto), {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
     maxZoom: 20
@@ -56,6 +89,65 @@ contenedorMapaBase.querySelector('.leaflet-control-layers-list')
     .setAttribute('aria-label', 'Mapa base');
 contenedorMapaBase.querySelector('.leaflet-control-layers-toggle')
     .setAttribute('title', 'Mapa base');
+
+// Both styles take the key, so switching base never drops back to the
+// watermark. setUrl redraws the layer on the map and only stores the URL on
+// the other one.
+function aplicarLlaveCarto(llave) {
+    llaveCarto = llave;
+    darkBaseLayer.setUrl(urlTeselasCarto('dark_nolabels', llave));
+    lightBaseLayer.setUrl(urlTeselasCarto('light_nolabels', llave));
+}
+
+const formLlaveCarto = document.getElementById('carto-key-form');
+const campoLlaveCarto = document.getElementById('carto-key');
+const estadoLlaveCarto = document.getElementById('carto-key-status');
+
+// Only the last four characters are ever shown back: enough to tell two keys
+// apart, not enough to copy one off a shared screen.
+const finDeLlave = llave => `…${llave.slice(-4)}`;
+
+function describirLlaveCarto() {
+    estadoLlaveCarto.textContent = llaveCarto
+        ? `Usando tu llave guardada en este navegador (termina en ${finDeLlave(llaveCarto)}).`
+        : 'Sin llave: el mapa base se ve con la marca de agua de CARTO.';
+}
+
+formLlaveCarto.addEventListener('submit', e => {
+    e.preventDefault();
+    const llave = campoLlaveCarto.value.trim();
+    if (!FORMATO_LLAVE_CARTO.test(llave)) {
+        estadoLlaveCarto.textContent = llave
+            ? 'Eso no parece una llave de CARTO: lleva caracteres que una llave no usa. No se guardó.'
+            : 'Pega tu llave en el campo antes de guardar.';
+        return;
+    }
+    aplicarLlaveCarto(llave);
+    campoLlaveCarto.value = '';
+    let guardada = true;
+    try {
+        localStorage.setItem(ALMACEN_LLAVE_CARTO, llave);
+    } catch {
+        guardada = false;
+    }
+    estadoLlaveCarto.textContent = (guardada
+        ? `Llave guardada y aplicada (termina en ${finDeLlave(llave)}).`
+        : `Llave aplicada solo a esta visita: este navegador no permite guardarla (termina en ${finDeLlave(llave)}).`)
+        + ' Si el fondo sigue con la marca de agua, CARTO no la aceptó.';
+});
+
+document.getElementById('carto-key-clear').addEventListener('click', () => {
+    try {
+        localStorage.removeItem(ALMACEN_LLAVE_CARTO);
+    } catch {
+        // Nothing stored to remove; the key in use is dropped below anyway.
+    }
+    aplicarLlaveCarto(null);
+    campoLlaveCarto.value = '';
+    estadoLlaveCarto.textContent = 'Llave quitada de este navegador. El mapa base vuelve a la marca de agua.';
+});
+
+describirLlaveCarto();
 
 // Detail sidebar: open/close
 const detailsSidebar = document.getElementById('details-sidebar');
@@ -923,10 +1015,7 @@ function actualizarLeyenda() {
 
 function marcarCapaActiva(clave) {
     capasActivas.add(clave);
-    // A polygon layer switched on after the stream courses is brought to the
-    // front and would paint over them. They share its canvas on purpose (see
-    // cargarCapaCauces), so they are lifted back above it here instead.
-    if (clave !== 'cauces' && capaCauces && map.hasLayer(capaCauces)) capaCauces.bringToFront();
+    elevarCapasDeLinea();
     actualizarLeyenda();
 }
 
@@ -1354,6 +1443,10 @@ function mostrarDetalleCatastro(props) {
     abrirFicha();
 }
 
+// Fetched once and shared: the layer and the criteria search both read it, and
+// neither should depend on the other having been switched on.
+const catastroListo = fetch('data/valor_catastral.json', { cache: 'no-cache' }).then(r => r.json());
+
 function cargarCapaCatastro(checkbox) {
     let capa = null;
     registrarClaveDeCapa('catastro', checkbox);
@@ -1361,7 +1454,7 @@ function cargarCapaCatastro(checkbox) {
     // Needs both the lookup and the AGEB polygons, which arrive from a
     // different request; whichever lands second starts the work.
     Promise.all([
-        fetch('data/valor_catastral.json', { cache: 'no-cache' }).then(r => r.json()),
+        catastroListo,
         agebsListos
     ]).then(([catastro, geojson]) => {
         catastroMeta = { fuente: catastro.fuente, edicion: catastro.edicion };
@@ -1488,6 +1581,16 @@ function mostrarDetalleCauce(props) {
         <p class="detail-source">Fuente: ${esc(props.FUENTE)} · ${esc(props.FECHA)}.</p>
     `;
     abrirFicha();
+}
+
+// A polygon layer switched on after a line layer is brought to the front and
+// would paint over it. The line layers share the polygons' canvas on purpose
+// (see below), so they are lifted back above it instead, in this order: the
+// search's outlines last, since they are what the reader just asked for.
+function elevarCapasDeLinea() {
+    for (const capa of [capaCauces, capaCoincidencias]) {
+        if (capa && map.hasLayer(capa)) capa.bringToFront();
+    }
 }
 
 // Drawn in the default overlay pane, sharing the polygons' canvas, and NOT in a
@@ -2099,6 +2202,330 @@ document.addEventListener('click', e => {
     if (!e.target.closest('#search-section')) cerrarSugerencias();
 });
 
+// --- Find zones by criteria ------------------------------------------
+// The minimum product DATOS.md §3.9 proposes in place of an AI agent: a
+// deterministic filter over fields already published per AGEB. No new data,
+// no request beyond the files the map already loads, no key. Two rules from
+// that evaluation are what this code is mostly about:
+//  · A sector with no figure for a criterion does NOT match. The 90 sectors
+//    outside the flood Atlas carry null, not 0, and a "no flood zone" filter
+//    that let them through would state something the data never said. They
+//    are counted apart instead, so the reader sees how many were left out
+//    for lack of data rather than for failing.
+//  · Criteria describe the place — hazard, services, amenities, land value —
+//    never the people who live there. Nothing about the population is offered.
+// The result is not ranked: no score is computed here, and an order would
+// read as one. Sectors are listed by colonia name.
+
+// Radius of the proximity scores, RADIO_MAX_KM in process_data.py: each
+// SCORE_* is 100 * (1 - d / 3 km), clipped at 0. Inverting it gives back the
+// straight-line distance exactly, except that a 0 only says "3 km or more".
+const RADIO_CERCANIA_KM = 3;
+
+function distanciaKm(score) {
+    return sinDato(score) ? null : RADIO_CERCANIA_KM * (1 - score / 100);
+}
+
+function formatoDistancia(km) {
+    if (km >= RADIO_CERCANIA_KM) return `${RADIO_CERCANIA_KM} km o más`;
+    if (km < 1) return `${Math.round(km * 100) * 10} m`;
+    return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
+}
+
+const formatoPesos = valor => `$${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Every criterion reads its value through `leer`, and null there means "no
+// figure", whatever the reason.
+//
+// The values a criterion accepts are declared HERE, in `opciones`, and the
+// select's options are generated from them -- the markup only holds "any".
+// Checking the submitted value against the markup's own options was tried and
+// proved worthless: tampering edits exactly those options. The thresholds mean
+// what these entries say and nothing else -- a proximity score of 0 only says
+// "3 km or more", so a value of 5 would have matched every sector that far
+// out, 10 km away or not. A value not declared here reads as "any".
+const OPCIONES_CERCANIA = [[0.5, 'A 500 m o menos'], [1, 'A 1 km o menos'], [2, 'A 2 km o menos']];
+
+const cercania = (id, campo, etiqueta) => ({
+    id, etiqueta, fuente: 'INEGI · DENUE 05_2026',
+    opciones: OPCIONES_CERCANIA,
+    leer: s => distanciaKm(s.props[campo]),
+    cumple: (km, max) => km <= max,
+    pide: max => `a ${formatoDistancia(max)} o menos`,
+    describir: km => `${formatoDistancia(km)} en línea recta`,
+    falta: 'sin dato de cercanía'
+});
+
+const CRITERIOS = [
+    {
+        id: 'servicios', etiqueta: 'Servicios básicos', fuente: 'INEGI · Censo 2020',
+        opciones: [[80, 'Índice de 80 o más'], [90, 'Índice de 90 o más'], [95, 'Índice de 95 o más']],
+        leer: s => s.props.SERVICIOS_INDEX,
+        cumple: (v, min) => v >= min,
+        pide: min => `índice de ${min} o más`,
+        describir: v => `índice ${formatoIndice(v)}`,
+        falta: 'sin dato del Censo'
+    },
+    {
+        id: 'inundacion', etiqueta: 'Inundación pluvial', fuente: 'IMPLAN · Atlas de Riesgos 2024',
+        opciones: [['sin-zona', 'Ninguna zona marcada en el sector'], ['baja', 'Exposición baja (5 de 100 o menos)']],
+        // Compared against `true`, the same way the investment card tests the
+        // flag: only a sector the model is known to have covered has a figure.
+        leer: s => (s.props.RIESGO_EVALUADO === true ? s.props.RIESGO_INDEX : null),
+        cumple: (v, modo) => (modo === 'sin-zona' ? v === 0 : v <= 5),
+        pide: modo => (modo === 'sin-zona' ? 'ninguna zona marcada' : 'exposición de 5 de 100 o menos'),
+        describir: v => (v === 0 ? 'ninguna zona marcada' : `exposición ${formatoIndice(v)} de 100`),
+        falta: 'fuera del Atlas de Riesgos'
+    },
+    cercania('escuela', 'SCORE_ESCUELA', 'Escuela más cercana'),
+    cercania('salud', 'SCORE_SALUD', 'Salud más cercana'),
+    cercania('supermercado', 'SCORE_SUPERMERCADO', 'Supermercado más cercano'),
+    {
+        id: 'catastro', etiqueta: 'Valor catastral', fuente: 'Tesorería Municipal de Saltillo · 2026',
+        // Filled from the published figures once the lookup arrives.
+        opciones: [],
+        leer: s => (s.catastro ? s.catastro.valor : null),
+        cumple: (v, max) => v <= max,
+        pide: max => `hasta ${formatoPesos(max)} por m²`,
+        describir: (v, s) => `${formatoPesos(v)} por m² · ${s.catastro.clase}`,
+        falta: 'sin valor catastral publicado'
+    }
+];
+
+let anunciarInversion;
+const inversionLista = new Promise(resolver => { anunciarInversion = resolver; });
+
+// Sectors the search runs over: geometry, published properties and the
+// cadastral figure joined by CVEGEO, built once both files are in.
+let sectoresBusqueda = [];
+let capaCoincidencias = null;
+
+const formCriterios = document.getElementById('criteria-form');
+const estadoCriterios = document.getElementById('criteria-status');
+
+// Municipalities offered, filled from the data like the cadastral options.
+let municipiosOfrecidos = [];
+
+function poblarOpciones(select, opciones) {
+    for (const [valor, texto] of opciones) select.add(new Option(texto, String(valor)));
+}
+
+// The submitted string is looked up among the declared options and the
+// declared value is what gets used, never the string parsed.
+function valorDeclarado(texto, opciones) {
+    const hallada = opciones.find(([valor]) => String(valor) === texto);
+    return hallada ? hallada[0] : null;
+}
+
+function leerFiltros() {
+    const datos = new FormData(formCriterios);
+    const municipio = valorDeclarado(String(datos.get('municipio') || ''), municipiosOfrecidos) || '';
+    const filtros = {};
+    for (const c of CRITERIOS) filtros[c.id] = valorDeclarado(String(datos.get(c.id) || ''), c.opciones);
+    return { municipio, filtros };
+}
+
+function buscarZonas({ municipio, filtros }) {
+    const activos = CRITERIOS.filter(c => filtros[c.id] !== null);
+    const enAlcance = sectoresBusqueda.filter(s => !municipio || s.props.NOM_MUN === municipio);
+    const coincidencias = [];
+    // Sectors that meet every criterion they have a figure for but lack one
+    // or more: they are the ones "no data" actually kept out, so they are
+    // what gets counted -- not every sector missing a field, most of which
+    // fail another criterion anyway.
+    let posibles = 0;
+    const faltantes = new Map(activos.map(c => [c.id, 0]));
+    for (const s of enAlcance) {
+        let falla = false;
+        const sinFigura = [];
+        for (const c of activos) {
+            const v = c.leer(s);
+            if (sinDato(v)) sinFigura.push(c.id);
+            else if (!c.cumple(v, filtros[c.id])) { falla = true; break; }
+        }
+        if (falla) continue;
+        if (sinFigura.length) {
+            posibles++;
+            for (const id of sinFigura) faltantes.set(id, faltantes.get(id) + 1);
+        } else {
+            coincidencias.push(s);
+        }
+    }
+    coincidencias.sort((a, b) =>
+        String(a.props.COLONIA).localeCompare(String(b.props.COLONIA), 'es')
+        || String(a.props.CVEGEO).localeCompare(String(b.props.CVEGEO)));
+    return { municipio, filtros, activos, enAlcance: enAlcance.length, coincidencias, posibles, faltantes };
+}
+
+// Outlined, not filled, so the layer the reader has on stays readable under
+// the result. Cased like the selection and in its amber, but dashed and
+// thinner: these are candidates, the solid outline is the one being read.
+function dibujarCoincidencias(coincidencias) {
+    if (capaCoincidencias) map.removeLayer(capaCoincidencias);
+    capaCoincidencias = null;
+    if (!coincidencias.length) return;
+    const coleccion = {
+        type: 'FeatureCollection',
+        features: coincidencias.map(s => ({ type: 'Feature', geometry: s.geometria, properties: {} }))
+    };
+    const contorno = estilo => L.geoJSON(coleccion, { interactive: false, style: { fill: false, ...estilo } });
+    capaCoincidencias = L.featureGroup([
+        contorno({ color: '#0b0c0e', weight: 4 }),
+        contorno({ color: '#c8912f', weight: 1.75, dashArray: '5 4' })
+    ]).addTo(map);
+    capaCoincidencias.bringToFront();
+}
+
+function etiquetaAlcance(municipio) {
+    return municipio ? `en ${municipio}` : 'en los tres municipios';
+}
+
+function mostrarResultadosCriterios(r, enfocar = null) {
+    const n = r.coincidencias.length;
+    const pedidos = r.activos.map(c =>
+        `<li><span>${esc(c.etiqueta)}</span> ${esc(c.pide(r.filtros[c.id]))}</li>`).join('');
+    const faltan = r.activos.filter(c => r.faltantes.get(c.id) > 0)
+        .map(c => `${esc(c.falta)} (${r.faltantes.get(c.id).toLocaleString('es-MX')})`);
+    const notaFaltantes = r.posibles
+        ? `<p class="detail-note">Otros <strong>${r.posibles.toLocaleString('es-MX')}</strong>
+               ${r.posibles === 1 ? 'sector cumple' : 'sectores cumplen'} todo lo que sí se sabe de
+               ${r.posibles === 1 ? 'él' : 'ellos'}, pero les falta dato: ${faltan.join('; ')}.
+               No se cuentan como coincidencias: no tener dato no es cumplir.</p>`
+        : '';
+    const avisoInundacion = r.filtros.inundacion !== null
+        ? `<p class="detail-note detail-note-riesgo"><strong>Sin zona marcada no es sin inundación.</strong>
+               La capa es solo pluvial: el desbordamiento de arroyos va en otro capítulo del Atlas que
+               aquí no se publica, y en julio de 2025 se inundaron colonias que esta capa deja limpias.</p>`
+        : '';
+    const lista = n
+        ? `<ul class="sector-list">${r.coincidencias.map(s => `
+                <li>
+                    <button type="button" class="sector-btn">
+                        <span class="sector-btn-name">${esc(s.props.COLONIA)}</span>
+                        <span class="sector-btn-meta">${esc(s.props.NOM_MUN)} · AGEB ${esc(String(s.props.CVEGEO).slice(-4))}</span>
+                    </button>
+                </li>`).join('')}</ul>`
+        : '<p class="sector-hint">Ningún sector cumple todos los criterios. Prueba relajando alguno.</p>';
+
+    document.getElementById('sector-title').textContent = 'Zonas que cumplen';
+    document.getElementById('sector-info').innerHTML = `
+        <p class="detail-row"><span>Sectores que cumplen</span><strong>${n.toLocaleString('es-MX')} de ${r.enAlcance.toLocaleString('es-MX')}</strong></p>
+        <p class="sector-hint">${esc(etiquetaAlcance(r.municipio))}, con todos estos criterios:</p>
+        <ul class="criteria-summary">${pedidos}</ul>
+        ${notaFaltantes}
+        ${avisoInundacion}
+        ${n ? '<h3>Elige un sector para ver por qué coincide</h3><p class="sector-hint">En orden alfabético: no es un ranking. En el mapa, contorno ámbar punteado.</p>' : ''}
+        ${lista}
+    `;
+    // Paired by position, as in the colonia chooser: a key round-tripped
+    // through the DOM that missed would show another sector's figures.
+    document.getElementById('sector-info').querySelectorAll('.sector-btn').forEach((btn, i) => {
+        btn.addEventListener('click', () => mostrarPorQueCoincide(r.coincidencias[i], r, i));
+    });
+    abrirFicha();
+    // Coming back from a sector, focus returns to the button that opened it;
+    // replacing the card's markup would otherwise drop it to <body> and send
+    // a keyboard user back to the top of the page.
+    if (enfocar !== null) {
+        const btn = document.getElementById('sector-info').querySelectorAll('.sector-btn')[enfocar];
+        if (btn) btn.focus();
+    }
+}
+
+function mostrarPorQueCoincide(s, r, indice) {
+    encuadrarYResaltar([s]);
+    const filas = r.activos.map(c => `
+        <p class="detail-row"><span>${esc(c.etiqueta)}</span><strong>${esc(c.describir(c.leer(s), s))}</strong></p>
+        <p class="criteria-row-src">Se pidió ${esc(c.pide(r.filtros[c.id]))} · ${esc(c.fuente)}</p>
+    `).join('');
+    const usaCercania = r.activos.some(c => ['escuela', 'salud', 'supermercado'].includes(c.id));
+    const notas = [
+        usaCercania ? 'Las distancias son en línea recta desde el centro del sector hasta el establecimiento más cercano del DENUE, no por calle.' : '',
+        r.filtros.catastro !== null ? 'El valor catastral es la base del predial, asignado a toda la colonia: no es precio de mercado ni avalúo del predio.' : '',
+        r.filtros.inundacion !== null ? 'La inundación es solo pluvial: no incluye el desbordamiento de arroyos.' : ''
+    ].filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('');
+
+    document.getElementById('sector-title').textContent = s.props.COLONIA;
+    document.getElementById('sector-info').innerHTML = `
+        <button type="button" class="criteria-back">← Volver a los resultados</button>
+        <p class="detail-row"><span>Municipio</span><strong>${esc(s.props.NOM_MUN)}</strong></p>
+        <h3>Por qué coincide</h3>
+        ${filas}
+        ${notas ? `<div class="detail-source">${notas}</div>` : ''}
+    `;
+    const volver = document.querySelector('#sector-info .criteria-back');
+    volver.addEventListener('click', () => {
+        limpiarSeleccion();
+        mostrarResultadosCriterios(r, indice);
+    });
+    abrirFicha();
+    // The button that was pressed no longer exists, so focus goes to the way back.
+    volver.focus();
+}
+
+function limpiarCriterios() {
+    if (capaCoincidencias) map.removeLayer(capaCoincidencias);
+    capaCoincidencias = null;
+    estadoCriterios.textContent = '';
+}
+
+formCriterios.addEventListener('submit', e => {
+    e.preventDefault();
+    const pedido = leerFiltros();
+    if (!CRITERIOS.some(c => pedido.filtros[c.id] !== null)) {
+        estadoCriterios.textContent = 'Elige al menos un criterio.';
+        return;
+    }
+    const r = buscarZonas(pedido);
+    dibujarCoincidencias(r.coincidencias);
+    estadoCriterios.textContent = `${r.coincidencias.length.toLocaleString('es-MX')} de ${r.enAlcance.toLocaleString('es-MX')} sectores cumplen.`;
+    mostrarResultadosCriterios(r);
+});
+
+// "reset" fires before the controls are cleared, which is fine: nothing here
+// reads them.
+// Closes the card if it is one of this search's -- the results or a sector's
+// "por qué coincide" -- recognised by its own markup rather than by its title,
+// which a sector's card does not share. Left open, "back" would re-list results
+// whose outlines had just been cleared.
+formCriterios.addEventListener('reset', () => {
+    limpiarCriterios();
+    if (document.querySelector('#sector-info .criteria-summary, #sector-info .criteria-back')) {
+        cerrarFicha();
+        limpiarSeleccion();
+    }
+});
+
+Promise.all([inversionLista, catastroListo]).then(([geojson, catastro]) => {
+    sectoresBusqueda = geojson.features.filter(f => f.geometry).map(f => ({
+        geometria: f.geometry,
+        props: f.properties,
+        // hasOwn for the same reason as the cadastral layer: a key such as
+        // "constructor" would otherwise return an inherited function.
+        catastro: Object.hasOwn(catastro.sectores, f.properties.CVEGEO)
+            ? catastro.sectores[f.properties.CVEGEO] : null
+    }));
+
+    municipiosOfrecidos = [...new Set(sectoresBusqueda.map(s => s.props.NOM_MUN))]
+        .sort((a, b) => a.localeCompare(b, 'es')).map(m => [m, m]);
+    poblarOpciones(document.getElementById('crit-municipio'), municipiosOfrecidos);
+    // One option per cadastral figure actually published, from the cheapest.
+    // The value is the figure itself, so the filter reads "up to this class".
+    // Classes are collected per figure, not one per figure: POPULAR (2) and
+    // INDUSTRIAL (2) are both 464.45, and keying by value alone dropped one.
+    const clases = new Map();
+    for (const s of sectoresBusqueda) {
+        if (!s.catastro || !Number.isFinite(s.catastro.valor)) continue;
+        if (!clases.has(s.catastro.valor)) clases.set(s.catastro.valor, new Set());
+        clases.get(s.catastro.valor).add(s.catastro.clase);
+    }
+    const criterioCatastro = CRITERIOS.find(c => c.id === 'catastro');
+    criterioCatastro.opciones = [...clases].sort((a, b) => a[0] - b[0]).map(([valor, nombres]) =>
+        [valor, `Hasta ${formatoPesos(valor)} por m² · ${[...nombres].sort().join(' / ')}`]);
+    for (const c of CRITERIOS) poblarOpciones(document.getElementById(`crit-${c.id}`), c.opciones);
+    document.getElementById('criteria-fieldset').disabled = false;
+}).catch(error => console.error('Error preparing the criteria search:', error));
+
 cargarCapaChoropleth({
     archivo: 'data/servicios_basicos.geojson',
     checkbox: document.getElementById('layer-services'),
@@ -2133,7 +2560,10 @@ cargarCapaChoropleth({
         asignar: escalones => { ESCALONES_INVERSION = escalones; }
     },
     funcionEstilo: crearEstiloCapa('INVERSION_INDEX', crearFuncionColor(() => ESCALONES_INVERSION)),
-    funcionDetalle: mostrarDetalleInversion
+    funcionDetalle: mostrarDetalleInversion,
+    // Every field the criteria search filters on is in this file, so it is
+    // what the search reads, loaded whether or not the layer is on.
+    alCargarGeojson: geojson => anunciarInversion(geojson)
 });
 
 // Layer 1 — Flood Risk (IMPLAN CARTO, 2024 Atlas): vector.
