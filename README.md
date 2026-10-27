@@ -115,7 +115,7 @@ All are official, publicly accessible sources. The complete provenance —publis
 
 All five layers are operational across the 431 AGEBs of the three municipalities. The IMPLAN risk layers, however, **only cover Saltillo**: its Atlas is municipal, so when navigating to Ramos Arizpe or Arteaga the panel disables those layers and explains why, instead of showing an empty map for no apparent reason.
 
-Main pending items: the forest-fire risk layer still lacks a source (relevant now that Arteaga contributes AGEBs in the sierra), and the IMPLAN vulnerability layers are unevaluated.
+Main pending item: the forest-fire risk layer still lacks a source (relevant now that Arteaga contributes AGEBs in the sierra). The IMPLAN vulnerability layers were evaluated and are not published (DATOS.md §3.7).
 
 The risk data are urban-scale intensity models: they help compare zones, they do not replace a site study.
 

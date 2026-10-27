@@ -193,7 +193,7 @@ CALLES_JSON = DATA_DIR / "calles.json"
 # Shape of each zone tuple in calles.json. Version 1 was
 # [tipo, asentamiento, municipio, cp, agebs]; version 2 turned the settlement
 # and the postal code into lists when zones resolving to the same sectors were
-# merged. Must match FORMATO_INDICE_CALLES in index.html.
+# merged. Must match FORMATO_INDICE_CALLES in app.js.
 FORMATO_INDICE_CALLES = 2
 
 # Metric CRS (the same as INEGI's vector cartography) used only to compute

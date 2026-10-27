@@ -30,7 +30,7 @@ instead of estimating it.
 | 9 | Indicadores Municipales PEV | CENAPRED | — | 2026-07-08 | Discarded |
 | 10 | Susceptibilidad a inundaciones pluviales | IMPLAN Saltillo | 2024 | 2026-07-15 | Discarded |
 | 11 | Tablas de Valores de Suelo y Construcción 2026 | Tesorería Municipal de Saltillo | 2026 | 2026-08-03 | In use |
-| 12 | Satellite Embedding (AlphaEarth Foundations) | Google / Google DeepMind | 2017–2025, annual | Not downloaded | Evaluated, screening pending |
+| 12 | Satellite Embedding (AlphaEarth Foundations) | Google / Google DeepMind | 2017–2025, annual | Not downloaded | Evaluated, screened 2026-08-11, not published (§3.6) |
 | 13 | Vulnerabilidad socio organizativa (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | Not downloaded | Discarded |
 | 14 | Vulnerabilidad sanitario ecológica (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-08-03 (PDF) | Discarded |
 | 15 | Property listings (Mercado Libre, EasyBroker, portals, SNIIV/RUV, SHF) | Various | — | Not downloaded | Evaluated, no usable source (§3.9) |
