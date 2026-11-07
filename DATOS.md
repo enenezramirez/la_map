@@ -35,6 +35,8 @@ instead of estimating it.
 | 14 | Vulnerabilidad sanitario ecológica (Atlas de Riesgos 2024) | IMPLAN Saltillo | 2024 | 2026-08-03 (PDF) | Discarded |
 | 15 | Property listings (Mercado Libre, EasyBroker, portals, SNIIV/RUV, SHF) | Various | — | Not downloaded | Evaluated, no usable source (§3.9) |
 | 16 | Red Hidrográfica escala 1:50 000, ed. 2.0 (subbasin RH24Be) | INEGI | 2010 (lines captured 1998–2008) | 2026-08-17 | In use, as context (§2.9) |
+| 17 | Mapa de Áreas Prioritarias de Protección Contra Incendios Forestales, Coahuila (Áreas Elegibles ROP 2025) | CONAFOR | 2025 | 2026-11-07 (WFS extract, not kept) | Evaluated, not published (§3.3) |
+| 18 | Concentrado Nacional de Polígonos de Incendios Forestales 2021–2024 | CONAFOR | 2021–2024, annual | 2026-11-07 (WFS extract, not kept) | Evaluated, not published (§3.3) |
 
 ---
 
@@ -451,11 +453,11 @@ Documented so they are not re-evaluated from scratch.
 
 ---
 
-### 3.3 Riesgo por incendios forestales (forest-fire risk, Layer 2) — evaluated and deferred
+### 3.3 Riesgo por incendios forestales (forest-fire risk, Layer 2) — evaluated and deferred; sources measured 2026-11-07, still deferred
 
-**No dataset was downloaded.** The layer was evaluated on 2026-07-16 and it was decided not
-to implement it while the scope is urban Saltillo. This is not a final discard: it has a
-reactivation criterion.
+**No dataset was downloaded in the first evaluation.** The layer was evaluated on 2026-07-16
+and it was decided not to implement it while the scope is urban Saltillo. This is not a final
+discard: it has a reactivation criterion.
 
 * **Sources considered:** CONABIO/CONAFOR, IMPLAN, CENAPRED.
 * **Reasons for deferring:**
@@ -482,6 +484,105 @@ reactivation criterion.
   Antonio de las Alazanas and the Sierra de Zapalinamé — and there would be sectors to
   analyze. At that point a source must be sought again (CONAFOR/CONABIO, or Arteaga's risk
   atlas if one exists), since Saltillo's IMPLAN atlas does not cover that municipality.
+
+#### Criterion met, sources measured 2026-11-07: still deferred
+
+The criterion was met on 2026-07-17 (§2.1). Arteaga contributes 28 AGEBs: 26 in the
+municipal seat and 2 in San Antonio de las Alazanas (`050040107`, 2,576 residents in 2020).
+Los Lirios has none. The source search was done on 2026-11-07. Two CONAFOR products were
+found and measured against the 431 AGEBs. The extracts went to a scratch folder and were not
+kept. Nothing is published.
+
+**Sources found (CONAFOR, IDEFOR portal, <https://idefor.cnf.gob.mx/>):**
+
+1. *Áreas Elegibles del Componente V ROP 2025 — Mapa de Áreas Prioritarias de Protección
+   Contra Incendios Forestales — Coahuila de Zaragoza* (`geonode:_05_coahuila_ae_2025_correc`).
+   * **Metadata author:** Centro Nacional de Manejo del Fuego, Gerencia de Manejo del Fuego.
+   * **Published:** 2025-02-27, edition 2025. Served in EPSG:4326; its areas are in EPSG:6372.
+   * **Structure:** 201 features, one dissolved multipolygon per municipality and class. There
+     are six classes of `Prioridad`: No aplica, Muy bajo, Bajo, Moderado, Alto and Muy alto.
+   * **What `Prioridad` means:** the field's only definition is "derivado del nivel de riesgo,
+     peligro y valor". It is a **management priority** that sets the eligible areas of a
+     CONAFOR subsidy component (ROP 2025, Componente V), and it weighs the value of the land
+     as well as its hazard. It is not a hazard classification.
+   * **Method:** processing history "No se provee información".
+   * **License:** rights "CONAFOR - CGPI - GPE - GMF". The layer states no license. The portal
+     footer shows CC BY-NC-SA 2.5 MX, but that applies to the IDEGeo platform as a whole.
+2. *Concentrado Nacional de Polígonos de Incendios Forestales*, one layer per year for 2021,
+   2022, 2023 and 2024.
+   * **What it is:** one burned-area perimeter per fire, with start date, cause, burned
+     vegetation and area.
+   * **How the perimeters were made:** from Sentinel-2 and Landsat 8 spectral indices,
+     satellite images, or field coordinates (`POLIGONO`, a field the 2021 layer lacks).
+   * **Purpose:** Art. 97 of the Ley General de Desarrollo Forestal Sustentable.
+
+**Measured.** The extracts are WFS GeoJSON. Areas and distances were computed in EPSG:6372
+against `servicios_basicos.geojson`.
+
+* **The priority map is detailed: its vertices sit on a 30 m grid.** It also reconciles with
+  its own attributes. Arteaga's six classes add up exactly to `Sup_mun` (161,915.3 ha), and
+  Alto + Muy alto add up exactly to `Sup_eleg` (88,203.5 ha).
+* **It does not classify the sectors themselves.**
+  * In Arteaga, **98.8%** of the area of the 28 AGEBs is "No aplica", and the rest is Muy bajo
+    or Bajo.
+  * Across all 431 AGEBs, only **3** touch Alto or Muy alto. The largest share is 4.08%, in an
+    AGEB with no residents; the other two are at 0.23% and 0.30%.
+  * An area-intersection penalty like `RIESGO_INDEX` would therefore be ≈0 everywhere. Reason
+    3 above predicted this; it is now measured.
+* **What it does show is proximity.**
+  * **36 AGEBs** have their edge within 500 m of Alto or Muy alto land: 34 in Saltillo, 2 in
+    Arteaga and none in Ramos Arizpe. They had 93,683 residents in 2020.
+  * The closest in Arteaga is Altos de Bella Unión, at 40 m. San Antonio de las Alazanas is
+    1.4–1.6 km away.
+  * Turning proximity into a sector attribute would take a distance threshold of our own, and
+    nothing here validates one. §3.8 raised the same objection against distance to a channel.
+* **The fire record, 2021–2024.** The search box runs from lon −101.2 to −100.3 and lat 25.15
+  to 25.7, at least ~12 km beyond every AGEB.
+  * It holds **52 Coahuila fires covering 7,111.7 ha**: 24 in Arteaga, 23 in Saltillo and 5 in
+    Ramos Arizpe.
+  * **No forest fire burned closer than 2.0 km to any AGEB.** The nearest two were in Saltillo
+    in May 2022: 130 ha at 2.0 km and 1,333 ha at 2.5 km.
+  * No fire of any kind came within 3.7 km of an Arteaga AGEB.
+  * Seven fires touched an AGEB or burned within 500 m of one. All were in Saltillo and all
+    were grassland or desert scrub. Six were under 7 ha, and one was 370.6 ha of grassland.
+
+**Other sources checked, none usable:**
+
+* **CONABIO:** no static, downloadable hazard zoning was found. Its early-warning system and
+  the *Sistema de Predicción de Peligro de Incendios Forestales* are both listed as inputs in
+  the 2023 burned-area lineage. Neither was evaluated as a layer.
+* **ThinkHazard (GFDRR):** a single class for all of Coahuila ("Alto"). It comes from a global
+  Fire Weather Index model (`WF-GLOBAL-CSIRO`), and the data cannot be downloaded because of
+  its license. That is the same granularity problem as CENAPRED's `GP_IF` (reason 4).
+* **An Arteaga risk atlas:** not found. The municipal site, including its *Prevención de
+  incendios* page, publishes none, and web searches turned up none. CENAPRED's *Cobertura de
+  Atlas Municipales* app refused the connection on 2026-11-07, so its absence is **not
+  confirmed**.
+
+**Verdict: Layer 2 stays deferred as a risk layer.** The reason has changed:
+
+* **Before:** the hazard had no sectors to fall on.
+* **Now:** the best source found stops, by design, at the edge of those sectors.
+
+A risk layer that is empty over every AGEB would read as "no fire risk", which it does not say,
+and the index cannot use it.
+
+* **Revisit if** either of these appears:
+  * a source that classifies wildland-urban-interface hazard on inhabited land, such as an
+    Arteaga or state atlas with a WUI layer;
+  * a published CONAFOR methodology that would justify a distance threshold.
+* **Open product decision:** publishing either layer as **context**, the way §2.9 publishes
+  stream courses. Two things would have to be resolved first:
+  * **The license:** neither layer states one.
+  * **The size:** the three municipalities' 18 priority features exceed 20 MB as GeoJSON.
+    They would need clipping, simplification and dropping "No aplica".
+* **To reproduce the extracts:** WFS 2.0 at `https://idefor.cnf.gob.mx/geoserver/ows`,
+  `outputFormat=application/json`.
+  * Priority map: `geonode:_05_coahuila_ae_2025_correc` with
+    `CQL_FILTER=CVE_MUN IN ('004','027','030')`.
+  * Fire perimeters: `geonode:_2021_incendios_forestales`, `_2022_incendios_forestales_wgs84`,
+    `_2023_incendios_forestales_wgs84` and `_2024_incendios_forestales`, each with
+    `bbox=25.15,-101.2,25.7,-100.3,urn:ogc:def:crs:EPSG::4326`.
 
 ### 3.4 Insecurity / crime incidence — investigated and deferred
 
@@ -611,7 +712,7 @@ granularity trap.**
   services (higher is better) and risk (higher is worse), it has no obvious sign, and picking one
   arbitrarily would bake an unstated thesis into the score.
 
-### 3.6 AlphaEarth Foundations / Satellite Embedding — evaluated 2026-08-03, screening approved, nothing trained
+### 3.6 AlphaEarth Foundations / Satellite Embedding — evaluated 2026-08-03, screened 2026-08-11, nothing trained or published
 
 User's idea (2026-08-03), after seeing an engineer combine AlphaEarth with ML to predict burned
 areas near Acapulco. **No data was downloaded.** This entry is the decision document that task
@@ -1416,13 +1517,20 @@ either way; splitting only repeats the properties on each feature.
   services and investment indices computed themselves for the new municipalities (Ramos
   Arizpe mean INVERSION_INDEX 76.6, Arteaga 71.9; their RIESGO_INDEX is 0 because there is
   no IMPLAN risk layer outside Saltillo). Verified in the browser.
+  **Correction, 2026-11-07:** the figures in parentheses describe the July data. Since
+  2026-08-04, `RIESGO_INDEX` and `INVERSION_INDEX` are both `null` for all 89 AGEBs of the
+  two municipalities. A sector outside the Atlas was never assessed, and a missing flood
+  penalty could only flatter its index (§3.9).
 * **Coverage of the risk layers:** the IMPLAN layers are municipal (**Saltillo only**).
   Ramos Arizpe and Arteaga have AGEBs but **no** risk data, and the **visible-area-aware
   layer panel** already communicates this (it disables + explains those layers when
   navigating there). Still pending: check whether IMPLAN publishes atlases for those
-  municipalities or whether another source is needed. **San Antonio de las Alazanas**
-  (sierra, already with AGEBs) is the trigger for revisiting **forest-fire risk** (§3.3).
-* **Forest-fire risk (Layer 2):** no source evaluated yet. Before implementing it, granular
-  data for Arteaga / the sierra must be confirmed to exist.
+  municipalities or whether another source is needed. The forest-fire search of 2026-11-07
+  found no Arteaga atlas, but could not confirm that none exists (§3.3).
+* **Forest-fire risk (Layer 2):** sources found and measured on 2026-11-07: CONAFOR's fire
+  priority map and its burned-area perimeters for 2021–2024. **Still deferred.** The
+  priority map is 30 m detailed, but it stops at the edge of the sectors: only 3 of 431 AGEBs
+  touch its Alto or Muy alto classes, at 4.08% at most (§3.3). Publishing either layer as
+  context is an open decision, pending a license and a size budget.
 * **Confirm with IMPLAN** the exact edition date of the risk layers if month-level precision
   ever matters (see the note in §2.5).
