@@ -4,6 +4,7 @@ Archived one-off analysis, not pipeline: nothing here feeds published data.
 DATOS.md 3.3 has the queries that produce the extracts.
 
     python scripts/conafor/medir_capas.py --agebs data/servicios_basicos.geojson \
+        --indice data/indice_inversion.geojson \
         --prioridad prioridad.json --incendios inc_2021.json inc_2022.json ...
 """
 
@@ -22,6 +23,7 @@ A_METRICO = Transformer.from_crs(4326, 6372, always_xy=True).transform
 MUNICIPIOS = {"004": "Arteaga", "027": "Ramos Arizpe", "030": "Saltillo"}
 CLASES = ("No aplica", "Muy bajo", "Bajo", "Moderado", "Alto", "Muy alto")
 CLASES_ALTAS = ("Alto", "Muy alto")
+PUNTAJE_CLASE = {"Bajo": 25, "Moderado": 50, "Alto": 75, "Muy alto": 100}
 CAJA_INCENDIOS = (-101.2, -100.3, 25.15, 25.7)
 CERCA_M = 500
 CLAVE_COAHUILA = "05"
@@ -84,13 +86,47 @@ def medir_clases(clases, agebs):
         print(f"  {nombre}: " + ", ".join(partes))
 
 
-def medir_cuadre_arteaga(clases):
-    filas = {c: valor for (m, c), valor in clases.items() if m == "004"}
-    atributos = next(iter(filas.values()))[1]
-    total = sum(g.area for g, _ in filas.values()) / 1e4
-    altas = sum(filas[c][0].area for c in CLASES_ALTAS) / 1e4
-    print(f"  all classes {total:,.1f} ha vs Sup_mun {atributos['Sup_mun']:,.1f}")
-    print(f"  Alto + Muy alto {altas:,.1f} ha vs Sup_eleg {atributos['Sup_eleg']:,.1f}")
+def medir_cuadre(clases):
+    for cve, nombre in MUNICIPIOS.items():
+        if any((cve, c) not in clases for c in CLASES):
+            print(f"  {nombre}: classes missing")
+            continue
+        atributos = clases[(cve, CLASES[0])][1]
+        total = sum(clases[(cve, c)][0].area for c in CLASES) / 1e4
+        altas = sum(clases[(cve, c)][0].area for c in CLASES_ALTAS) / 1e4
+        print(f"  {nombre}: all classes {total:,.1f} ha vs Sup_mun {atributos['Sup_mun']:,.1f}")
+        print(f"  {nombre}: Alto + Muy alto {altas:,.1f} ha vs Sup_eleg {atributos['Sup_eleg']:,.1f}")
+
+
+def medir_penalizacion(clases, agebs):
+    """Score each AGEB the way RIESGO_INDEX does, with Moderado standing in for Medio."""
+    for cve, nombre in MUNICIPIOS.items():
+        if any((cve, c) not in clases for c in PUNTAJE_CLASE):
+            print(f"Penalty in {nombre}: classes missing")
+            continue
+        filas = []
+        for ageb in agebs:
+            if municipio_de(ageb) != cve:
+                continue
+            g = ageb["geometria"]
+            partes = {c: g.intersection(clases[(cve, c)][0]).area / g.area for c in PUNTAJE_CLASE}
+            filas.append((sum(partes[c] * p for c, p in PUNTAJE_CLASE.items()), partes, ageb))
+        filas.sort(key=itemgetter(0), reverse=True)
+
+        print(f"Penalty in {nombre}, {len(filas)} AGEBs:")
+        for umbral in (0, 1, 5, 10, 25):
+            print(f"  above {umbral}: {sum(1 for f in filas if f[0] > umbral)}")
+        for clase in PUNTAJE_CLASE:
+            partes = [f[1][clase] for f in filas]
+            print(
+                f"  {clase}: touches {sum(1 for v in partes if v > 0)}, "
+                f"at least 1% in {sum(1 for v in partes if v >= 0.01)}, "
+                f"at least 10% in {sum(1 for v in partes if v >= 0.1)}, "
+                f"largest share {max(partes):.2%}"
+            )
+        for penalizacion, _, ageb in filas[:6]:
+            p = ageb["propiedades"]
+            print(f"  {p['CVEGEO']} {p['COLONIA']}: {penalizacion:.1f}, POBTOT={p['POBTOT']}")
 
 
 def medir_cercania(altas, agebs):
@@ -123,6 +159,16 @@ def medir_cercania(altas, agebs):
             print(f"  {p['CVEGEO']} San Antonio de las Alazanas: {distancia:,.0f} m")
 
 
+def medir_indice_inundacion(ruta):
+    valores = [
+        e["properties"]["RIESGO_INDEX"]
+        for e in leer_entidades(ruta)
+        if e["properties"]["CVEGEO"][2:5] == "030" and e["properties"]["RIESGO_INDEX"] is not None
+    ]
+    print(f"Flood RIESGO_INDEX in Saltillo, {len(valores)} AGEBs:")
+    print(f"  above 1: {sum(1 for v in valores if v > 1)}")
+
+
 def medir_prioridad(rutas, agebs):
     clases = {}
     for ruta in rutas:
@@ -134,13 +180,14 @@ def medir_prioridad(rutas, agebs):
 
     print("Vertices of Arteaga's Muy alto class, in EPSG:6372:")
     medir_reticula(clases[("004", "Muy alto")][0])
-    print("Arteaga's classes against the layer's own attributes:")
-    medir_cuadre_arteaga(clases)
+    print("Classes against the layer's own attributes:")
+    medir_cuadre(clases)
     print("Share of each municipality's AGEB area, by class:")
     medir_clases(clases, agebs)
     medir_cercania(
         unary_union([g for (_, c), (g, _) in clases.items() if c in CLASES_ALTAS]), agebs
     )
+    medir_penalizacion(clases, agebs)
 
 
 def medir_margen_caja(huella):
@@ -218,12 +265,14 @@ def medir_incendios(rutas, agebs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--agebs", required=True)
+    parser.add_argument("--indice", required=True)
     parser.add_argument("--prioridad", nargs="+", required=True)
     parser.add_argument("--incendios", nargs="+", required=True)
     args = parser.parse_args()
 
     agebs = cargar_agebs(args.agebs)
     medir_prioridad(args.prioridad, agebs)
+    medir_indice_inundacion(args.indice)
     medir_incendios(args.incendios, agebs)
 
 
