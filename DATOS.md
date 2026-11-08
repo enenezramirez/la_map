@@ -522,27 +522,40 @@ against `servicios_basicos.geojson`.
 * **The priority map is detailed: its vertices sit on a 30 m grid.** It also reconciles with
   its own attributes. Arteaga's six classes add up exactly to `Sup_mun` (161,915.3 ha), and
   Alto + Muy alto add up exactly to `Sup_eleg` (88,203.5 ha).
-* **It does not classify the sectors themselves.**
-  * In Arteaga, **98.8%** of the area of the 28 AGEBs is "No aplica", and the rest is Muy bajo
-    or Bajo.
-  * Across all 431 AGEBs, only **3** touch Alto or Muy alto. The largest share is 4.08%, in an
-    AGEB with no residents; the other two are at 0.23% and 0.30%.
-  * An area-intersection penalty like `RIESGO_INDEX` would therefore be ≈0 everywhere. Reason
-    3 above predicted this; it is now measured.
+* **In Arteaga and Ramos Arizpe it does not classify the sectors, and in Saltillo its top
+  classes barely reach them.**
+  * In Arteaga, **98.8%** of the area of the 28 AGEBs is "No aplica", and nearly all the rest
+    is Muy bajo. In Ramos Arizpe, more than 99.9% of the area of the 61 AGEBs is "No aplica".
+  * Across all 431 AGEBs, only **3** touch Alto or Muy alto, all in Saltillo. The largest share
+    is 4.08%, in an AGEB with no Census 2020 record (`POBTOT` is null); the other two are at
+    0.23% and 0.30%.
+  * **Not measured: Saltillo's four lower classes,** No aplica to Moderado. The extract of the
+    three municipalities reached its 20 MB limit and was cut off, so only Alto and Muy alto
+    were fetched for Saltillo's 342 AGEBs.
+  * A penalty built only on Alto and Muy alto would therefore be ≈0 in every AGEB. Reason 3
+    above predicted this, and it is now measured for those two classes. `RIESGO_INDEX` also
+    scores `Bajo` and `Medio`, so a penalty built exactly like it remains unmeasured in
+    Saltillo.
 * **What it does show is proximity.**
   * **36 AGEBs** have their edge within 500 m of Alto or Muy alto land: 34 in Saltillo, 2 in
-    Arteaga and none in Ramos Arizpe. They had 93,683 residents in 2020.
+    Arteaga and none in Ramos Arizpe. Two of the 36 have no Census 2020 record; the other 34
+    had 93,683 residents in 2020.
   * The closest in Arteaga is Altos de Bella Unión, at 40 m. San Antonio de las Alazanas is
     1.4–1.6 km away.
   * Turning proximity into a sector attribute would take a distance threshold of our own, and
     nothing here validates one. §3.8 raised the same objection against distance to a channel.
 * **The fire record, 2021–2024.** The search box runs from lon −101.2 to −100.3 and lat 25.15
-  to 25.7, at least ~12 km beyond every AGEB.
-  * It holds **52 Coahuila fires covering 7,111.7 ha**: 24 in Arteaga, 23 in Saltillo and 5 in
-    Ramos Arizpe.
-  * **No forest fire burned closer than 2.0 km to any AGEB.** The nearest two were in Saltillo
-    in May 2022: 130 ha at 2.0 km and 1,333 ha at 2.5 km.
-  * No fire of any kind came within 3.7 km of an Arteaga AGEB.
+  to 25.7, at least 10 km beyond every AGEB (10.3 km on the north side, the tightest).
+  * It holds **52 Coahuila fires covering 7,111.8 ha**: 24 in Arteaga, 23 in Saltillo and 5 in
+    Ramos Arizpe. It also holds 23 fires in Nuevo León, left out of these counts; the nearest
+    is 12.4 km from any AGEB.
+  * CONAFOR counts grassland and scrub fires as *incendios forestales* too. Below, "forest
+    vegetation" means a `TIPVEG` that starts with "Bosque".
+  * **No fire in forest vegetation burned closer than 2.0 km to any AGEB.** The nearest two
+    were in Saltillo in May 2022: 130 ha at 2.0 km and 1,333 ha at 2.5 km.
+  * No fire recorded in Arteaga came within 3.7 km of one of its AGEBs. Two fires recorded in
+    Saltillo came closer to them: 2 ha of grassland at 1.4 km and 2 ha of desert scrub at
+    3.0 km.
   * Seven fires touched an AGEB or burned within 500 m of one. All were in Saltillo and all
     were grassland or desert scrub. Six were under 7 ha, and one was 370.6 ha of grassland.
 
@@ -562,15 +575,18 @@ against `servicios_basicos.geojson`.
 **Verdict: Layer 2 stays deferred as a risk layer.** The reason has changed:
 
 * **Before:** the hazard had no sectors to fall on.
-* **Now:** the best source found stops, by design, at the edge of those sectors.
+* **Now:** the top classes of the best source found barely reach those sectors, and it labels
+  Arteaga's and Ramos Arizpe's "No aplica". That looks like a deliberate mask, but it is an
+  inference: the layer documents no method.
 
-A risk layer that is empty over every AGEB would read as "no fire risk", which it does not say,
-and the index cannot use it.
+A risk layer built on those classes would be nearly empty over the AGEBs. It would read as "no
+fire risk", which the source does not say, and it would give the index nothing to use.
 
-* **Revisit if** either of these appears:
-  * a source that classifies wildland-urban-interface hazard on inhabited land, such as an
-    Arteaga or state atlas with a WUI layer;
-  * a published CONAFOR methodology that would justify a distance threshold.
+* **Revisit if** any of these happens:
+  * a source appears that classifies wildland-urban-interface hazard on inhabited land, such
+    as an Arteaga or state atlas with a WUI layer;
+  * CONAFOR publishes a methodology that would justify a distance threshold;
+  * Saltillo's Bajo and Moderado classes, once measured, turn out to cover its sectors.
 * **Open product decision:** publishing either layer as **context**, the way §2.9 publishes
   stream courses. Two things would have to be resolved first:
   * **The license:** neither layer states one.
@@ -582,7 +598,11 @@ and the index cannot use it.
     `CQL_FILTER=CVE_MUN IN ('004','027','030')`.
   * Fire perimeters: `geonode:_2021_incendios_forestales`, `_2022_incendios_forestales_wgs84`,
     `_2023_incendios_forestales_wgs84` and `_2024_incendios_forestales`, each with
-    `bbox=25.15,-101.2,25.7,-100.3,urn:ogc:def:crs:EPSG::4326`.
+    `bbox=25.15,-101.2,25.7,-100.3,urn:ogc:def:crs:EPSG::4326`. The box returns 75 fires; the
+    52 from Coahuila have state code `05` in `CLAVEINC`.
+* **To re-derive the figures:** `scripts/conafor/medir_capas.py` takes those extracts and
+  `servicios_basicos.geojson`, and prints the figures measured above. It is an archived
+  one-off, like `scripts/alphaearth/`, and nothing from it feeds published data.
 
 ### 3.4 Insecurity / crime incidence — investigated and deferred
 
@@ -715,9 +735,10 @@ granularity trap.**
 ### 3.6 AlphaEarth Foundations / Satellite Embedding — evaluated 2026-08-03, screened 2026-08-11, nothing trained or published
 
 User's idea (2026-08-03), after seeing an engineer combine AlphaEarth with ML to predict burned
-areas near Acapulco. **No data was downloaded.** This entry is the decision document that task
-asked for. Everything below was verified on 2026-08-03 against primary sources or measured
-locally; none of it is from memory.
+areas near Acapulco. **No data was downloaded in the first evaluation;** the screening of
+2026-08-11 read about 103 MB (see its correction below). This entry is the decision document
+that task asked for. Everything below was verified on 2026-08-03 against primary sources or
+measured locally; none of it is from memory.
 
 **What it is.** A geospatial embedding model from Google DeepMind. Its public output is the
 *Satellite Embedding* dataset: **64 dimensions per 10 m pixel, one image per year**, covering
@@ -793,6 +814,8 @@ independent samples, and the unit in which this app publishes *every* number is 
    entry deferred fire because the hazard is in the sierra where there are no AGEBs, not only
    because no source published a layer. AlphaEarth supplies a source; **it does not supply an
    analysis unit**. Fixing the source does not fix the geometry.
+   **Correction, 2026-11-07:** Arteaga has had AGEBs since 2026-07-17 (§2.1), so a missing
+   analysis unit is not what blocks fire. §3.3 records the current reason.
 4. **Filling the gaps** (96 AGEBs with no cadastral row, 21 with no Census figures). Needs
    land-use labels this project does not have, and would be inventing a category where today
    there is an honest blank.
@@ -1519,8 +1542,8 @@ either way; splitting only repeats the properties on each feature.
   no IMPLAN risk layer outside Saltillo). Verified in the browser.
   **Correction, 2026-11-07:** the figures in parentheses describe the July data. Since
   2026-08-04, `RIESGO_INDEX` and `INVERSION_INDEX` are both `null` for all 89 AGEBs of the
-  two municipalities. A sector outside the Atlas was never assessed, and a missing flood
-  penalty could only flatter its index (§3.9).
+  two municipalities. A sector outside the Atlas was never assessed (§3.9), and a missing
+  flood penalty could only flatter its index.
 * **Coverage of the risk layers:** the IMPLAN layers are municipal (**Saltillo only**).
   Ramos Arizpe and Arteaga have AGEBs but **no** risk data, and the **visible-area-aware
   layer panel** already communicates this (it disables + explains those layers when
@@ -1529,8 +1552,9 @@ either way; splitting only repeats the properties on each feature.
   found no Arteaga atlas, but could not confirm that none exists (§3.3).
 * **Forest-fire risk (Layer 2):** sources found and measured on 2026-11-07: CONAFOR's fire
   priority map and its burned-area perimeters for 2021–2024. **Still deferred.** The
-  priority map is 30 m detailed, but it stops at the edge of the sectors: only 3 of 431 AGEBs
-  touch its Alto or Muy alto classes, at 4.08% at most (§3.3). Publishing either layer as
-  context is an open decision, pending a license and a size budget.
+  priority map is 30 m detailed, but its top classes barely reach the sectors: only 3 of 431
+  AGEBs touch Alto or Muy alto, at 4.08% at most. Saltillo's lower classes were not measured
+  (§3.3). Publishing either layer as context is an open decision, pending a license and a
+  size budget.
 * **Confirm with IMPLAN** the exact edition date of the risk layers if month-level precision
   ever matters (see the note in §2.5).
