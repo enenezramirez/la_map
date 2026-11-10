@@ -3,54 +3,22 @@
 <head>
     <meta charset="UTF-8">
 
-    <!-- Content-Security-Policy. Second layer, not a bug fix: every field that
-         reaches the DOM from the data files goes through esc() first. This is
-         what limits the damage if that ever fails.
-         It has to sit here, above every <link> and <script>: a meta policy only
-         governs what the parser meets after it.
+    <!-- Content-Security-Policy: a second layer behind esc(). It sits above every
+         <link> and <script> because a meta policy only governs what the parser
+         meets after it.
 
-         Only ONE source is not 'self', and it is the map tiles
-         (a-d.basemaps.cartocdn.com under img-src). Everything needed to RUN the
-         page is same-origin: Leaflet is vendored into assets/vendor, and so are
-         app.js, styles.css, the woff2 fonts and the SVG favicon; the GeoJSON
-         layers and data/calles.json are fetched from here too.
+         Everything needed to run the page is same-origin. The only other source
+         is the map tiles (*.basemaps.cartocdn.com under img-src).
 
-         Vendoring Leaflet is what let script-src and style-src collapse to bare
-         'self'. They previously named unpkg, and pinning that source down to the
-         exact file mattered more than it looked: a CSP host-source matches every
-         path on the host, and unpkg mirrors all of npm, so `https://unpkg.com`
-         in script-src was effectively a script-execution wildcard — an injected
-         <script src="https://unpkg.com/anything.js"> would have sailed through
-         the very policy meant to contain it, with no integrity attribute of its
-         own to satisfy. Naming the file closed that; removing the host closes
-         the whole question, and takes the CDN out of the render path the way the
-         fonts already were. The cost is that a Leaflet security patch is now a
-         manual bump — assets/vendor/leaflet-1.9.4/ carries the version in its
-         path so the next one lands beside it rather than silently over it.
+         `data:` under img-src is Leaflet's: to cancel a tile request in flight it
+         points the <img> at a 1x1 GIF kept as a data: URI (L.Util.emptyImageUrl).
 
-         `data:` under img-src is Leaflet's, and it is not optional: to cancel a
-         tile request still in flight, Leaflet points that <img> at a 1x1
-         transparent GIF it keeps as a data: URI (L.Util.emptyImageUrl). Without
-         this, two zoom clicks logged 16 img-src violations — measured. Nothing
-         breaks (the handlers are detached and the tile removed before the src
-         is reassigned, so the map still draws), but panning would flood the
-         console permanently and drown out any real error. It is a cheap source
-         to allow: the dangerous places for `data:` are script-src, object-src
-         and frame-src, where such a URI can execute or navigate, and none of
-         them admit it here.
+         No 'unsafe-inline': the app logic lives in app.js and the legend swatches
+         are colored through the CSSOM.
 
-         The three 'none' at the end close doors the page never uses: no
-         plugins, no <base> to repoint every relative URL, no form target.
-
-         Deliberately absent: 'unsafe-inline'. Neither script-src nor style-src
-         needs it — the app logic moved to app.js, and the legend swatches are
-         colored through the CSSOM instead of a style attribute. Admitting it
-         would forfeit most of the policy, since an injected inline block is
-         indistinguishable from one we wrote.
-         Also absent, and worth knowing: frame-ancestors, report-uri and
-         sandbox are IGNORED in a meta policy, so this does nothing against
-         framing. That needs a real response header, which GitHub Pages does
-         not let us set. -->
+         frame-ancestors, report-uri and sandbox are IGNORED in a meta policy, so
+         this does nothing against framing. That needs a response header, which
+         GitHub Pages does not let us set. -->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
         script-src 'self';
@@ -66,37 +34,24 @@
     <title>Traza — Inteligencia territorial · Saltillo</title>
     <link rel="icon" type="image/svg+xml" href="assets/logo-traza.svg">
 
-    <!-- Inter for the UI, IBM Plex Mono for figures, labels and provenance (the
-         "instrument's voice"). Both are self-hosted from assets/fonts and
-         declared in styles.css, so no request leaves this origin to render the
-         page — see the @font-face block there for why. -->
+    <!-- Inter for the UI, IBM Plex Mono for figures, labels and provenance. Both
+         are self-hosted from assets/fonts and declared in styles.css. -->
 
-    <!-- Leaflet CSS, vendored. No integrity/crossorigin here on purpose: SRI
-         answers "did the CDN send what I expected", a question a same-origin
-         file does not raise, and crossorigin="" on a same-origin request only
-         adds a needless CORS mode. The bytes were checked against the SRI
-         hashes this tag used to carry before they were committed, so what ships
-         is what the page has been running all along. -->
+    <!-- Leaflet CSS, vendored. No integrity/crossorigin: the file is same-origin. -->
     <link rel="stylesheet" href="assets/vendor/leaflet-1.9.4/leaflet.css"/>
 
-    <!-- Custom CSS. The ?v= is a cache buster and it earns its keep: the
-         markup and the stylesheet have to move together (the suggestion rows
-         are two-line markup styled by two-line rules), and a browser holding a
-         stale styles.css renders the new markup with the old layout. The dev
-         server sends no Cache-Control or ETag at all, only Last-Modified, so
-         browsers cache it heuristically and never revalidate. Bump this
-         whenever a stylesheet change is one the markup depends on. -->
+    <!-- The ?v= is a cache buster: bump it whenever a stylesheet change is one the
+         markup depends on. The dev server sends no validators, so browsers do
+         not revalidate. -->
     <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 
-    <!-- Map container. It is the page's main content, and Leaflet already makes
-         it focusable (tabindex="0") so the arrow keys can pan it, so the label
-         is what a screen reader announces on arrival — without it the main
-         landmark is a nameless box. -->
+    <!-- Map container and main landmark. Leaflet makes it focusable, so the
+         label is what a screen reader announces on arrival. -->
     <main id="map" aria-label="Mapa de riesgos y servicios de la Zona Metropolitana de Saltillo"></main>
 
-    <!-- Floating control panel (glassmorphism) -->
+    <!-- Floating control panel -->
     <div class="control-panel">
         <header class="panel-header">
             <div class="brand">
@@ -124,24 +79,20 @@
                        role="combobox" aria-labelledby="search-heading" aria-controls="colonia-suggestions"
                        aria-autocomplete="list" aria-expanded="false" disabled>
                 <button type="button" id="colonia-search-clear" class="search-clear" aria-label="Limpiar búsqueda" hidden>&times;</button>
-                <!-- tabindex="-1" keeps the list out of the tab sequence: the
-                     browser makes any scrollable box focusable, and landing on
-                     it was a dead stop because the arrow keys are handled on
-                     the input. Selection is exposed via aria-activedescendant. -->
+                <!-- tabindex="-1" keeps the list out of the tab sequence (a scrollable
+                     box is focusable by default). Selection is exposed via
+                     aria-activedescendant. -->
                 <ul id="colonia-suggestions" class="search-suggestions" role="listbox"
                     aria-labelledby="search-heading" tabindex="-1" hidden></ul>
             </div>
         </section>
 
-        <!-- Find zones by criteria: the deterministic panel DATOS.md §3.9 proposes
-             in place of an AI agent. Native controls and an explicit submit, not
-             filtering on change: the results open the side card, and a context
-             change on input would fail SC 3.2.2. The fieldset stays disabled
-             until the sectors have loaded, like the colonia search. The criteria
-             describe the place only — never the people who live there (§3.9).
-             Each select holds only "any" here: the thresholds are declared in
-             app.js (CRITERIOS) and the options generated from them, so the
-             values the search accepts and the values offered cannot drift. -->
+        <!-- Find zones by criteria (DATOS.md §3.9). Native controls and an explicit
+             submit, not filtering on change: the results open the side card, and a
+             context change on input would fail SC 3.2.2. The fieldset stays
+             disabled until the sectors have loaded. Each select holds only "any"
+             here: the thresholds are declared in app.js (CRITERIOS) and the
+             options are generated from them. -->
         <section class="panel-section" id="criteria-section" aria-labelledby="criteria-heading">
             <h2 id="criteria-heading">Buscar Zonas por Criterios</h2>
             <details class="criteria-details">
@@ -213,14 +164,10 @@
             </details>
         </section>
 
-        <!-- Layers are grouped because the panel mixes three kinds of claim, and
-             a flat list of six said they were all the same kind: indices this
-             project computes, a risk classification it republishes from IMPLAN,
-             and a figure it merely cites. The grouping is declared HERE and
-             nowhere else — app.js reads the family off each switch's enclosing
-             .layer-group, so the legend regroups itself and cannot drift.
-             role="group" carries to assistive tech what the heading carries to
-             the eye (SC 1.3.1); the headings alone would only be an outline. -->
+        <!-- The grouping is declared HERE and nowhere else: app.js reads each
+             layer's family off its switch's enclosing .layer-group, so the legend
+             regroups itself. role="group" carries to assistive tech what the
+             heading carries to the eye (SC 1.3.1). -->
         <section class="panel-section" id="layers-section" aria-labelledby="layers-heading">
             <h2 id="layers-heading">Capas</h2>
 
@@ -316,12 +263,9 @@
             </div>
         </section>
 
-        <!-- The visitor's own CARTO key. No key ships with this public repo —
-             anything served to the browser is published — so without one the
-             basemap degrades to CARTO's watermark and the data is unaffected.
-             The key stays in the visitor's browser (see app.js). A plain text
-             field, not type="password": it is not a login secret, and a
-             password manager offering to save it would be the wrong cue. -->
+        <!-- The visitor's own CARTO key (see app.js). A plain text field, not
+             type="password": it is not a login secret, and a password manager
+             should not offer to save it. -->
         <section class="panel-section" id="basemap-section" aria-labelledby="basemap-heading">
             <h2 id="basemap-heading">Mapa Base</h2>
             <details class="criteria-details">
@@ -354,10 +298,8 @@
         </footer>
     </div>
 
-    <!-- Detail info panel (right sidebar). Complementary landmark: it supports
-         whatever zone is selected on the map. The name is deliberately static —
-         the <h2> inside already carries the colonia, and a landmark that renames
-         itself on every click is not one a user can learn to jump to. -->
+    <!-- Detail info panel (right sidebar). Complementary landmark with a static
+         name: the <h2> inside carries the colonia. -->
     <aside id="details-sidebar" class="sidebar-collapsed" inert aria-label="Detalles de la zona seleccionada">
         <button id="close-sidebar" class="close-btn" aria-label="Cerrar panel de detalles">&times;</button>
         <div class="sidebar-content">
@@ -372,15 +314,9 @@
          path, so an upgrade changes the URL by construction. -->
     <script src="assets/vendor/leaflet-1.9.4/leaflet.js"></script>
 
-    <!-- App Logic JS -->
-    <!-- App logic. It lives in its own file, not inline, so the
-         Content-Security-Policy above can withhold 'unsafe-inline' from
-         script-src: an inline block is indistinguishable from an injected
-         one, so allowing it would forfeit most of what the policy buys.
-         Classic script, not type="module", on purpose — it runs after
-         Leaflet and after the markup above, exactly as the inline block did.
-         The ?v= is the same cache buster as styles.css and matters for the
-         same reason: markup and script have to move together. -->
+    <!-- App logic, in its own file so the CSP can withhold 'unsafe-inline'.
+         Classic script, not type="module": it runs after Leaflet and after the
+         markup above. The ?v= is a cache buster, like the one on styles.css. -->
     <script src="app.js?v=18"></script>
 </body>
 </html>

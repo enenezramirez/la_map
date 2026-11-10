@@ -19,14 +19,9 @@ const REGION_BOUNDS = L.latLngBounds([
 map.fitBounds(REGION_BOUNDS, { padding: [20, 20] });
 
 // --- The visitor's own CARTO key (optional) -------------------------------
-// CARTO now serves its basemaps with an "API KEY REQUIRED" watermark unless a
-// key is passed as ?key= -- measured: same watermark tile (ETag wm-…) with no
-// referer and with the GitHub Pages one. This repository is public and served
-// as it is, and anything sent to the browser is published, so no key ships with
-// it: without one the basemap degrades to the watermark and every data layer
-// works the same. A visitor who wants the clean basemap pastes their own free
-// key. It stays in THEIR browser (localStorage) and only travels to CARTO, in
-// the tile URLs.
+// CARTO watermarks its basemaps unless a key travels as ?key=. No key ships
+// with this public repository: a visitor can paste their own, which stays in
+// their browser (localStorage) and goes only to CARTO, in the tile URLs.
 const ALMACEN_LLAVE_CARTO = 'traza.cartoKey';
 // The key is spliced into a URL, so only URL-unreserved characters get through
 // (letters, digits, - . _ ~): that covers hex, UUID and JWT-style tokens, and
@@ -51,22 +46,16 @@ function leerLlaveCarto() {
 
 let llaveCarto = leerLlaveCarto();
 
-// Add base layer - CartoDB Dark Matter, label-free variant.
-// `dark_nolabels` rather than `dark_all` because the basemap's street labels
-// render UNDER the choropleth: inside an AGEB they sit beneath a 0.65 fill, so
-// they are noise without being readable, and outside the AGEBs they were
-// labelling territory the app makes no claim about. Same tile host, so the CSP
-// (which lists the host, not the path) is unaffected.
+// CartoDB Dark Matter without labels: under the 0.65 choropleth fill the
+// street labels would be noise, not text.
 const darkBaseLayer = L.tileLayer(urlTeselasCarto('dark_nolabels', llaveCarto), {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
     maxZoom: 20
 }).addTo(map);
 
-// Alternative base layer - CartoDB Positron, label-free to match the dark one.
-// Kept symmetric on purpose: with one variant labelled and the other not,
-// switching base changed the theme AND the information density at once, so the
-// control stopped being a single choice.
+// CartoDB Positron, also without labels, so switching base changes the theme
+// and nothing else.
 const lightBaseLayer = L.tileLayer(urlTeselasCarto('light_nolabels', llaveCarto), {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
@@ -152,13 +141,9 @@ describirLlaveCarto();
 // Detail sidebar: open/close
 const detailsSidebar = document.getElementById('details-sidebar');
 
-// The card never leaves the DOM — it slides out and fades to
-// `opacity: 0` — so hiding it from the eye does not hide it from the
-// keyboard. Closed, it still held up to 16 focusable controls (the close
-// button plus one per sector of the last colonia opened; ZONA CENTRO has
-// 15), every one of them accepting focus with nothing on screen.
-// `inert` is set with the class instead of after the slide-out, so
-// keyboard reachability never depends on an animation finishing.
+// The card stays in the DOM when closed (it slides out and fades), so `inert`
+// is what takes its controls out of the tab order. It is set with the class,
+// not after the animation.
 function abrirFicha() {
     detailsSidebar.classList.remove('sidebar-collapsed');
     detailsSidebar.inert = false;
@@ -179,32 +164,17 @@ function cerrarFicha() {
 
 document.getElementById('close-sidebar').addEventListener('click', () => {
     cerrarFicha();
-    // The outline marks whatever the card is describing, so closing the
-    // card is what says "I am done with this zone". Leaving it behind
-    // would mark a selection with nothing left to explain it.
+    // The outline marks what the card describes, so closing the card clears it.
     limpiarSeleccion();
 });
 
-// --- Shared choropleth and legend utilities (Phase 4/5) ---
+// --- Shared choropleth and legend utilities ---
 
 // Escapes text before interpolating it into innerHTML templates.
-// Today the GeoJSON files are generated locally by process_data.py from
-// official SHP files (INEGI/IMPLAN) and served from the same origin, so
-// there is no third-party input; this hardens the cards in case a layer
-// ever comes from a remote URL or a user upload.
-//
-// **Contract: HTML text nodes and QUOTED attribute values only.** These
-// five entities are enough for both, and that is every context this file
-// uses it in. They are NOT enough for an unquoted attribute, a URL
-// (`href`/`src`, where `javascript:` survives escaping) or a CSS context
-// (`style="..."`, where `url(...)` does).
-//
-// This file no longer writes a style attribute anywhere — the legend
-// swatches carry `data-swatch` and are colored through the CSSOM — but the
-// CSS caveat still holds on the far side of that hop: whatever lands in
-// data-swatch is assigned to `style.background`, so it must stay a
-// hardcoded palette constant. esc() would not make a computed value safe
-// there.
+// Contract: HTML text nodes and QUOTED attribute values only. It is not enough
+// for an unquoted attribute, a URL (`href`/`src`) or a CSS context. Legend
+// swatches put a color in `data-swatch`, which is assigned to
+// `style.background`: that value must stay a hardcoded palette constant.
 function esc(valor) {
     return String(valor)
         .replace(/&/g, '&amp;')
@@ -214,63 +184,27 @@ function esc(valor) {
         .replace(/'/g, '&#39;');
 }
 
-/* Map color budget ("Traza" identity, 2026-07-18).
-   Each family means ONE thing and only one:
-     · brick-red    → DANGER   (risk layers)
-     · amber-cream  → VALUE    (investment index)
-     · teal         → COVERAGE (basic services)
+/* Map color budget. Each family means one thing:
+   · brick-red    → DANGER   (risk layers)
+   · amber-cream  → VALUE    (investment index, cadastral value)
+   · teal         → COVERAGE (basic services)
+   Ramps are sequential and share one direction: light = low, dark = high, so
+   they read in grayscale and with deuteranopia. The dark end stays saturated
+   so it does not merge with the near-black basemap (#0b0c0e). */
 
-   The three used to share the same green→red traffic-light ramp, so
-   red meant "low coverage", "bad investment" and "dangerous zone" at
-   the same time, on the same map. On top of that, the red-green pair
-   is the one that works worst with deuteranopia (~8% of men): exactly
-   the axis that matters most to read here.
-
-   The ramps are SEQUENTIAL and all share the SAME direction as the
-   risk layers: light = low, dark/intense = high. That gives the map a
-   single reading rule. The indices used to run opposite to the risk
-   layers (in the indices "high" was the lightest tone; in risk the
-   darkest), and even with each legend beside it, the eye cannot hold
-   two opposing rules on the same canvas: it confused people during
-   presentations. Luminosity still does the work, so the ramps read in
-   grayscale and for anyone who can't distinguish hues.
-
-   The HIGH (dark) end uses deep but SATURATED tones, never close to the
-   near-black background (#0b0c0e) —they are the same tones the identity
-   had already chosen because they sit above the basemap—, so the top
-   step is not lost; and the LOW end is now light, impossible to lose.
-   Each AGEB also carries a faint border that outlines it even with a
-   dark fill.
-
-   Deliberate deviation from the original green-yellow-orange-red color
-   spec; the reason is the unified color law explained above. */
-
-// Ramps from low to high (light → dark): index 0 is the lowest value
-// (light tone) and the last is the highest (dark tone), matching the
-// risk layers. Services uses teal, Investment amber: they measure
-// different things and can be on at the same time over the same AGEBs,
-// so sharing a ramp made them indistinguishable.
+// Index 0 is the lowest value (lightest tone). Services and Investment use
+// different hues because both can be on over the same AGEBs.
 const RAMPA_SERVICIOS = ['#7fd4c4', '#35a396', '#2a7d75', '#235a58', '#1d3a3c'];
 const RAMPA_INVERSION = ['#f2d79c', '#d29b33', '#a87c27', '#7d5c22', '#4a3a24'];
 
-// Cadastral value reuses the amber ramp on purpose. The color law is by
-// MEANING, not by layer: amber-cream is the "value" family, and land value
-// belongs to it as much as the investment index does. The legend already
-// renders one block per active layer and warns when a ramp is shared, so
-// the repetition is labelled rather than silent.
+// Cadastral value shares the amber ramp: color is assigned by meaning (value),
+// not by layer. The legend warns when two active layers share a ramp.
 const RAMPA_CATASTRO = RAMPA_INVERSION;
 
-// Breaks below read their colors from that ramp by index rather than
-// repeating the hex codes, so the ramp really is the single source of truth
-// it claims to be instead of a constant nobody references.
+// The breaks below read their colors from that ramp by index.
 
-// Fixed pesos/m2 breaks, NOT quantiles. The other two layers use quantiles
-// because their values are continuous and bunched; this one has just 14
-// distinct values (one per terrain class), so quantiles would cut between
-// identical figures and put the same class in two colors. Fixed breaks also
-// keep the legend meaningful across editions: the tables are reissued yearly
-// and the classes are reasonably stable, whereas a quantile cut would move
-// under the reader's feet.
+// Fixed pesos/m² breaks, not quantiles: there are only 14 distinct values (one
+// per terrain class), and quantiles would cut between identical figures.
 const ESCALONES_CATASTRO = [
     { hasta: 500, color: RAMPA_CATASTRO[0], etiqueta: 'Menos de $500' },
     { hasta: 800, color: RAMPA_CATASTRO[1], etiqueta: '$500 – $800' },
@@ -283,34 +217,15 @@ const ESCALONES_CATASTRO = [
 // ramps so it isn't confused with a low value.
 const COLOR_SIN_DATO = '#3a3f47';
 
-/* The breaks are computed by QUANTILES over the real data, not with
-   fixed steps every 20 points. Reason: both indices are heavily skewed
-   upward (the median for services is 91.7 and for investment 86.1), so
-   with fixed breaks ~9 of every 10 AGEBs fell into the same class and
-   the map was almost a single color: pretty and useless. By quantiles
-   each class holds ~the same number of AGEBs and the real variation
-   becomes visible.
+/* Breaks are computed by QUANTILES over the real data. Both indices are skewed
+   upward (median 91.7 for services, 86.1 for investment), so fixed steps would
+   put ~9 of 10 AGEBs in one class. The color therefore shows relative position
+   within the city, not an absolute score.
 
-   The price, worth keeping in mind when reading the map: the breaks
-   depend on the data (they change if it changes), the labels end up on
-   irregular numbers, and two nearly identical AGEBs can fall into
-   different classes if the break passes right between them. In other
-   words, the color shows RELATIVE POSITION within the city, not an
-   absolute score. */
-/* `piso` turns the lowest class into an ABSOLUTE band and runs the quantiles
-   over what is left. Pure quantiles cannot separate a thin tail: for services,
-   4% of the sectors span 0-80% coverage while the other 96% crowd into 80-100,
-   so the bottom class came out `0.0% - 87.1%` and was 25 TIMES wider than the
-   next one -- a sector with 20% coverage wore the same colour as one with 86%.
-   Adding classes does not fix it, because there are not enough sectors down
-   there to earn a break of their own; the fix is to stop pretending the tail is
-   another step on the same scale.
-
-   Only pass a floor where the threshold means something in the world. For a
-   coverage percentage, "under 80%" is a statement about the sector. For a
-   synthetic 0-100 score it would be a number invented here, which is why the
-   investment index stays on pure quantiles even though its bottom class is wide
-   too -- see the note in AYUDA_INDICE. */
+   `piso` turns the lowest class into an ABSOLUTE band and runs the quantiles
+   over the rest, for a thin tail that quantiles cannot separate (4% of the
+   sectors span 0-80% of services coverage). Pass a floor only where the
+   threshold means something in the world, such as a coverage percentage. */
 function escalonesPorCuantiles(valores, rampa, sufijo = '', piso = null) {
     const datos = valores
         .filter(v => v !== null && v !== undefined && !Number.isNaN(v))
@@ -327,10 +242,8 @@ function escalonesPorCuantiles(valores, rampa, sufijo = '', piso = null) {
 
     const escalones = [];
     for (let i = nClases - 1; i >= 0; i--) {
-        // With a floor, the bottom quantile class starts AT the floor rather
-        // than at the lowest value above it, so the bands stay contiguous:
-        // otherwise the legend reads "Menos de 80.0%" then "80.1% - …" and
-        // leaves a gap no sector can be in but every reader can see.
+        // With a floor, the bottom quantile class starts AT the floor, so the bands
+        // in the legend stay contiguous.
         const minimo = i === 0 ? (usaPiso ? piso : escalables[0]) : cuantil(i / nClases);
         const maximo = i === nClases - 1
             ? escalables[escalables.length - 1]
@@ -339,12 +252,8 @@ function escalonesPorCuantiles(valores, rampa, sufijo = '', piso = null) {
         // would be empty; skip it instead of showing a dead color
         // in the legend.
         if (escalones.length && minimo >= escalones[escalones.length - 1].minimo) continue;
-        // How many sectors actually landed in the class, so the legend help can
-        // state the real figure instead of promising an even split that repeated
-        // values can break. Counted the way crearFuncionColor assigns -- closed
-        // below, open above, except for the top class. Counting both ends closed
-        // put every value sitting exactly on a break into two classes, so the
-        // totals came out above the number of sectors that exist (413 of 410).
+        // Sectors per class, counted the way crearFuncionColor assigns them: closed
+        // below and open above, except for the top class.
         const esLaMasAlta = i === nClases - 1;
         const conteo = escalables.filter(
             v => v >= minimo && (esLaMasAlta ? v <= maximo : v < maximo)).length;
@@ -390,28 +299,18 @@ const ORDEN_RIESGO = ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo'];
 function crearEstiloRiesgo() {
     return feature => ({
         fillColor: COLORES_RIESGO[feature.properties.INTENSIDAD] || '#9ca3af',
-        // Same zoom scaling as the choropleths, and these layers need it more,
-        // not less: there are 1,358 flood zones and 2,136 chemical ones against
-        // 431 AGEBs, so far more outline per screen.
+        // Same zoom scaling as the choropleths.
         weight: pesoBorde(),
-        // Was rgba(255,255,255,0.25), and that failed on BOTH basemaps -- 1.47:1
-        // over the dark one, 1.07 over the light -- because a translucent border
-        // blends toward its own fill. The opaque-white fix that closed this for
-        // the AGEB outline never reached here. Same rule now: 3.80 dark, 5.18
-        // light. It does make the outline read harder at z>=13, where the weight
-        // stops being 0; that is a visible change, not a silent one.
+        // Opaque and chosen per basemap: measured 3.80:1 over the dark one and
+        // 5.18:1 over the light one.
         color: colorBorde(),
         opacity: 1,
         fillOpacity: 0.6
     });
 }
 
-// Short layer name for the help disclosure. Several legends can be on
-// screen at once, so "what do these levels mean?" repeated three times
-// named nothing: it read as one help for the whole map. Naming the layer
-// in the summary is also what a screen reader announces when tabbing
-// between the disclosures, where the surrounding legend title is not
-// part of the accessible name.
+// Short layer name for each help disclosure: several legends can be open at
+// once, and the summary is what a screen reader announces.
 const NOMBRE_CORTO_CAPA = {
     servicios: 'Servicios',
     inversion: 'Inversión',
@@ -428,26 +327,12 @@ const AYUDA_RIESGO = {
         mide: 'Acumulación de agua de lluvia en zona urbana.',
         omite: 'Se omite el nivel «Muy bajo», que es el fondo del modelo y cubre casi toda la mancha urbana.',
         indice: 'Es la única capa de riesgo que penaliza el Índice de Inversión.',
-        // The most serious caveat attached to any layer in this project, and it
-        // is measured rather than inferred (DATOS.md 2.4; 3.8 for the cause). It
-        // is split in two on purpose. The short half is pinned to the legend,
-        // because the reader it protects is the one comparing zones who never
-        // opens the help and takes a blank map for a safe one; the long half —
-        // the episode itself, and what it does and does not establish — lives
-        // in its own disclosure below, where there is room to say it without
-        // overstating it. The pinned half now names which chapter this layer is:
-        // "pluvial, not arroyo" is what changes the conclusion a reader draws
-        // from an unmarked zone, so it cannot wait behind a click.
+        // Measured caveat (DATOS.md §2.4; §3.8 for the cause), in two halves: the
+        // short one is pinned next to the ramp, the episode has its own disclosure.
         advertencia: {
             lead: 'La ausencia de zona marcada no es evidencia de ausencia de inundación.',
             cuerpo: 'Esta capa es solo la inundación pluvial: el desbordamiento de arroyos va en otro capítulo del Atlas que aquí no se publica. En julio de 2025 se inundaron colonias que esta capa deja limpias.'
         },
-        // Its own disclosure, not a tail on the levels one. Measured before
-        // splitting: the levels disclosure ran 1,083 px — 1.56 viewports — and
-        // 59% of it was this episode, under a label that promises what «Medio»
-        // means. The reader who came for the scale got an essay on something
-        // else, and the reader who came for the episode had to scroll past the
-        // scale. Two labels, each answering the question it asks.
         limitacion: {
             resumen: '¿Por qué esta capa deja limpias colonias que sí se inundaron?',
             parrafos: [
@@ -471,19 +356,8 @@ const AYUDA_RIESGO = {
     }
 };
 
-// Both halves of the caveat are read through here, so the guard tests the very
-// fields that get dereferenced instead of a neighbouring one. Checking
-// `limitacion` and then reading `advertencia.lead` is the shape of bug this
-// repo has already shipped once — `if (!dato)` said nothing about `dato.valor`
-// — and here it would throw inside cargarCapaRiesgo's `.then()`, whose `.catch`
-// only logs: the switch would stay checked and do nothing, with one console
-// line to show for it. A half-filled entry degrades to no caveat instead.
-// The episode disclosure reads `limitacion.resumen` and `limitacion.parrafos`,
-// so this checks those and nothing else. Deliberately independent of
-// `advertenciaDeRiesgo`: coupling a block to a field it never renders is the
-// shape that already cost this repo a Medium finding, when counting risk layers
-// per group could silently drop the shared-ramp notice. A half-filled entry
-// renders no second disclosure instead of one labelled with an empty string.
+// Each guard checks exactly the fields its own block renders, so a
+// half-filled entry renders no block instead of throwing.
 function limitacionDeRiesgo(clave) {
     const ayuda = AYUDA_RIESGO[clave];
     const lim = ayuda && ayuda.limitacion;
@@ -509,9 +383,7 @@ function htmlAyudaRiesgo(clave, conteos) {
     // whole point: "Medio" is the worst level mapped for landslides but
     // the mildest one shown for chemical risk.
     const peor = presentes[0];
-    // Only a layer whose blank areas have been measured against a real event
-    // earns this block; the rest render nothing here. It gets its own
-    // disclosure so neither label has to promise what the other one answers.
+    // Only a layer whose blank areas were measured against a real event has this.
     const lim = limitacionDeRiesgo(clave);
     const limitacion = lim
         ? `<details class="legend-help">
@@ -570,12 +442,8 @@ function htmlLeyendaRiesgo(titulo, clave, conteos, fuente, fecha) {
 const leyendasRiesgo = { inundacion: null, deslizamientos: null, quimico: null };
 
 // --- Locate the colonia of a point (point-in-polygon) ----------------
-// The IMPLAN risk layers carry no zone name: they are an intensity
-// model and, on top of that, are dissolved by level, so a single shape
-// covers half the city. To answer "which colonia is this?" on click, we
-// locate the point inside the AGEBs (which do have COLONIA) with our own
-// ray-casting: ~340 polygons and an isolated click, so it isn't worth
-// adding a dependency like Turf.js.
+// The IMPLAN risk layers carry no zone name, so a click is located inside
+// the AGEBs (which do have COLONIA) by ray casting.
 
 // AGEB index for lookups, with a precomputed bounding box to quickly
 // discard most of them without walking their vertices.
@@ -692,38 +560,20 @@ function crearFuncionColor(obtenerEscalones) {
     return valor => {
         if (sinDato(valor)) return COLOR_SIN_DATO;
         const escalones = obtenerEscalones();
-        // With no breaks there is no scale to apply (would happen if a
-        // whole layer arrived without data). This used to blow up with a
-        // TypeError reading .color of undefined and crashed the render.
+        // With no breaks there is no scale to apply (a whole layer without data).
         if (escalones.length === 0) return COLOR_SIN_DATO;
         const escalon = escalones.find(e => valor >= e.minimo);
         return escalon ? escalon.color : escalones[escalones.length - 1].color;
     };
 }
 
-/* Stroke weight is in SCREEN pixels, so it does not shrink with the map: zoom
-   out and a polygon's fill falls with the SQUARE of the scale while its outline
-   falls only with the perimeter. Measured on the real AGEBs (median area
-   386,027 m², perimeter 3,162 m), the outline is this share of a sector's
-   pixels at weight 1: z13 12%, z12 22%, z11 36%, z10 53%, z9 69%. Past halfway
-   the map stops being a choropleth and becomes a white mesh -- which is exactly
-   what going opaque made visible, and it was already true at 0.25 alpha, only
-   dimmer.
-
-   The outline exists to delimit a sector the reader can tell apart. Below the
-   zoom where a sector is a few pixels across there is nothing to delimit, so it
-   thins out and then goes. These weights hold the outline near 12-18% of the
-   shape at every zoom where it is drawn at all. */
-// Border colour is a function of the basemap under it, for the same kind of
-// measured reason the weight is a function of zoom. Every opaque grey was swept
-// against all 16 fills actually on the map, each composited over its basemap:
-// over the dark one only SEVEN clear 3:1 (#f9 through #ff), so white was very
-// nearly forced; over the light one FIFTY do (#00 through #31) -- and white is
-// not among them. It lands at 1.26:1 there, which is to say the border stops
-// delimiting anything the moment a reader switches base, which is exactly what
-// it is for. #1a1a1a over pure black (4.86 worst case) because 4.03 already
-// clears 3:1 with room, and a black hairline reads heavier on near-white than a
-// white one does on near-black.
+/* Stroke weight is in SCREEN pixels, so it does not shrink with the map.
+   Measured on the real AGEBs, at weight 1 the outline takes this share of a
+   sector's pixels: z13 12%, z12 22%, z11 36%, z10 53%, z9 69%. pesoBorde()
+   thins it with zoom to hold it near 12-18%, and removes it below z11. */
+// Border color depends on the basemap. Swept against the 16 fills on the map:
+// white clears 3:1 over the dark basemap but lands at 1.26:1 over the light
+// one, where #1a1a1a is 4.03:1 at worst.
 const BORDE_POR_TEMA = { oscuro: '#ffffff', claro: '#1a1a1a' };
 let temaBase = 'oscuro';
 
@@ -745,11 +595,8 @@ function crearEstiloCapa(campoValor, funcionColor) {
         return {
             fillColor: funcionColor(valor),
             weight: pesoBorde(),
-            // Opaque, and the colour comes from the basemap: see colorBorde().
-            // Opacity is the older half of that measurement -- at 0.25 alpha the
-            // worst case was 1.40:1 and at 0.75 still 2.47, because a
-            // translucent white blends toward whatever is under it and so
-            // vanishes against the LIGHT end of the ramps.
+            // Opaque on purpose: a translucent border blends toward the fill under it
+            // and vanishes against the light end of the ramps (2.47:1 at 0.75 alpha).
             color: colorBorde(),
             opacity: 1,
             // AGEBs with no data are drawn fainter: present and
@@ -777,9 +624,8 @@ const AYUDA_INDICE = {
 function htmlAyudaIndice(clave, escalones, nSinDato) {
     const a = AYUDA_INDICE[clave];
     if (!a) return '';
-    // Averaged over the QUANTILE classes only. Including an absolute floor class
-    // would report a figure true of no class on the map: 17 averaged with four
-    // classes of ~98 gives 78, which is neither.
+    // Averaged over the quantile classes only: the absolute floor class is not
+    // the same size as the others.
     const porCuantil = escalones.filter(e => !e.absoluto);
     const piso = escalones.find(e => e.absoluto);
     const porClase = porCuantil.length ? Math.round(
@@ -834,11 +680,7 @@ function htmlLeyenda(titulo, escalones, nSinDato = 0, clave = null) {
     return `<p class="legend-title">${esc(titulo)}</p>${filas}${filaSinDato}${nota}${htmlAyudaIndice(clave, escalones, nSinDato)}`;
 }
 
-// Legend registry per layer. EVERY active layer gets its own block:
-// showing only the most recently activated one meant the reader had
-// several layers painted on the map and a legend describing just one of
-// them, with no sign of which — and the help below it reported counts
-// and levels belonging to that one layer only.
+// Legend registry per layer: every active layer gets its own block.
 const SIN_DATO_CONTEO = { servicios: 0, inversion: 0 };
 
 const LEYENDAS = {
@@ -861,12 +703,8 @@ const CLAVES_RIESGO = new Set(['inundacion', 'deslizamientos', 'quimico']);
 
 const capasActivas = new Set();
 
-// Panel order, read off the DOM, is the legend order. Activation order
-// would reshuffle the blocks on every toggle, moving the help away from
-// where it was found last time (WCAG 2.2 SC 3.2.6 Consistent Help), and
-// reading the legend against the switches above would mean hunting. The
-// sequence is derived rather than hardcoded so it still holds if the
-// panel is regrouped into sections.
+// Legend order is the panel order, read off the DOM. Activation order would
+// move the help on every toggle (WCAG 2.2 SC 3.2.6 Consistent Help).
 const checkboxPorClave = new Map();
 
 function registrarClaveDeCapa(clave, checkbox) {
@@ -879,23 +717,15 @@ function ordenDePanel(claves) {
         enPanel.indexOf(checkboxPorClave.get(a)) - enPanel.indexOf(checkboxPorClave.get(b)));
 }
 
-// Which family a layer belongs to, read off the switch's enclosing group in
-// the markup. Deriving it — rather than keeping a list here — means the panel
-// declares the grouping once: regrouping index.html regroups the legend, and
-// the two cannot disagree about which layer is a risk and which is an index.
+// A layer's family is read off the group that encloses its switch in the
+// markup, so regrouping index.html regroups the legend.
 function familiaDeCapa(clave) {
     const checkbox = checkboxPorClave.get(clave);
     const grupo = checkbox && checkbox.closest('.layer-group');
     if (!grupo) return null;
     const titulo = grupo.querySelector('.layer-group-title');
     if (!titulo) return null;
-    // Identity comes from the heading's id, not the container's, because the
-    // heading's is load-bearing in the markup already — aria-labelledby points
-    // at it, so it cannot be deleted as tidying without something visibly
-    // breaking. A container id used only from here looks inert in index.html;
-    // removing it would silently collapse every family into one key (the DOM
-    // `id` property yields '', not null) and render all six layers inside a
-    // single <details> wearing the first family's name, with valid HTML.
+    // Keyed by the heading's id, the one aria-labelledby already points at.
     return { id: titulo.id, titulo: titulo.textContent.trim() };
 }
 
@@ -919,11 +749,8 @@ function agruparPorFamilia(claves) {
     return grupos;
 }
 
-// The help panes are re-rendered along with the legend, so an open one
-// would snap shut just because another layer was toggled — irrelevant
-// when a single legend existed, annoying now that reading one layer's
-// help while turning another on is the normal case. The state is read
-// back off the DOM, which needs no bookkeeping of its own.
+// The legend is re-rendered on every toggle, so the open help panes are read
+// off the DOM first and restored afterwards.
 function ayudasAbiertas() {
     return new Set(Array.from(document.querySelectorAll('#legend-container .legend-block'))
         .filter(bloque => {
@@ -933,9 +760,7 @@ function ayudasAbiertas() {
         .map(bloque => bloque.dataset.capa));
 }
 
-// Same idea one level up: which family sections the reader had folded. Read
-// off the DOM for the same reason, and tracked separately because a folded
-// family must not also forget which helps were open inside it.
+// Same for the family sections the reader had folded.
 function gruposPlegados() {
     return new Set(Array.from(document.querySelectorAll('#legend-container .legend-group'))
         .filter(grupo => !grupo.open)
@@ -952,28 +777,18 @@ function actualizarLeyenda() {
     const plegados = gruposPlegados();
     const claves = ordenDePanel(Array.from(capasActivas));
 
-    // Counted over EVERY active layer, not per family. The hazard is two brick
-    // ramps on screen at once — "Medio" is literally the same swatch in two
-    // legends meaning a different thing — and that is true however the panel
-    // groups them. Counting per family looked tidier and quietly broke it: move
-    // one risk layer to another group and each side counts 1, so two identical
-    // ramps would render with nothing saying so. CLAVES_RIESGO is the one thing
-    // still declared in JS rather than derived from the markup, which is
-    // exactly why it must not be crossed with the markup's grouping.
+    // Counted over EVERY active layer, not per family: two brick ramps on screen
+    // show the same swatch meaning two different things, however the panel
+    // groups them.
     const nRiesgo = claves.filter(k => CLAVES_RIESGO.has(k)).length;
     const avisoRiesgo = nRiesgo > 1
         ? `<p class="legend-note">${nRiesgo} capas de riesgo activas. Cada bloque explica la suya:
            los colores se repiten entre capas, y un «Medio» de una no equivale al «Medio» de otra.</p>`
         : '';
-    // It still gets placed inside the first family that holds a risk layer,
-    // next to what it is about — but it is emitted exactly once, and the
-    // untitled fallback path below carries it too rather than dropping it.
+    // Placed inside the first family that holds a risk layer, and emitted once.
     let avisoPendiente = avisoRiesgo;
 
     // The legend mirrors the panel's grouping, and each family folds as a unit.
-    // That is where the height is: three risk layers on their own are ~590 px
-    // of the ~2,550 px this column reaches with everything active, and folding
-    // them one block at a time was the only way to get out of the way.
     contenedor.innerHTML = agruparPorFamilia(claves).map(grupo => {
         let aviso = '';
         if (avisoPendiente && grupo.claves.some(k => CLAVES_RIESGO.has(k))) {
@@ -991,17 +806,9 @@ function actualizarLeyenda() {
             </details>`;
     }).join('');
 
-    // Each swatch carries its color in data-swatch and gets it applied here,
-    // rather than arriving as a `style="background:…"` attribute. A style
-    // attribute in markup is governed by the CSP (style-src-attr), so keeping
-    // one would have forced 'unsafe-inline' into style-src for three spans;
-    // assigning through the CSSOM is not subject to the policy at all.
-    // The color still comes from the JS palette, which is the point: the map
-    // polygons read the same constants, and a second copy in the stylesheet
-    // would be a second source of truth for the color law, free to drift.
-    // The hex test is the invariant stated mechanically instead of trusted to a
-    // comment: only a palette-shaped literal is ever assigned, so this fails
-    // closed (an uncolored swatch) if a computed value ever reaches data-swatch.
+    // Each swatch carries its color in data-swatch and gets it through the CSSOM:
+    // a style attribute would need 'unsafe-inline' in the CSP. Only a hex literal
+    // is ever assigned, so a computed value leaves the swatch uncolored.
     for (const muestra of contenedor.querySelectorAll('.legend-swatch[data-swatch]')) {
         const color = muestra.dataset.swatch;
         if (/^#[0-9a-f]{3,8}$/i.test(color)) muestra.style.background = color;
@@ -1021,22 +828,15 @@ function marcarCapaActiva(clave) {
 
 function marcarCapaInactiva(clave) {
     capasActivas.delete(clave);
-    // With nothing left on the map the outline marks nothing: no
-    // choropleth, no risk zones, just basemap. While ANY layer is still
-    // on it keeps doing its job — it says where the zone the card
-    // describes was, which is half the reason to turn a noisy layer off
-    // in the first place — so this only fires on the empty map.
+    // With no layer left on the map the outline marks nothing.
     if (capasActivas.size === 0) limpiarSeleccion();
     actualizarLeyenda();
 }
 
 // --- Layer availability by visible area ------------------------------
-// When navigating outside a layer's coverage (e.g. to Arteaga, where
-// there are no AGEBs yet), its toggle is disabled and explained instead
-// of leaving the map empty for no reason. Coverage is derived from the
-// real bbox of the already-loaded GeoJSON (capa.getBounds()), never from
-// a zoom or a hardcoded rectangle, so the state keeps working on its own
-// when data from new municipalities is added.
+// Outside a layer's coverage its toggle is disabled and explained. Coverage
+// comes from the bbox of the loaded GeoJSON (capa.getBounds()), never from a
+// hardcoded rectangle.
 const capasEnVista = [];
 
 function registrarCapaEnVista(checkbox, capa) {
@@ -1046,11 +846,8 @@ function registrarCapaEnVista(checkbox, capa) {
     statusEl.id = `layer-status-${checkbox.id}`;
     statusEl.textContent = 'Sin datos en la zona visible del mapa.';
     control.appendChild(statusEl);
-    // The native disabled attribute would take the switch out of the tab
-    // order entirely, which contradicts the rule this feature was built
-    // on — disable and explain, never hide. aria-disabled keeps it
-    // reachable and announced; this guard is what actually stops the
-    // toggle, for pointer and for the space bar alike.
+    // aria-disabled, not the native attribute, keeps the switch reachable and
+    // announced; this guard is what stops the toggle, for pointer and space bar.
     checkbox.closest('.switch-container').addEventListener('click', e => {
         if (checkbox.getAttribute('aria-disabled') === 'true') e.preventDefault();
     });
@@ -1075,11 +872,9 @@ function actualizarDisponibilidadCapas() {
 
 map.on('moveend', actualizarDisponibilidadCapas);
 
-// The style functions read pesoBorde() when Leaflet calls them, so the layers
-// have to be told to ask again after a zoom. resetStyle() with no argument
-// re-applies the layer's own style function to every feature, which is exactly
-// what is wanted -- and it costs nothing on the zooms that do not cross a
-// threshold, because the repaint is skipped when the weight has not changed.
+// The style functions read pesoBorde() when Leaflet calls them, so after a
+// zoom the layers are told to ask again. The repaint is skipped when the
+// weight did not change.
 let pesoBordeAplicado = null;
 map.on('zoomend', () => {
     const peso = pesoBorde();
@@ -1090,14 +885,8 @@ map.on('zoomend', () => {
     }
 });
 
-// The style functions read colorBorde() when Leaflet calls them, so switching
-// the basemap has to make the layers ask again -- exactly what zoomend already
-// does for pesoBorde(). Without this the border keeps whatever colour it was
-// painted with and the switch silently leaves it at 1.26:1.
-//
-// Compared against the layer object, not `e.name`: the name is the label
-// rendered in the control, i.e. UI text, and hanging the palette off a Spanish
-// string would break the map the day that control gets translated.
+// Same for colorBorde() when the basemap changes. Compared against the layer
+// object, not `e.name`, which is UI text.
 map.on('baselayerchange', e => {
     temaBase = e.layer === lightBaseLayer ? 'claro' : 'oscuro';
     for (const { capa } of capasEnVista) {
@@ -1112,16 +901,9 @@ const formatoEntero = valor => sinDato(valor) ? SIN_VALOR : Number(valor).toLoca
 const formatoPct = valor => sinDato(valor) ? SIN_VALOR : `${Number(valor).toFixed(1)}%`;
 const formatoIndice = valor => sinDato(valor) ? SIN_VALOR : Number(valor).toFixed(1);
 
-// The flood penalty is 30% of the index's weight, and the IMPLAN Atlas covers
-// Saltillo only -- so outside it there is no index to publish, the same rule
-// the services weight (40%) already follows. Flagging it while still scoring
-// the sector was not enough: the missing penalty can only move a score UP, so
-// the colour ramp went on ranking those sectors above ones that did pay one.
-//
-// Tested against `false` and not for falsiness on purpose: a visitor holding an
-// older cached GeoJSON has no such field at all, and `undefined` there means
-// "this file predates the flag", not "not assessed". Claiming the latter would
-// print the warning over every sector in the city.
+// Outside the IMPLAN Atlas there is no flood penalty, so no index is published.
+// Tested against `false`, not for falsiness: an older cached GeoJSON has no
+// such field, and `undefined` must not read as "not assessed".
 function htmlSinEvaluacionDeRiesgo(props) {
     return props.RIESGO_EVALUADO === false
         ? `<p class="detail-source">Sin Índice de Inversión: este sector queda fuera del Atlas
@@ -1140,13 +922,10 @@ function htmlMotivoSinDato(props) {
         : '';
 }
 
-// When the card is opened from a street search, the searched street is
-// stated on it, and so is a mismatch between the settlement INEGI
-// records for that block front and the colonia the map assigns to the
-// sector. They disagree for 42.1% of street fronts, because an AGEB
-// routinely spans several settlements and the map keeps the dominant
-// one. Saying it is better than a card that silently contradicts the
-// result the user just clicked.
+// When the card is opened from a street search it names the street, and says
+// so when the settlement INEGI records for that block front differs from the
+// colonia the map assigns to the sector (42.1% of fronts: an AGEB spans
+// several settlements and the map keeps the dominant one).
 function htmlContextoCalle(contexto, colonia) {
     if (!contexto) return '';
     const asentamientos = contexto.asentamientos || [];
@@ -1157,8 +936,7 @@ function htmlContextoCalle(contexto, colonia) {
         // published under.
         nota = `<p class="detail-note">Ese tramo está en ${asentamientos.length === 1 ? 'el asentamiento' : 'los asentamientos'} <strong>${esc(listaEsp(asentamientos))}</strong>. El sector se publica bajo <strong>${esc(colonia)}</strong>, el asentamiento predominante del AGEB.</p>`;
     } else if (otros.length) {
-        // The card's own title is one of them; the rest still deserve
-        // saying, or the merged zone would hide names it really carries.
+        // The card's title is one of them; the others are listed.
         nota = `<p class="detail-note">Esta vialidad también se registra en <strong>${esc(listaEsp(otros))}</strong>, dentro del mismo sector.</p>`;
     }
     const cps = contexto.cps || [];
@@ -1275,9 +1053,7 @@ function cargarCapaRiesgo({ archivo, checkbox, clave, titulo }) {
     fetch(archivo, { cache: 'no-cache' })
         .then(respuesta => respuesta.json())
         .then(geojson => {
-            // Counted, not just listed: how many zones each level covers
-            // is what tells the reader whether a level is the exception
-            // or the rule in this layer.
+            // Counted per level, for the legend help.
             const conteos = new Map();
             for (const f of geojson.features) {
                 const n = f.properties.INTENSIDAD;
@@ -1324,15 +1100,9 @@ function cargarCapaRiesgo({ archivo, checkbox, clave, titulo }) {
 }
 
 // --- Cadastral land value (Tesorería Municipal) ---------------------
-// Informational layer: it does NOT feed the Investment Index. A low land
-// value is genuinely ambiguous for a buyer — cheap entry or weak area — so
-// giving it a sign in the score would bake in an undeclared thesis.
-//
-// It is the only layer with no geometry file of its own. The figures are
-// published per colonia, so data/valor_catastral.json is a lookup keyed by
-// AGEB and the polygons come from the ones the services layer already
-// fetched. A third copy of the AGEB geometry would have cost ~640 KB against
-// the 5 MB budget of SPEC §2, which data/ is already close to.
+// Informational layer: it does NOT feed the Investment Index. It has no
+// geometry file: data/valor_catastral.json is a lookup keyed by AGEB, and the
+// polygons are the ones the services layer already fetched.
 let catastroMeta = null;
 
 function colorCatastro(valor) {
@@ -1390,9 +1160,7 @@ function mostrarDetalleCatastro(props) {
 
     let cuerpo;
     if (!dato) {
-        // Why there is no figure matters: "no row in the tables" and "this
-        // municipality is not covered" are different facts, and neither is a
-        // zero. Same principle as MOTIVO_SIN_DATO in the services card.
+        // "No row in the tables" and "municipality not covered" are different facts.
         const motivo = String(props.NOM_MUN || '').toUpperCase() === 'SALTILLO'
             ? `La colonia <strong>${esc(props.COLONIA || 'de este sector')}</strong> no aparece
                en las tablas de valores del municipio. Puede ser un desarrollo posterior a la
@@ -1401,10 +1169,7 @@ function mostrarDetalleCatastro(props) {
                sector está en <strong>${esc(props.NOM_MUN || 'otro municipio')}</strong>.`;
         cuerpo = `<p class="detail-note">Sin valor catastral publicado. ${motivo}</p>`;
     } else {
-        // Say WHY the two names differ rather than lumping both cases into one
-        // phrase: "same words, different order" is simply false of a spacing
-        // difference, and the note exists to stop the card from quietly
-        // contradicting the name on the map.
+        // Says which of the two matching rules paired the names.
         const motivoAlias = dato.via === 'espacios'
             ? 'escrito junto o separado distinto'
             : 'mismas palabras, otro orden';
@@ -1412,17 +1177,8 @@ function mostrarDetalleCatastro(props) {
             ? `<p class="detail-note">El catastro registra esta colonia como
                <strong>${esc(dato.nombre_catastro)}</strong> (${motivoAlias}).</p>`
             : '';
-        // `if (!dato)` above says nothing about `dato.valor`, and null is a
-        // state the pipeline can reach: a class present in the colonia table
-        // but missing from the value table exports as null. That happened
-        // during this layer's own development. Unguarded it is worse than a
-        // blank: the map still paints (grey), the legend still counts the
-        // sector under its class, and only the click throws — from inside a
-        // Leaflet handler, after the title was already replaced, leaving the
-        // new colonia's name sitting above the previous colonia's figures.
-        // Checking the type also keeps this the one interpolation that does
-        // not reach innerHTML through esc(): toLocaleString on a non-number
-        // is Object.prototype's, which returns the string unchanged.
+        // `dato.valor` can be null: a class present in the colonia table but missing
+        // from the value table exports that way.
         const cifra = Number.isFinite(dato.valor)
             ? `$${dato.valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
             : 'Sin cifra publicada';
@@ -1462,10 +1218,8 @@ function cargarCapaCatastro(checkbox) {
         const conteos = {};
         let sinDato = 0;
         const features = geojson.features.map(f => {
-            // hasOwn, not a truthiness check: `sectores` comes from JSON.parse
-            // and carries Object.prototype, so a key like "constructor" would
-            // hand back an inherited function — truthy, and it would sail past
-            // the `if (!dato)` guard in the card.
+            // hasOwn, not a truthiness check: `sectores` comes from JSON.parse, and a key
+            // like "constructor" would return an inherited function.
             const dato = Object.hasOwn(catastro.sectores, f.properties.CVEGEO)
                 ? catastro.sectores[f.properties.CVEGEO] : null;
             if (dato) conteos[dato.clase] = (conteos[dato.clase] || 0) + 1;
@@ -1478,9 +1232,7 @@ function cargarCapaCatastro(checkbox) {
         capa = L.geoJSON({ type: 'FeatureCollection', features }, {
             style: f => ({
                 fillColor: colorCatastro(f.properties.CATASTRO && f.properties.CATASTRO.valor),
-                // Same border rule as crearEstiloCapa, for the same measured
-                // reason: this ramp reaches #f2d79c, the lightest fill on the
-                // map and the one a translucent border disappears against.
+                // Same border rule as crearEstiloCapa.
                 weight: pesoBorde(), opacity: 1, color: colorBorde(), fillOpacity: 0.65
             }),
             onEachFeature: (feature, layer) => {
@@ -1516,19 +1268,12 @@ function cargarCapaCatastro(checkbox) {
 }
 
 // --- Stream courses (INEGI Red Hidrográfica 1:50 000) ----------------
-// Context, not risk: drawn as INEGI mapped it, never classified, and kept out
-// of every index. Nothing validates proximity to a channel as a flood
-// predictor -- two thirds of the city's AGEBs touch one of some order
-// (DATOS.md §3.8). What it adds is WHERE the arroyos ran when they were
-// captured, 1998-2008, which is the half of the flood story the pluvial
-// layer leaves out.
+// Context, not risk: drawn as INEGI mapped it in 1998-2008, never classified
+// and kept out of every index (DATOS.md §3.8).
 //
-// Cased like the selection outline and for the same measured reason: no single
-// colour stays visible over every fill on this map, and the services ramp —
-// on by default — sits at the blue's own luminance (#2a7d75 against #3d7fd6 is
-// ~1.2:1). The core reads against its casing at ~4.8:1 whatever is beneath,
-// and against either basemap on its own (4.9:1 dark, 3.6-3.9:1 light), so the
-// casing is fixed and does not follow the basemap switch.
+// Cased like the selection outline, because no single color stays visible
+// over every fill: the core reads at ~4.8:1 against its casing, 4.9:1 on the
+// dark basemap and 3.6-3.9:1 on the light one.
 const COLOR_CAUCE = '#3d7fd6';
 const CASCO_CAUCE = '#0b0c0e';
 // Core width by Strahler order: higher order, more water gathered upstream.
@@ -1583,22 +1328,17 @@ function mostrarDetalleCauce(props) {
     abrirFicha();
 }
 
-// A polygon layer switched on after a line layer is brought to the front and
-// would paint over it. The line layers share the polygons' canvas on purpose
-// (see below), so they are lifted back above it instead, in this order: the
-// search's outlines last, since they are what the reader just asked for.
+// A polygon layer switched on later is brought to the front and would paint
+// over the lines, so they are lifted back above it: the search's outlines last.
 function elevarCapasDeLinea() {
     for (const capa of [capaCauces, capaCoincidencias]) {
         if (capa && map.hasLayer(capa)) capa.bringToFront();
     }
 }
 
-// Drawn in the default overlay pane, sharing the polygons' canvas, and NOT in a
-// pane of its own above them. That was tried: with preferCanvas a pane gets a
-// canvas the size of the map, Leaflet leaves it in place after the layer is
-// switched off, and it took every click meant for the sectors underneath --
-// from the first time the layer was turned on until reload. One canvas
-// hit-tests top-down and falls through to the polygon when no line is hit.
+// Drawn in the default overlay pane, sharing the polygons' canvas. A pane of
+// its own would get a map-sized canvas that takes every click meant for the
+// sectors; one canvas hit-tests top-down and falls through to the polygon.
 let capaCauces = null;
 
 function cargarCapaCauces(checkbox) {
@@ -1616,9 +1356,7 @@ function cargarCapaCauces(checkbox) {
                 // integer is let through to either.
                 if (!Number.isInteger(p.ORDEN)) continue;
                 conteos.set(p.ORDEN, (conteos.get(p.ORDEN) || 0) + 1);
-                // A year that is not an integer is left out of the range rather
-                // than turning the whole legend into "entre NaN". The pipeline
-                // already refuses to publish one; this is the fallback.
+                // A non-integer year is left out of the range.
                 if (Number.isInteger(p.ANIO_CAPTURA)) {
                     anios.min = Math.min(anios.min, p.ANIO_CAPTURA);
                     anios.max = Math.max(anios.max, p.ANIO_CAPTURA);
@@ -1700,11 +1438,8 @@ function listaEsp(valores) {
     return valores.slice(0, -1).join(', ') + ' y ' + valores[valores.length - 1];
 }
 
-// Fold accents and case so "peñas" matches "penas" and "Centro" "centro",
-// and fold punctuation to a single space, because nobody types the
-// period in "FRANCISCO I. MADERO" or "ALFREDO V. BONFIL" — 76 street
-// names carry one, and a plain substring match made every one of them
-// unreachable unless the punctuation was typed exactly.
+// Fold accents and case, and punctuation to a single space: nobody types the
+// period in "FRANCISCO I. MADERO".
 const normalizarTexto = t => t
     .normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ').trim();
@@ -1759,37 +1494,20 @@ function alCargarAgebs(geojson) {
 }
 
 // --- Street index (INEGI Frente de manzana) -------------------------
-// INEGI already pairs street and settlement in the same record, so the
-// index needs no geometry: each zone lists the AGEBs it touches and the
-// browser resolves position from the polygons it already has.
-//
-// It is fetched lazily, on the first search, for two reasons: it is
-// useless until someone types, and keeping it off the initial load means
-// it never competes with the layer budget SPEC §2 sets for the map.
+// The index carries no geometry: each zone lists the AGEBs it touches and
+// the position comes from the polygons already loaded. It is fetched lazily,
+// on the first search.
 let indiceCalles = null;
 let cargaCalles = null;
 
 // Shape of the zone tuples this parser understands. Must match
-// FORMATO_INDICE_CALLES in scripts/process_data.py.
-//
-// It exists because the failure it prevents was observed for real: the
-// index is fetched with `no-cache`, so a regenerated file reaches the
-// page immediately — including a page that is itself a cached older
-// version. An older parser reading a newer shape did not throw, it
-// resolved lookups to `undefined` and printed "undefined · SALTILLO"
-// into the suggestion list. Refusing an unknown version turns that into
-// an honest, visible failure: the street search goes unavailable and
-// says why, and the colonia search carries on.
+// FORMATO_INDICE_CALLES in scripts/process_data.py. A cached older page can
+// receive a newer file, so an unknown version is refused instead of parsed.
 const FORMATO_INDICE_CALLES = 2;
 
 function cargarIndiceCalles() {
     if (cargaCalles) return cargaCalles;
-    // `cache: 'no-cache'` for the same reason as the map layers: it
-    // revalidates with the server instead of trusting a stale copy.
-    // It matters more here — this file's SHAPE changes between
-    // versions, so a returning visitor holding an old copy would not
-    // just see old streets, the parser would throw on it and the whole
-    // street search would go quiet. (Observed exactly that in testing.)
+    // `no-cache` revalidates with the server, as for the map layers.
     cargaCalles = fetch('data/calles.json', { cache: 'no-cache' })
         .then(r => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -1853,20 +1571,15 @@ function filtrarCalles(q) {
     for (const calle of indiceCalles.calles) {
         const pos = calle.normalizado.indexOf(q);
         if (pos === -1) continue;
-        // One row per street, never per zone: "LUIS ECHEVERRÍA" runs
-        // through 64 settlements, and 64 rows would bury everything
-        // else. Where it goes is what the card answers.
+        // One row per street, never per zone: "LUIS ECHEVERRÍA" runs through 64
+        // settlements.
         const tipos = new Set(calle.zonas.map(z => z.tipoVia));
         const unica = calle.zonas.length === 1 ? calle.zonas[0] : null;
         encontrados.push({
             pos, clase: 'calle', orden: 1,
             titulo: calle.nombre,
-            // "Tramos", not "asentamientos": after the merge a zone can
-            // carry several settlement names, so counting zones is not
-            // counting names. And a merged zone with many names is
-            // counted rather than listed — spelling out seven of them
-            // produces a truncated blob that labels nothing, which is
-            // the very problem this row is meant to solve.
+            // Zones are counted as "tramos"; a merged zone with many settlement names
+            // shows how many there are instead of listing them.
             subtitulo: !unica
                 ? `${calle.zonas.length} tramos`
                 : unica.asentamientos.length <= 2
@@ -1910,19 +1623,10 @@ function renderSugerencias(lista) {
         cerrarSugerencias();
         return;
     }
-    // Each option needs an id so aria-activedescendant can point at it:
-    // that is what tells a screen reader which suggestion the arrow keys
-    // landed on, since focus itself never leaves the input.
-    //
-    // The kind tag is inside the option, so it is part of the name a
-    // screen reader announces: with colonias and streets in one list,
-    // the name alone would not say which is which.
-    // Two lines, and the name gets the first one to itself. On one line
-    // the settlement label — up to 439px for "ZONA DE AMORTIGUAMIENTO DE
-    // LA SIERRA DE ZAPALINAMÉ III · Saltillo" — took all the room and
-    // left the street name 0px in 4 of 8 rows, so "COLA DE PESCADO"
-    // rendered as nothing and three different streets all read "NI…".
-    // The name is what was searched for; the settlement is context.
+    // Each option has an id so aria-activedescendant can point at it: focus
+    // never leaves the input. The kind tag is inside the option so a screen
+    // reader announces whether it is a colonia or a street. The name gets its
+    // own line because a long settlement label would otherwise squeeze it out.
     buscadorSugerencias.innerHTML = lista.map((r, i) => `
         <li class="search-suggestion" role="option" id="colonia-opcion-${i}"
             aria-selected="false" data-i="${i}">
@@ -1937,19 +1641,12 @@ function renderSugerencias(lista) {
     buscadorInput.setAttribute('aria-expanded', 'true');
 }
 
-// The selection is drawn as a SEPARATE overlay rather than by restyling
-// the clicked feature. That is what makes it work on the risk layers,
-// which render to a canvas and reset their style on mouseout, and it
-// keeps one selection alive across layer toggles: nothing here depends
-// on the feature's own style surviving.
+// The selection is a SEPARATE overlay, not a restyle of the clicked feature:
+// the risk layers render to a canvas and reset their style on mouseout.
 //
-// A cased line — dark casing under an amber core — because a single
-// color cannot stay visible over this map. Amber alone vanishes against
-// the SECOND CLASS OF EVERY RAMP (investment #d29b33 at 1.12:1, services
-// #35a396 at 1.10:1, risk #d9743f at 1.16:1) and white alone vanishes
-// against the light ones (1.22-1.51:1). Casing puts the contrast inside
-// the line: core against casing is 7.16:1 whatever it is drawn over, and
-// no fill can hide both at once since the two are 7.16:1 apart.
+// A cased line (dark casing under an amber core) because no single color
+// stays visible over every fill: amber alone is 1.10-1.16:1 against the
+// second class of each ramp. Core against casing is 7.16:1.
 function resaltarGeometrias(geometrias) {
     limpiarSeleccion();
     const coleccion = {
@@ -1977,11 +1674,8 @@ function limpiarSeleccion() {
     }
 }
 
-// A colonia can cover several AGEBs, and an AGEB is the unit every
-// figure in this app is measured on. Rather than average them into a
-// number no source backs, the card lists the sectors and lets one be
-// chosen. 212 of the 290 searchable colonias are a single AGEB, so most
-// searches go straight to the data.
+// A colonia can cover several AGEBs, the unit every figure is measured on.
+// The card lists the sectors and lets one be chosen instead of averaging.
 function mostrarSectoresDeColonia(g, contextoCalle) {
     const sectores = g.sectores.slice()
         .sort((a, b) => String(a.props.CVEGEO).localeCompare(String(b.props.CVEGEO)));
@@ -2003,9 +1697,8 @@ function mostrarSectoresDeColonia(g, contextoCalle) {
             `).join('')}
         </ul>
     `;
-    // Paired by position, not by a key round-tripped through the DOM:
-    // a lookup that misses would quietly show another sector's figures,
-    // and a plausible wrong number is the worst failure this app has.
+    // Paired by position, not by a key round-tripped through the DOM: a lookup
+    // that misses would show another sector's figures.
     document.getElementById('sector-info').querySelectorAll('.sector-btn').forEach((btn, i) => {
         btn.addEventListener('click', () => {
             resaltarGeometrias([sectores[i].geometria]);
@@ -2026,10 +1719,8 @@ function seleccionarColonia(g) {
     buscadorInput.value = g.colonia;
     cerrarSugerencias();
     buscadorLimpiar.hidden = false;
-    // Opening the card is what gives a keyboard user a route to the
-    // data at all: the layers are drawn on a canvas, so the polygons
-    // have no DOM node to focus and the map's figures were reachable
-    // by mouse only.
+    // The polygons are drawn on a canvas and have no DOM node to focus, so the
+    // card is the keyboard route to the data.
     if (g.sectores.length === 1) mostrarDetalleSector(g.sectores[0].props);
     else mostrarSectoresDeColonia(g);
 }
@@ -2059,9 +1750,8 @@ function encuadrarYResaltar(sectores) {
     resaltarGeometrias(sectores.map(s => s.geometria));
 }
 
-// Opening a zone reuses the colonia machinery: one AGEB goes straight to
-// its figures, several show the sector chooser, because every number in
-// this app is published per AGEB and averaging them would invent data.
+// Reuses the colonia flow: one AGEB goes straight to its figures, several
+// show the sector chooser.
 function abrirZonaDeCalle(calle, zona) {
     const sectores = sectoresDeZona(zona);
     encuadrarYResaltar(sectores);
@@ -2170,9 +1860,7 @@ buscadorInput.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { e.preventDefault(); moverSugerencia(1); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); moverSugerencia(-1); }
     else if (e.key === 'Enter') {
-        // Only commits while the list is open. Enter used to fall back
-        // to the first suggestion even after Escape had dismissed it,
-        // so a keyboard user's cancel was not honoured.
+        // Only commits while the list is open, so Escape cancels.
         if (buscadorSugerencias.hidden) return;
         e.preventDefault();
         const idx = sugerenciaActiva >= 0 ? sugerenciaActiva : 0;
@@ -2182,10 +1870,8 @@ buscadorInput.addEventListener('keydown', e => {
     }
 });
 
-// WCAG 2.2 SC 2.4.11 (Focus Not Obscured): the list only closed on an
-// outside click, so tabbing out of the search left it open on top of
-// the layer switches — the next control received focus completely
-// hidden behind it. Closing on focus-out fixes it at the source.
+// WCAG 2.2 SC 2.4.11 (Focus Not Obscured): closing on focus-out keeps the
+// list from covering the control that receives focus next.
 document.getElementById('search-section').addEventListener('focusout', e => {
     if (!e.relatedTarget || !e.relatedTarget.closest('#search-section')) cerrarSugerencias();
 });
@@ -2203,19 +1889,12 @@ document.addEventListener('click', e => {
 });
 
 // --- Find zones by criteria ------------------------------------------
-// The minimum product DATOS.md §3.9 proposes in place of an AI agent: a
-// deterministic filter over fields already published per AGEB. No new data,
-// no request beyond the files the map already loads, no key. Two rules from
-// that evaluation are what this code is mostly about:
-//  · A sector with no figure for a criterion does NOT match. The 90 sectors
-//    outside the flood Atlas carry null, not 0, and a "no flood zone" filter
-//    that let them through would state something the data never said. They
-//    are counted apart instead, so the reader sees how many were left out
-//    for lack of data rather than for failing.
-//  · Criteria describe the place — hazard, services, amenities, land value —
-//    never the people who live there. Nothing about the population is offered.
-// The result is not ranked: no score is computed here, and an order would
-// read as one. Sectors are listed by colonia name.
+// A deterministic filter over fields already published per AGEB (DATOS.md
+// §3.9). Rules:
+//  · A sector with no figure for a criterion does NOT match; it is counted
+//    apart.
+//  · Criteria describe the place, never the people who live there.
+//  · Results are not ranked: they are listed by colonia name.
 
 // Radius of the proximity scores, RADIO_MAX_KM in process_data.py: each
 // SCORE_* is 100 * (1 - d / 3 km), clipped at 0. Inverting it gives back the
@@ -2234,16 +1913,9 @@ function formatoDistancia(km) {
 
 const formatoPesos = valor => `$${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// Every criterion reads its value through `leer`, and null there means "no
-// figure", whatever the reason.
-//
-// The values a criterion accepts are declared HERE, in `opciones`, and the
-// select's options are generated from them -- the markup only holds "any".
-// Checking the submitted value against the markup's own options was tried and
-// proved worthless: tampering edits exactly those options. The thresholds mean
-// what these entries say and nothing else -- a proximity score of 0 only says
-// "3 km or more", so a value of 5 would have matched every sector that far
-// out, 10 km away or not. A value not declared here reads as "any".
+// Every criterion reads its value through `leer`; null means "no figure".
+// The accepted values are declared in `opciones` and the select is generated
+// from them. A submitted value that is not declared reads as "any".
 const OPCIONES_CERCANIA = [[0.5, 'A 500 m o menos'], [1, 'A 1 km o menos'], [2, 'A 2 km o menos']];
 
 const cercania = (id, campo, etiqueta) => ({
@@ -2482,12 +2154,8 @@ formCriterios.addEventListener('submit', e => {
     mostrarResultadosCriterios(r);
 });
 
-// "reset" fires before the controls are cleared, which is fine: nothing here
-// reads them.
-// Closes the card if it is one of this search's -- the results or a sector's
-// "por qué coincide" -- recognised by its own markup rather than by its title,
-// which a sector's card does not share. Left open, "back" would re-list results
-// whose outlines had just been cleared.
+// Closes the card if it belongs to this search (the results or a sector's
+// "por qué coincide"), recognised by its markup.
 formCriterios.addEventListener('reset', () => {
     limpiarCriterios();
     if (document.querySelector('#sector-info .criteria-summary, #sector-info .criteria-back')) {
@@ -2509,10 +2177,8 @@ Promise.all([inversionLista, catastroListo]).then(([geojson, catastro]) => {
     municipiosOfrecidos = [...new Set(sectoresBusqueda.map(s => s.props.NOM_MUN))]
         .sort((a, b) => a.localeCompare(b, 'es')).map(m => [m, m]);
     poblarOpciones(document.getElementById('crit-municipio'), municipiosOfrecidos);
-    // One option per cadastral figure actually published, from the cheapest.
-    // The value is the figure itself, so the filter reads "up to this class".
-    // Classes are collected per figure, not one per figure: POPULAR (2) and
-    // INDUSTRIAL (2) are both 464.45, and keying by value alone dropped one.
+    // One option per cadastral figure published, from the cheapest. Classes are
+    // collected per figure: POPULAR (2) and INDUSTRIAL (2) are both 464.45.
     const clases = new Map();
     for (const s of sectoresBusqueda) {
         if (!s.catastro || !Number.isFinite(s.catastro.valor)) continue;
@@ -2534,10 +2200,7 @@ cargarCapaChoropleth({
     configEscala: {
         rampa: RAMPA_SERVICIOS,
         sufijo: '%',
-        // Absolute floor, not a quantile: see escalonesPorCuantiles. 80% average
-        // coverage is a statement about the sector, and below it the city has
-        // only 17 sectors -- too few to earn a break of their own, and far too
-        // different from the rest to keep sharing a colour with them.
+        // Absolute floor, not a quantile: see escalonesPorCuantiles.
         piso: 80,
         asignar: escalones => { ESCALONES_SERVICIOS = escalones; }
     },
