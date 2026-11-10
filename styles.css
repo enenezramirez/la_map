@@ -1,24 +1,8 @@
-/* Self-hosted typefaces (SIL OFL 1.1 — license texts in assets/fonts/).
-   Served from this origin rather than Google Fonts for three reasons that a
-   <link> to fonts.googleapis.com cannot solve: the stylesheet it returns varies
-   by User-Agent, so it cannot carry a Subresource Integrity hash; every visitor
-   makes a request to a third party, handing over an IP and a User-Agent just to
-   read a map; and two extra DNS lookups plus TLS handshakes sit in front of the
-   first paint.
-
-   Only the `latin` subset ships. Audited, not assumed: neither the interface nor
-   the 431 AGEB colonia and municipio names contain a single character outside
-   that range.
-
-   Inter is a variable font, so one file covers the whole weight axis. IBM Plex
-   Mono is not, so its two weights are two files. The app declares only 400 and
-   500 — every heading and <strong> sets its weight explicitly, so nothing falls
-   back to the browser's default bold — which is why the 300, 600 and 700 Inter
-   files that used to be requested were downloaded and never drawn.
-
-   The two italic runs in the legend glossary were already synthesized by the
-   browser (the Google request carried no italic axis), and still are: shipping
-   no italic file keeps rendering identical to before. */
+/* Self-hosted typefaces (SIL OFL 1.1; license texts in assets/fonts/), so no
+   request leaves this origin. Only the `latin` subset ships: no character in
+   the interface or the place names falls outside it. Inter is variable (one
+   file); IBM Plex Mono needs one file per weight (400 and 500). No italic
+   file ships, so the browser synthesizes the two italic runs. */
 @font-face {
     font-family: 'Inter';
     font-style: normal;
@@ -53,14 +37,11 @@
     box-sizing: border-box;
 }
 
-/* "Traza" identity — "analytical terminal" visual direction.
-   Neutral, near-black, OPAQUE surfaces (no glassmorphism), a single amber
+/* "Traza" identity: neutral, near-black, opaque surfaces, a single amber
    accent and a monospaced voice for figures and provenance.
-
-   Color rule: amber belongs to the BRAND and the ACTIVE STATE (toggle on,
-   focus, selection, notices), never to the data. The map ramps
-   (ESCALA_CHOROPLETH and COLORES_RIESGO in index.html) have their own color
-   budget; if the chrome competes with them, the map stops being readable. */
+   Amber belongs to the BRAND and the ACTIVE STATE (toggle on, focus,
+   selection, notices), never to the data: the map ramps are declared in
+   app.js. */
 :root {
     --tz-bg: #0b0c0e;
     --tz-surface: #131519;
@@ -74,11 +55,8 @@
 
     --tz-text: #f2efe9;
     --tz-text-2: #8a8f98;
-    /* 4.78:1 on --tz-surface and 5.12:1 on --tz-bg, clearing the 4.5:1 minimum
-       for body text (WCAG 2.2 SC 1.4.3, AA). The previous #6f747c sat at
-       3.89:1 and carried most of the quiet text in the app: section headings,
-       layer descriptions, legend provenance, the source credits in the footer
-       and the search placeholder. */
+    /* 4.78:1 on --tz-surface and 5.12:1 on --tz-bg (WCAG 2.2 SC 1.4.3, AA needs
+       4.5:1 for body text). */
     --tz-text-3: #7d838b;
 
     --tz-accent: #c8912f;
@@ -173,9 +151,8 @@ body {
     font-weight: 400;
 }
 
-/* Layer families. The <h2> above stays the section's micro-label ("Capas");
-   these headings are what the reader actually navigates by, so they are set
-   in sentence case and at full text color rather than as another tag. */
+/* Layer families: the headings the reader navigates by, in sentence case and
+   full text color. */
 .layer-group + .layer-group {
     margin-top: 18px;
     padding-top: 14px;
@@ -191,9 +168,7 @@ body {
     margin-bottom: 2px;
 }
 
-/* One line on what kind of claim the family makes. This is the whole reason
-   for grouping: an index this project computed and a figure it merely cites
-   are not the same sort of statement, and a flat list said they were. */
+/* One line on what kind of claim the family makes. */
 .layer-group-desc {
     font-size: 0.7rem;
     line-height: 1.35;
@@ -242,9 +217,8 @@ body {
     height: 20px;
     background-color: var(--tz-border-strong);
     border-radius: 20px;
-    /* The off-state fill alone is 1.36:1 against the panel, so the control was
-       imperceptible when off. The inset ring restores the boundary at 3:1
-       without touching the geometry the knob translation depends on. */
+    /* The off-state fill alone is 1.36:1 against the panel; the inset ring gives
+       the boundary 3:1 without changing the geometry. */
     box-shadow: inset 0 0 0 1px var(--tz-border-ui);
     transition: background-color 0.3s;
     margin-right: 12px;
@@ -299,20 +273,15 @@ body {
     padding: 12px 0;
 }
 
-/* One block per active layer. The separator is deliberately heavier than the
-   hairlines inside a block (source line, help disclosure): those divide parts
-   of one legend, this divides one layer from the next, and with up to five
-   stacked the reader needs to see which rule is which. */
+/* One block per active layer. The separator is heavier than the hairlines
+   inside a block, which divide parts of one legend. */
 .legend-block + .legend-block {
     margin-top: 18px;
     padding-top: 14px;
     border-top: 1px solid var(--tz-border-strong);
 }
 
-/* Legend families, mirroring the panel's groups and folding as a unit. This is
-   where the column's height lives: three risk layers alone are ~590 px of the
-   ~2,550 px the legend reaches with everything on, and before this the only way
-   to get them out of the way was one block at a time. */
+/* Legend families, mirroring the panel's groups and folding as a unit. */
 .legend-group + .legend-group {
     margin-top: 16px;
     padding-top: 12px;
@@ -375,11 +344,8 @@ body {
     padding-top: 12px;
 }
 
-/* Shown only when more than one risk layer is on. Labelling each block is not
-   enough there: the brick ramp is keyed to the LEVEL, not to the layer, so the
-   very same swatch appears in two legends meaning two different things. Amber
-   is the identity's notice color, and the inset mark is the same device the
-   search list uses for the active row. */
+/* Shown only when more than one risk layer is on: the brick ramp is keyed to
+   the LEVEL, so the same swatch appears in two legends with two meanings. */
 .legend-note {
     margin-bottom: 14px;
     padding: 8px 0 8px 10px;
@@ -389,11 +355,8 @@ body {
     color: var(--tz-text-2);
 }
 
-/* Caveat pinned inside one layer's legend, beside the ramp rather than inside
-   the collapsed help: the reader it protects is the one scanning colors to
-   decide whether a zone is clear, and that reader never opens a disclosure.
-   Same inset amber mark as .legend-note — this is a notice about how to read
-   the map, not a level of the data, so it must not look like a swatch row. */
+/* Caveat pinned inside one layer's legend, beside the ramp. Same inset amber
+   mark as .legend-note, so it does not look like a swatch row. */
 .legend-caveat {
     margin-top: 12px;
     padding: 8px 0 8px 10px;
@@ -408,10 +371,8 @@ body {
     font-weight: 500;
 }
 
-/* The episode behind the pinned notice, told in full inside its own disclosure.
-   It keeps the accent rule even though it is now the sole content of that body:
-   the rule is what visually ties it back to the one-line .legend-caveat pinned
-   beside the ramp, so a reader recognises the two as the same warning. */
+/* The episode behind the pinned notice, inside its own disclosure. The accent
+   rule ties it visually to .legend-caveat. */
 .help-caveat {
     margin-top: 8px;
     padding: 8px 0 8px 10px;
@@ -450,11 +411,7 @@ body {
 }
 
 /* The swatch carries a border rather than an adjusted fill: its color IS the
-   map's color, so changing it to clear 3:1 would misreport the data. WCAG
-   exempts a graphic whose particular presentation is essential; the border
-   makes the boundary perceivable without touching what the swatch claims.
-   Without it the dark end of both ramps (#1d3a3c, #4a3a24), "Muy alto" risk
-   and the no-data gray sat at 1.5-2.2:1 and read as empty space. */
+   map's color, so changing it to clear 3:1 would misreport the data. */
 .legend-swatch {
     display: inline-block;
     width: 14px;
@@ -474,10 +431,8 @@ body {
 .legend-swatch.legend-line-fina { height: 5px; }
 .legend-swatch.legend-line-gruesa { height: 6.5px; }
 
-/* Data source and cutoff date (traceability).
-   Monospaced on purpose: if the project's promise is that the index can be
-   traced back to its source, provenance is not legal fine print — it is part
-   of the brand, and speaks with the same voice as the figures. */
+/* Data source and cutoff date (traceability), in the same monospaced voice as
+   the figures. */
 .legend-source {
     margin-top: 10px;
     padding-top: 8px;
@@ -568,10 +523,8 @@ body {
     cursor: not-allowed;
 }
 
-/* "No data in the visible area" note: the panel disables and explains rather
-   than hiding the toggle when the user navigates outside the layer's coverage
-   (e.g. to Arteaga, where there are no AGEBs yet). Hidden by default; revealed
-   only when the layer is out of view. */
+/* "No data in the visible area" note. Hidden by default; revealed only when
+   the layer is out of view. */
 .layer-status {
     display: none;
     font-size: 0.72rem;
@@ -612,10 +565,8 @@ body {
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
 }
 
-/* This class only takes the panel off the screen. Taking it off the keyboard is
-   the `inert` attribute's job, set alongside the class in JS: `opacity: 0` hides
-   the panel from the eye but not from the tab order, and tying that to a CSS
-   transition would make keyboard reachability depend on an animation finishing. */
+/* This class only takes the panel off the screen. Taking it off the keyboard
+   is the `inert` attribute's job, set alongside the class in JS. */
 .sidebar-collapsed {
     transform: translateX(380px);
     opacity: 0;
@@ -626,8 +577,7 @@ body {
     position: absolute;
     top: 16px;
     right: 16px;
-    /* Was 14px wide: the glyph's own advance. Squared off to clear the 24px
-       target minimum without moving the icon. */
+    /* Squared off to clear the 24px target minimum (WCAG 2.2 SC 2.5.8). */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -705,10 +655,8 @@ body {
     margin-bottom: 10px;
 }
 
-/* Stated, not hidden: the settlement INEGI records for a street front and the
-   colonia the map publishes the sector under disagree 42% of the time. Amber is
-   the identity's "pay attention" signal, and the left rule keeps the note from
-   reading as one more data row. */
+/* A note, not a data row: amber is the "pay attention" signal and the left
+   rule sets it apart. */
 .detail-note {
     margin: 10px 0;
     padding: 8px 10px;
@@ -1056,9 +1004,8 @@ body {
 }
 
 /* 24x24 is the minimum target size (WCAG 2.2 SC 2.5.8, AA). The spacing
-   exception does not rescue this one: the button sits inside the search
-   field's own bounds, so a 24px circle centred on it always overlaps another
-   target. It was 18.3x21.6. */
+   exception does not apply: the button sits inside the search field's own
+   bounds. */
 .search-clear {
     position: absolute;
     top: 50%;
@@ -1083,8 +1030,7 @@ body {
     color: var(--tz-text);
 }
 
-/* The icon-only buttons had no focus style of their own and fell back to the
-   user agent ring; give them the same amber indicator as the rest. */
+/* Same amber focus indicator as the rest of the controls. */
 .search-clear:focus-visible,
 .close-btn:focus-visible {
     outline: 2px solid var(--tz-accent);
@@ -1109,11 +1055,8 @@ body {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-/* Two lines: the name on its own, the kind tag and settlement below it. Sharing
-   one line made the settlement label — which never wraps — push the street name
-   down to 0px on the longest rows, and overflowed the list sideways
-   (512px of content in a 278px box). Stacking gives each the full width and
-   makes horizontal overflow impossible. */
+/* Two lines: the name on its own, the kind tag and settlement below it, so a
+   long settlement label cannot squeeze the name or overflow the list. */
 .search-suggestion {
     display: flex;
     flex-direction: column;
@@ -1136,12 +1079,9 @@ body {
     border-bottom: none;
 }
 
-/* Hover and keyboard selection darken the row instead of lightening it: the
-   old lighter fill (--tz-border) dropped the municipality label to 3.18:1,
-   below the 4.5:1 minimum. Darkening lifts it to 5.12:1 instead.
-   The keyboard-selected row additionally carries the amber marker — the
-   identity's signal for "active state" — so selection is not conveyed by
-   background color alone. */
+/* Hover and keyboard selection darken the row: the municipality label stays
+   at 5.12:1. The keyboard-selected row also carries the amber marker, so
+   selection is not conveyed by background color alone. */
 .search-suggestion:hover,
 .search-suggestion.active {
     background: var(--tz-bg);
@@ -1151,10 +1091,8 @@ body {
     box-shadow: inset 3px 0 0 var(--tz-accent);
 }
 
-/* Colonias and streets share one list, so each row states which it is. The tag
-   sits inside the option element on purpose: that makes it part of the name a
-   screen reader announces, where the street name alone would not say whether
-   the result is a place or a road. */
+/* Each row states whether it is a colonia or a street. The tag sits inside
+   the option so a screen reader announces it. */
 .suggestion-kind {
     flex: 0 0 auto;
     font-family: var(--tz-mono);
@@ -1183,8 +1121,7 @@ body {
     color: var(--tz-text-3);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    /* It shrinks now instead of pushing the row wider: it is the context line,
-       and a settlement name can be far longer than the box. */
+    /* The context line shrinks instead of pushing the row wider. */
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

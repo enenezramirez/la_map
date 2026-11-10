@@ -86,39 +86,17 @@ DATA_DIR = Path("data")
 # the AGEB polygons at the map's zoom levels.
 TOLERANCIA_SIMPLIFICACION = 0.00005
 
-# Decimal places kept for coordinates on export. GDAL writes the full float64
-# precision when this is not set, which is ~15 decimals: sub-nanometre detail on
-# geometry that was just simplified to ~5 m above. Trimming it removes about a
-# quarter of every layer's bytes -- worth having in a file the browser downloads
-# whole on every visit. data/ goes from 4.42 MB to 3.54 MB. Written through
-# `exportar_geojson` so a new export cannot forget it.
+# Decimal places kept for coordinates on export; GDAL would otherwise write
+# ~15. Always written through `exportar_geojson`.
 #
-# Do not read "6" as "11 cm". GDAL's COORDINATE_PRECISION is not a plain round:
-# it picks the shortest representation it considers within tolerance, so a value
-# sitting near a round number moves further than the decimal count implies.
-# Measured: -100.999995009 is written as -101.0, which is 4.99e-06 deg -- about
-# 55 cm, ten times the 5 cm a naive reading predicts. Across all five layers the
-# worst genuine vertex shift is 55.6 cm, on 2 of 2136 chemical-risk polygons;
-# every other vertex stays under 7.7 cm.
-#
-# It also drops vertices that collide once rounded, and that is worth knowing
-# before raising it back: AGEB 0503000013740 (EL DIVISADERO) carried a spike --
-# two vertices 3.3 cm apart, each ~26 m from its neighbours, so the boundary ran
-# out 26 m, turned around within 3.3 cm and came back. Rounding merged the pair
-# and the needle went with it: 2.86 m2 of a 1,288,112 m2 sector, and 52 m off a
-# perimeter that was tracing a digitising artefact.
-#
-# Both effects sit an order of magnitude inside TOLERANCIA_SIMPLIFICACION, which
-# already moves every boundary by up to 5 m and is documented as acceptable, so
-# 6 stands. If a future layer needs the guarantee rather than the bytes, 7 caps
-# the worst shift at 7.5 cm and keeps the spike, for 100 KB more.
+# "6" is not "11 cm": COORDINATE_PRECISION picks the shortest representation
+# within tolerance, so a vertex can move up to ~55 cm (measured worst case),
+# and vertices that collide once rounded are dropped. Both effects are an
+# order of magnitude inside TOLERANCIA_SIMPLIFICACION.
 DECIMALES_COORDENADA = 6
 
-# The Census and DENUE files are published per state, and these used to be two
-# constants spelling Coahuila's code (05) into the path. That was the single
-# thing keeping the pipeline in one state: everything else already derives from
-# configuration, and CVEGEO was already built from ENTIDAD + MUN + LOC + AGEB.
-# Adding a city in another state is now a MUNICIPIOS_AGEB entry and a download.
+# The Census and DENUE files are published per state, so their paths are
+# derived from each municipality's state code.
 
 
 def censo_csv(entidad: str) -> Path:
@@ -183,17 +161,13 @@ VALORES_SIN_VIALIDAD = frozenset({"NINGUNO", "OTRO", "MANZANA O EDIFICACIÓN CON
 # "SIN REFERENCIA" has nothing to point at.
 TIPOS_NO_VIALIDAD = frozenset({"RASGO", "SIN REFERENCIA"})
 
-# Street -> settlement index consumed by the frontend search. Not a GeoJSON and
-# not part of the map layers: it carries no geometry at all (see
-# construir_indice_calles) and the browser fetches it lazily, only once the user
-# actually searches, so it does not compete with the 5 MB budget SPEC §2 sets
-# for the layers.
+# Street -> settlement index consumed by the frontend search. It carries no
+# geometry (see construir_indice_calles) and the browser fetches it lazily.
 CALLES_JSON = DATA_DIR / "calles.json"
 
-# Shape of each zone tuple in calles.json. Version 1 was
-# [tipo, asentamiento, municipio, cp, agebs]; version 2 turned the settlement
-# and the postal code into lists when zones resolving to the same sectors were
-# merged. Must match FORMATO_INDICE_CALLES in app.js.
+# Shape version of each zone tuple in calles.json:
+# [tipo, asentamientos, municipio, cps, agebs]. Must match
+# FORMATO_INDICE_CALLES in app.js.
 FORMATO_INDICE_CALLES = 2
 
 # Metric CRS (the same as INEGI's vector cartography) used only to compute
@@ -284,11 +258,8 @@ RIESGO_DESLIZAMIENTOS_GEOJSON = DATA_DIR / "riesgo_deslizamientos.geojson"
 RIESGO_QUIMICO_GEOJSON = DATA_DIR / "riesgo_quimico.geojson"
 
 # --- Cadastral land value (Tesorería Municipal de Saltillo) -----------------
-# Published per colonia, which is the unit this project already works in, so
-# the join needs no geometry at all — see DATOS.md §3.5. Informational layer:
-# it does NOT enter the Investment Index. A low land value is genuinely
-# ambiguous for a buyer (cheap entry or weak area), so giving it a sign in the
-# score would bake in an undeclared thesis.
+# Published per colonia, so the join needs no geometry (DATOS.md §3.5).
+# Informational layer: it does NOT enter the Investment Index.
 CATASTRO_PDF = RAW_DATA / "catastro" / "TABLAS_VALORES_SUELO_CONSTRUCCION_2026.pdf"
 CATASTRO_JSON = DATA_DIR / "valor_catastral.json"
 CATASTRO_FUENTE = (
@@ -312,18 +283,11 @@ CATASTRO_RUIDO = re.compile(
     r"CONGRESO|SOBERANO|ZARAGOZA|PODER LEGISLATIVO|TABLA|COLONIA O FRACC"
     r"|TIPO DE TERRENO|FRACCIONAMIENTOS \d{4}|^NO\.?$|^\d{1,3}$", re.I)
 # Alphabet allowed in anything published from the cadastral PDF, mirroring
-# CARACTERES_PERMITIDOS for the street index. Today the values cannot escape
-# this anyway — the classes come from an anchored whitelist and the colonia
-# names from a normalizer that strips every HTML metacharacter — but that
-# invariant is spread across three functions, and loosening any one of them
-# (a 2027 edition adding a class, or "stop destroying apostrophes in names")
-# would dissolve it silently. This is the second layer the project says it wants.
+# CARACTERES_PERMITIDOS for the street index: a second layer behind the class
+# whitelist and the name normalizer.
 CATASTRO_PERMITIDOS = re.compile(r"^[0-9A-ZÁÉÍÓÚÜÑ ().]+$")
-# Ceiling per inflated PDF stream. The file is downloaded by hand rather than
-# fetched by the pipeline, so this is not an exposed attack surface — but it is
-# the one hand-rolled parser here pointed at a third-party binary, and 200 MB of
-# zeros compresses to ~204 KB, so one crafted stream could take the machine out
-# mid-run, after some layers are written and before others.
+# Ceiling per inflated PDF stream, so a crafted or corrupt stream cannot
+# exhaust memory mid-run.
 CATASTRO_MAX_FLUJO = 64 * 1024 * 1024
 
 # 2020 Census variables used for the basic-services coverage index. The
@@ -557,20 +521,12 @@ def construir_indice_calles() -> dict:
         .reset_index()
     )
 
-    # Merge the zones that resolve to the SAME sectors under the same road type.
-    # Two such zones are one answer, not two: the card they open is built
-    # entirely from the AGEB, so offering them separately asks the user to
-    # choose between identical outcomes — a choice the data cannot back. It
-    # happens to 1,553 groups (14.5% of zones), because an AGEB routinely spans
-    # several settlements and INEGI records different NOMASEN on different
-    # fronts of the same street inside it. Every settlement name is kept, joined
-    # onto the one zone; none is dropped.
+    # Merge the zones that resolve to the SAME sectors under the same road type:
+    # the card they open is built from the AGEB, so they are one answer (1,553
+    # groups, 14.5% of zones). Every settlement name is kept on the merged zone.
     #
-    # The road type stays in the key on purpose: a CALLE and a PRIVADA of the
-    # same name in the same sector are two different roads, and merging them
-    # would erase a real distinction (519 groups). Municipality is not in the
-    # key because it cannot differ — the sectors determine it, verified: 0
-    # groups with more than one.
+    # The road type stays in the key: a CALLE and a PRIVADA of the same name in
+    # the same sector are two different roads (519 groups).
     fusionadas: dict[tuple, dict] = {}
     for zona in zonas.itertuples(index=False):
         clave = (zona.NOMVIAL, zona.TIPOVIAL, tuple(zona.agebs))
@@ -613,12 +569,8 @@ def construir_indice_calles() -> dict:
         f"(merged down from {len(zonas)}), {len(agebs)} AGEBs referenced."
     )
     return {
-        # Shape version. The page fetches this file with `no-cache`, so a fresh
-        # index reliably reaches a page that may itself be a cached older
-        # version — and an older parser reading a newer shape does not fail, it
-        # renders "undefined" into the interface, which is worse than failing.
-        # Bump this whenever the zone tuple changes; the frontend refuses a
-        # version it does not know and says so instead of showing garbage.
+        # Shape version. Bump it whenever the zone tuple changes; the frontend
+        # refuses a version it does not know.
         "formato": FORMATO_INDICE_CALLES,
         "fuente": INEGI_VECTORIAL_FUENTE,
         "fecha_corte": INEGI_VECTORIAL_FECHA_CORTE,
@@ -631,14 +583,9 @@ def construir_indice_calles() -> dict:
     }
 
 
-# Characters the published names are allowed to contain: capitals (accented
-# included), digits, spaces and the punctuation INEGI actually uses. This is a
-# guard on what reaches a public page, not a data-cleaning step — the index is
-# generated from shapefiles that live outside the repo (`raw_data/` is
-# gitignored), so a reviewer looking at a diff of the generated file cannot
-# check the input that produced it. Anything outside this set means the source
-# changed in a way nobody has looked at, and the pipeline should stop rather
-# than publish it.
+# Characters the published names may contain: capitals (accented included),
+# digits, spaces and the punctuation INEGI uses. A guard on what reaches a
+# public page: anything else stops the pipeline.
 CARACTERES_PERMITIDOS = re.compile(r"^[0-9A-ZÁÉÍÓÚÜÑ '(),./-]+$")
 
 
@@ -800,11 +747,8 @@ def extraer_tablas_catastrales() -> tuple[dict[str, float], dict[str, str]]:
 
     print(f"  Cadastral tables read: {len(valores)} terrain classes, "
           f"{len(colonias)} colonias (edition {CATASTRO_EDICION}).")
-    # A present-but-unparsable PDF is the dangerous case, not a missing one:
-    # the export would return early, leave the PREVIOUS valor_catastral.json in
-    # place, and the run would still report success — shipping last year's
-    # figures under this year's edition label. The tables are reissued yearly
-    # and their internals already drift, so this is a "when", not an "if".
+    # A present-but-unparsable PDF must fail loudly: returning early would leave
+    # the PREVIOUS valor_catastral.json in place under this year's edition label.
     if not colonias or not valores:
         raise ValueError(
             f"{CATASTRO_PDF} was read but yielded {len(valores)} classes and "
@@ -995,11 +939,9 @@ def cargar_censo_servicios() -> pd.DataFrame:
     for col in ["POBTOT", "TVIVHAB"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # INEGI masks small counts (1-2 dwellings) with "*" for confidentiality.
-    # They are NOT filled with 0 here: "masked" and "zero" are different things
-    # and confusing them made an AGEB with no published data render as if it had
-    # 0% coverage. The distinction is resolved in calcular_cobertura_servicios(),
-    # which can see how many of the four columns are missing.
+    # INEGI masks small counts (1-2 dwellings) with "*". They are NOT filled with
+    # 0 here: calcular_cobertura_servicios() resolves them, since it can see how
+    # many of the four columns are missing.
     for col in COLUMNAS_SERVICIOS:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -1400,9 +1342,7 @@ def calcular_indice_inversion(
     gdf["INVERSION_INDEX"] = (base - gdf["RIESGO_INDEX"] * PESO_RIESGO).clip(
         lower=0, upper=100
     )
-    # NaN propagates through the subtraction on its own, so this is belt and
-    # braces -- and it is the line that states the rule, which is worth having
-    # explicitly rather than as a side effect of arithmetic.
+    # NaN already propagates through the subtraction; this line states the rule.
     gdf.loc[~gdf["RIESGO_EVALUADO"], "INVERSION_INDEX"] = float("nan")
 
     sin_evaluar = int((~gdf["RIESGO_EVALUADO"]).sum())
@@ -1435,13 +1375,8 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
         "MOTIVO_SIN_DATO",
         "geometry",
     ]
-    # With no service data there is no index: 40% of its weight is missing, so
-    # INVERSION_INDEX ends up null by NaN propagation. They are kept in the
-    # layer to paint them gray and explain the reason, rather than letting an
-    # unmeasured AGEB look like a bad investment. The same rule now covers the
-    # flood term (30%): a sector outside the Atlas is grey too, because the
-    # missing penalty could only flatter it and the colour ramp would have
-    # ranked it against sectors that did pay one.
+    # With no service data (40% of the weight) or no flood assessment (30%) there
+    # is no index: INVERSION_INDEX stays null and the sector is painted gray.
     gdf_final = gdf_inversion[columnas_finales].copy()
     gdf_final["geometry"] = gdf_final["geometry"].simplify(
         TOLERANCIA_SIMPLIFICACION, preserve_topology=True
@@ -1476,10 +1411,8 @@ def exportar_capa_servicios_basicos(gdf_ageb_servicios: gpd.GeoDataFrame) -> gpd
         "MOTIVO_SIN_DATO",
         "geometry",
     ]
-    # AGEBs with no data are kept on purpose (with a null SERVICIOS_INDEX and
-    # their MOTIVO_SIN_DATO): the map paints them gray and explains why. They
-    # used to be dropped with dropna, so they simply vanished from the map
-    # without anyone knowing they existed.
+    # AGEBs with no data are kept on purpose (null SERVICIOS_INDEX plus their
+    # MOTIVO_SIN_DATO): the map paints them gray and explains why.
     gdf_final = gdf_ageb_servicios[columnas_finales].copy()
     gdf_final["geometry"] = gdf_final["geometry"].simplify(
         TOLERANCIA_SIMPLIFICACION, preserve_topology=True
