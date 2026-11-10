@@ -50,6 +50,23 @@ python -m http.server 8000
 
 Open `http://localhost:8000` in your browser.
 
+### Checking the published data
+
+```bash
+python scripts/validar_data.py
+```
+
+It checks the files in `data/` against the rules the site relies on, and exits with an error if any fails. It needs only the Python standard library, not the environment above or `raw_data/`, and GitHub Actions runs it on every pull request. Among the rules:
+
+- Both AGEB layers hold the same 431 sectors, with exactly the fields the front end reads.
+- A missing figure is `null`, never `0`: a sector without services data states why, and a sector outside the flood Atlas carries no risk index and no investment index.
+- The published investment index matches its formula and its published components.
+- Coordinates fall inside the metropolitan area and keep the precision `exportar_geojson` writes.
+- The constants shared between `scripts/process_data.py` and `app.js` agree.
+- The layers stay within the 5 MB budget, and no text carries markup.
+
+Run it after regenerating `data/` and before committing the result.
+
 ### Basemap and your own CARTO key
 
 CARTO now requires an API key for its basemaps; without one, every basemap tile carries an **"API KEY REQUIRED" watermark**. The data layers are not affected. **This repository ships no key and never will** — it is public, and anything served to the browser is published — so out of the box the basemap shows the watermark.
@@ -85,6 +102,9 @@ assets/
     leaflet-1.9.4/   Leaflet, vendored so no CDN sits in the render path
 scripts/
   process_data.py    Data processing pipeline (GeoPandas)
+  validar_data.py    Checks data/ against the rules the site relies on (standard library only)
+.github/
+  workflows/         Runs validar_data.py on every pull request
 data/
   servicios_basicos.geojson      Basic-services layer per AGEB
   indice_inversion.geojson       Investment-index layer per AGEB
