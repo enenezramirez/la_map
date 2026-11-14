@@ -221,6 +221,7 @@ colonia name of each one.
   (SCIAN 61), healthcare (SCIAN 62) and supermarkets (by business-name matching, since they
   have no SCIAN sector of their own), measured as the distance from the AGEB centroid to
   the nearest establishment of each category.
+* **Also evaluated** as a source for nearness to employment (§3.10). Not published.
 
 ### 2.4 IMPLAN Saltillo — Riesgo por inundaciones pluviales urbanas (Atlas de Riesgos 2024)
 
@@ -1522,6 +1523,49 @@ adds no request. What it does with the traps in the table:
   under 0.001% of its sector. The counts were checked against an independent Python count over
   the published file, alone and combined with the flood criterion (102 sectors).
 
+### 3.10 Nearness to employment from the DENUE — evaluated 2026-11-14, not published
+
+The backlog asked whether the DENUE already in use (§2.3) could support a criterion for
+nearness to industrial parks and large employers. Measured with `scripts/denue/medir_empleo.py`
+(archived, not pipeline) over the 39,056 establishments of the three municipalities.
+
+**What the DENUE can say about employment:**
+* **Size is a stratum, not a headcount.** `per_ocu` has seven bands. The top one,
+  "251 y más personas", holds 247 establishments: 126 in Saltillo, 95 in Ramos Arizpe and 26 in
+  Arteaga. 168 of them are manufacturing (SCIAN 31–33). A plant with 5,000 workers and one with
+  260 count the same, so the DENUE can count large employers but not jobs.
+* **"Industrial park" is a self-declared tag.** `tipoCenCom` reads "PARQUE INDUSTRIAL" on 214
+  establishments under 49 distinct names, and the names are inconsistent: "SANTA MARIA" and
+  "PARQUE INDUSTRIAL SANTA MARIA" are both there. 138 of the 247 largest establishments declare
+  no park or industrial zone at all, so the tag cannot delimit the parks.
+
+**What a distance criterion would show.** From each sector's centroid, in a straight line:
+
+| Nearest… | Median | Sectors within 1 km | Within 2 km | Within 3 km |
+|---|---|---|---|---|
+| Establishment with 251+ people | 0.90 km | 238 | 375 | 420 |
+| Establishment with 101+ people | 0.60 km | 311 | 405 | 426 |
+| Manufacturing with 101+ people | 1.20 km | 174 | 338 | 404 |
+| Establishment tagged as industrial park | 1.76 km | 100 | 247 | 345 |
+
+Out of 431 sectors. The only ones beyond 5 km of a 251+ establishment are in Arteaga, two of
+them 34.5 km away in the sierra. Within 5 km, the median sector has 41 such establishments
+(10th percentile 19, 90th percentile 64).
+
+**Verdict: not published, for two reasons.**
+1. **It barely discriminates.** The metropolitan area is compact and large employers are spread
+   through it: 87% of sectors are within 2 km of one. A "within 1 km" filter would split the city
+   roughly in half, but only because 1 km is short, not because it separates places a buyer would
+   tell apart.
+2. **Its sign is ambiguous, like cadastral value (§2.8).** Being next to a large plant means jobs
+   nearby, but also truck traffic, noise and, along the industrial corridor, the
+   chemical-technological exposure the Atlas maps (§2.6). Turning it into a criterion or an index
+   term would build in a thesis about which one matters.
+
+**Left open, as a product decision:** showing the 247 largest establishments as a *context*
+layer, the way §2.9 shows stream courses: points with their sector and size band, no score. The
+DENUE is under INEGI's free-use terms (§1.1), and 247 points would weigh a few tens of KB.
+
 ---
 
 ## 4. Traceability of the published layers
@@ -1652,3 +1696,6 @@ dates in §2.5, and the cadastral PDF is 13,956,955 bytes, as in §2.8.
     out of `data/` on 2026-11-14.
   * ~~The panel footer does not cite every source or say the indices are Traza's own.~~
     Done 2026-11-14.
+* **Large employers as a context layer (§3.10).** Measured 2026-11-14: as a criterion, distance
+  to the DENUE's largest establishments barely discriminates and has no clear sign. Showing the
+  247 establishments with 251+ people as points, with no score, is an open product decision.
