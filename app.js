@@ -693,7 +693,8 @@ const LEYENDAS = {
     // counts are only known then.
     catastro: () => '<p class="empty-legend">Cargando…</p>',
     // Same: replaced by cargarCapaCauces with the orders and years it found.
-    cauces: () => '<p class="empty-legend">Cargando…</p>'
+    cauces: () => '<p class="empty-legend">Cargando…</p>',
+    empleadores: () => '<p class="empty-legend">Cargando…</p>'
 };
 
 // Which risk layers share the single-hue brick ramp: their swatches are
@@ -1331,7 +1332,7 @@ function mostrarDetalleCauce(props) {
 // A polygon layer switched on later is brought to the front and would paint
 // over the lines, so they are lifted back above it: the search's outlines last.
 function elevarCapasDeLinea() {
-    for (const capa of [capaCauces, capaCoincidencias]) {
+    for (const capa of [capaCauces, capaEmpleadores, capaCoincidencias]) {
         if (capa && map.hasLayer(capa)) capa.bringToFront();
     }
 }
@@ -1406,6 +1407,111 @@ function cargarCapaCauces(checkbox) {
         } else {
             map.removeLayer(capa);
             marcarCapaInactiva('cauces');
+        }
+    });
+}
+
+// --- Large employers (INEGI DENUE) ----------------------------------
+// Context, not a score: the DENUE's establishments in its top size band,
+// drawn where INEGI places them and kept out of every index (DATOS.md §3.10).
+//
+// Cased like the stream lines. The core reads at 7.3:1 against its casing and
+// 7.2:1 on the dark basemap; on the light one the casing carries it (18.7:1).
+const COLOR_EMPLEADOR = '#b48be8';
+const RADIO_EMPLEADOR = 4.5;
+// Hit area: a 24 px circle (SC 2.5.8) around a point drawn much smaller.
+const RADIO_TOQUE_EMPLEADOR = 12;
+const SECTORES_MANUFACTURA = ['31', '32', '33'];
+
+function htmlLeyendaEmpleadores(total, manufactura, fuente, edicion) {
+    return `
+        <p class="legend-title">Grandes empleadores (DENUE)</p>
+        <div class="legend-row">
+            <span class="legend-swatch legend-punto" data-swatch="${COLOR_EMPLEADOR}"></span>
+            <span>251 personas o más — ${total.toLocaleString('es-MX')} establecimientos, ${manufactura.toLocaleString('es-MX')} de manufactura</span>
+        </div>
+        <p class="legend-source">No es una capa de riesgo y no entra en ningún índice.
+           Fuente: ${esc(fuente)} · ${esc(edicion)}.</p>
+        <details class="legend-help">
+            <summary>¿Qué muestran los Grandes empleadores?</summary>
+            <div class="legend-help-body">
+                <p><strong>Qué son:</strong> los establecimientos que el DENUE del INEGI registra en su rango
+                   más alto de personal ocupado, 251 personas o más, en los tres municipios. Sirven para ver
+                   dónde están los corredores industriales y los grandes centros de trabajo.</p>
+                <p><strong>Cuánto empleo representan:</strong> el DENUE publica rangos, no cifras exactas. Una
+                   planta de 260 personas y una de varios miles se ven igual.</p>
+                <p><strong>Lo que no es:</strong> no califica a ningún sector. Estar cerca de una planta puede
+                   significar empleo a la mano, pero también tráfico pesado o ruido, y en el corredor industrial
+                   coincide con zonas de la capa de riesgo químico.</p>
+            </div>
+        </details>
+    `;
+}
+
+function mostrarDetalleEmpleador(props) {
+    document.getElementById('sector-title').textContent = props.NOMBRE || 'Establecimiento';
+    document.getElementById('sector-info').innerHTML = `
+        <p class="detail-row"><span>Actividad</span><strong>${esc(props.ACTIVIDAD)}</strong></p>
+        <p class="detail-row"><span>Personal ocupado</span><strong>${esc(props.ESTRATO)}</strong></p>
+        <p class="detail-row"><span>Municipio</span><strong>${esc(props.MUNICIPIO)}</strong></p>
+        <p class="detail-row"><span>Asentamiento</span><strong>${esc(props.ASENTAMIENTO || SIN_VALOR)}</strong></p>
+        <p class="detail-note">El DENUE publica el personal en rangos, no la cifra exacta. Es contexto:
+           no entra en ningún índice ni califica al sector donde está.</p>
+        <p class="detail-source">Fuente: ${esc(props.FUENTE)} · ${esc(props.FECHA)}.</p>
+    `;
+    abrirFicha();
+}
+
+let capaEmpleadores = null;
+
+function cargarCapaEmpleadores(checkbox) {
+    let capa = null;
+    registrarClaveDeCapa('empleadores', checkbox);
+
+    fetch('data/empleadores_denue.geojson', { cache: 'no-cache' })
+        .then(respuesta => respuesta.json())
+        .then(geojson => {
+            const total = geojson.features.length;
+            const manufactura = geojson.features.filter(f =>
+                SECTORES_MANUFACTURA.includes(String(f.properties.SCIAN).slice(0, 2))).length;
+            const p0 = total ? geojson.features[0].properties : {};
+            LEYENDAS.empleadores = () => htmlLeyendaEmpleadores(total, manufactura, p0.FUENTE, p0.FECHA);
+
+            const toque = L.geoJSON(geojson, {
+                pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+                    radius: RADIO_TOQUE_EMPLEADOR, stroke: false, fillOpacity: 0
+                }),
+                onEachFeature: (feature, layer) => {
+                    layer.on('click', () => mostrarDetalleEmpleador(feature.properties));
+                }
+            });
+            const punto = L.geoJSON(geojson, {
+                interactive: false,
+                pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+                    radius: RADIO_EMPLEADOR, color: CASCO_CAUCE, weight: 2.5, opacity: 1,
+                    fillColor: COLOR_EMPLEADOR, fillOpacity: 1
+                })
+            });
+            capa = L.featureGroup([punto, toque]);
+            capaEmpleadores = capa;
+
+            if (checkbox.checked) {
+                capa.addTo(map);
+                marcarCapaActiva('empleadores');
+            }
+            registrarCapaEnVista(checkbox, capa);
+        })
+        .catch(error => console.error('Error loading large employers:', error));
+
+    checkbox.addEventListener('change', () => {
+        if (!capa) return;
+        if (checkbox.checked) {
+            capa.addTo(map);
+            capa.bringToFront();
+            marcarCapaActiva('empleadores');
+        } else {
+            map.removeLayer(capa);
+            marcarCapaInactiva('empleadores');
         }
     });
 }
@@ -2282,6 +2388,9 @@ cargarCapaCatastro(document.getElementById('layer-cadastral'));
 
 // Stream courses (INEGI, 1:50 000). Context only: no index reads it.
 cargarCapaCauces(document.getElementById('layer-streams'));
+
+// Large employers (INEGI DENUE, 251+ people). Context only: no index reads it.
+cargarCapaEmpleadores(document.getElementById('layer-employers'));
 
 // Backup (ANRI - CONAGUA): the pipeline keeps the Tr=100 severity raster in
 // raw_data/conagua_anri/, unpublished (DATOS.md §1.1). Reactivating it as an
