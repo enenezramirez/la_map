@@ -1575,6 +1575,38 @@ individual zones (1,358 in flooding, 197 in landslides, 2,136 in the chemical on
 map can highlight one zone at a time instead of an entire level. The geometry is identical
 either way; splitting only repeats the properties on each feature.
 
+### 4.1 Rebuilding `raw_data/` from scratch
+
+`raw_data/` is not in the repository. On 2026-11-14 it was rebuilt on macOS from these
+downloads alone, with no copy of the original folder:
+
+| Folder in `raw_data/` | Download | Unpacking |
+|---|---|---|
+| `ageb_mza_urbana_05_cpv2020_csv/` | <https://www.inegi.org.mx/contenidos/programas/ccpv/2020/datosabiertos/ageb_manzana/ageb_mza_urbana_05_cpv2020_csv.zip> | Into the folder |
+| `denue_05_csv/` | <https://www.inegi.org.mx/contenidos/masiva/denue/denue_05_csv.zip> | Into the folder. This URL always serves the latest edition: check `metadatos/metadatos_denue.txt` says 05_2026 |
+| `marco_geoestadistico/saltillo_map_ageb/` | `…/geografia/rural/SHP_2023/Coahuila_de_Zaragoza/794551068038_s.zip` (§2.1, Saltillo) | The locality folders inside `05030_vla_ne_mg_2022/` |
+| `marco_geoestadistico/ramos_arizpe_map_ageb/` | Same path, `794551068007_s.zip` (Ramos Arizpe) | The locality folders inside `05027_vla_ne_mg_2022/` |
+| `marco_geoestadistico/arteaga_map_ageb/` | Same path, `794551067772_s.zip` (Arteaga) | The locality folders, which sit at the zip's root |
+| `inegi_red_hidrografica/` | `…/geografia/hidrogeolo/cuenca/702825006909_s.zip` (*Cuenca R. Bravo - San Juan*, §2.9) | Only `RH24/`; the technical PDF's file name is not valid UTF-8 and macOS refuses it |
+| `Riesgo_por_inundaciones_pluviales3/`, `Riesgo_por_Deslizamientos_traslacionales2/`, `Riesgo_Quimico_tecnologico/` | `https://implansaltillo.mx/perfil/ZIP/<folder>.zip` | Into the folder of the same name |
+| `catastro/TABLAS_VALORES_SUELO_CONSTRUCCION_2026.pdf` | Saltillo transparency, art. 28 fr. XIII, `2026/08.AGOSTO/` (§2.8) | Renamed |
+
+The INEGI paths start with
+`https://www.inegi.org.mx/contenidos/productos/prod_serv/contenidos/espanol/bvinegi/productos/`.
+Every package carried the edition this log records: the DENUE metadata reads 05_2026, the
+Saltillo locality metadata gives the dates in §2.1, the IMPLAN `.shp.xml` files give the
+dates in §2.5, and the cadastral PDF is 13,956,955 bytes, as in §2.8.
+
+**What the rebuilt run produced (Python 3.12, geopandas 1.2.0, pandas 3.1.1, pyogrio 0.12.0):**
+* Six of the eight published files came out **byte-identical**: `servicios_basicos`,
+  `calles`, `valor_catastral` and the three risk layers.
+* `indice_inversion.geojson` differed only in floating-point noise: every value within
+  4×10⁻¹⁰ of the published one, and the same 90 sectors without a flood figure.
+* `cauces_inegi.geojson` held the same 68 lines with the same properties, in a different
+  order. The export sorted by `ORDEN` alone, which leaves ties in whatever order the clip
+  produced. It now sorts by `ORDEN`, capture year and geometry, so two runs give the same
+  file; the published file was regenerated with that order.
+
 ---
 
 ## 5. Pending

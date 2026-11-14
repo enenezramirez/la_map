@@ -48,6 +48,17 @@ venv\Scripts\python scripts/process_data.py
 python -m http.server 8000
 ```
 
+Those are Windows paths. On macOS or Linux, with Python 3.10 or later (the pipeline does not run on 3.9):
+
+```bash
+python3 -m venv venv
+venv/bin/pip install pandas geopandas shapely pyproj "pyogrio==0.12.0"
+venv/bin/python scripts/process_data.py
+python3 -m http.server 8000
+```
+
+Step 2 needs `raw_data/`, which is not in the repository; [DATOS.md](DATOS.md) §4.1 lists the download for each folder.
+
 Open `http://localhost:8000` in your browser.
 
 ### Checking the published data
