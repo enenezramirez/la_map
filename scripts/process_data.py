@@ -1317,6 +1317,54 @@ def calcular_riesgo_inundacion_por_ageb(
     return resultado[["CVEGEO", "RIESGO_INDEX"]]
 
 
+def calcular_exposicion_informativa(
+    gdf_agebs: gpd.GeoDataFrame,
+    gdf_publicado: gpd.GeoDataFrame,
+    gdf_completo: gpd.GeoDataFrame,
+    prefijo: str,
+) -> pd.DataFrame:
+    """
+    Highest published level touching each AGEB and the share of the AGEB under
+    any published zone, for a risk layer that does NOT enter the Investment Index.
+
+    `{prefijo}_NIVEL` is "Ninguno" when no published zone touches the AGEB and
+    null when the model never covered it; `{prefijo}_PCT` is 0-100 or null the
+    same way. "Published" means the layer's own threshold, so "Ninguno" on the
+    chemical layer still allows its unpublished "Bajo" background.
+    """
+    agebs_m = gdf_agebs[["CVEGEO", "geometry"]].to_crs(CRS_METRICO).copy()
+    agebs_m["AREA_AGEB"] = agebs_m.geometry.area
+    publicado_m = gdf_publicado[["INTENSIDAD", "geometry"]].to_crs(CRS_METRICO)
+
+    interseccion = gpd.overlay(
+        agebs_m[["CVEGEO", "geometry"]], publicado_m, how="intersection", keep_geom_type=True
+    )
+    interseccion["AREA"] = interseccion.geometry.area
+    interseccion = interseccion[interseccion["AREA"] > 0]
+    orden = {nivel: i for i, nivel in enumerate(NIVELES_INTENSIDAD)}
+    nivel_max = interseccion.groupby("CVEGEO")["INTENSIDAD"].agg(
+        lambda s: max(s, key=orden.__getitem__)
+    )
+    area = interseccion.groupby("CVEGEO")["AREA"].sum()
+
+    resultado = agebs_m[["CVEGEO", "AREA_AGEB"]].copy()
+    resultado[f"{prefijo}_NIVEL"] = resultado["CVEGEO"].map(nivel_max).fillna("Ninguno")
+    resultado[f"{prefijo}_PCT"] = (
+        resultado["CVEGEO"].map(area).fillna(0) / resultado["AREA_AGEB"] * 100
+    ).clip(0, 100)
+
+    evaluados = agebs_evaluados_por_riesgo(gdf_agebs, gdf_completo)
+    fuera = ~resultado["CVEGEO"].isin(evaluados)
+    resultado.loc[fuera, f"{prefijo}_NIVEL"] = None
+    resultado.loc[fuera, f"{prefijo}_PCT"] = float("nan")
+    print(
+        f"  {prefijo}: {int((resultado[f'{prefijo}_NIVEL'] != 'Ninguno').sum() - fuera.sum())} "
+        f"of {len(evaluados)} assessed AGEBs touch a published zone; "
+        f"{int(fuera.sum())} outside the Atlas."
+    )
+    return resultado[["CVEGEO", f"{prefijo}_NIVEL", f"{prefijo}_PCT"]]
+
+
 def calcular_indice_inversion(
     gdf_ageb_servicios: gpd.GeoDataFrame,
     df_comercios: pd.DataFrame,
@@ -1384,6 +1432,11 @@ def exportar_capa_indice_inversion(gdf_inversion: gpd.GeoDataFrame) -> gpd.GeoDa
         "RIESGO_EVALUADO",
         "INVERSION_INDEX",
         "MOTIVO_SIN_DATO",
+        # Criteria-search fields only; no index reads them (DATOS.md §2.5, §2.6).
+        "DESLIZAMIENTO_NIVEL",
+        "DESLIZAMIENTO_PCT",
+        "QUIMICO_NIVEL",
+        "QUIMICO_PCT",
         "geometry",
     ]
     # With no service data (40% of the weight) or no flood assessment (30%) there
@@ -1565,9 +1618,8 @@ if __name__ == "__main__":
         gdf_inundacion, RIESGO_INUNDACION_GEOJSON,
         "Riesgo por Inundaciones Pluviales", "Hidrometeorológico",
     )
-    gdf_deslizamientos = preparar_capa_riesgo(
-        cargar_riesgo_implan(IMPLAN_DESLIZAMIENTOS_SHP, "Intensid_1")
-    )
+    gdf_deslizamientos_completa = cargar_riesgo_implan(IMPLAN_DESLIZAMIENTOS_SHP, "Intensid_1")
+    gdf_deslizamientos = preparar_capa_riesgo(gdf_deslizamientos_completa)
     exportar_capa_riesgo(
         gdf_deslizamientos, RIESGO_DESLIZAMIENTOS_GEOJSON,
         "Riesgo por Deslizamientos Traslacionales", "Geológico",
@@ -1576,10 +1628,8 @@ if __name__ == "__main__":
     # Arizpe industrial corridor. Own threshold (Medio+Alto): see
     # NIVELES_ELEVADOS_QUIMICO. Informational-only layer (does not penalize the
     # index, like landslides; only flood penalizes).
-    gdf_quimico = preparar_capa_riesgo(
-        cargar_riesgo_implan(IMPLAN_QUIMICO_SHP, "Intensid_1"),
-        niveles=NIVELES_ELEVADOS_QUIMICO,
-    )
+    gdf_quimico_completa = cargar_riesgo_implan(IMPLAN_QUIMICO_SHP, "Intensid_1")
+    gdf_quimico = preparar_capa_riesgo(gdf_quimico_completa, niveles=NIVELES_ELEVADOS_QUIMICO)
     exportar_capa_riesgo(
         gdf_quimico, RIESGO_QUIMICO_GEOJSON,
         "Riesgo Químico-Tecnológico", "Químico-Tecnológico",
@@ -1597,6 +1647,16 @@ if __name__ == "__main__":
     gdf_denue = cargar_denue()
     df_comercios = calcular_indice_comercios(gdf_agebs, gdf_denue)
     gdf_inversion = calcular_indice_inversion(gdf_ageb_servicios, df_comercios, df_riesgo)
+
+    print("\nComputing landslide and chemical exposure per AGEB (search only, not in the index)...")
+    for gdf_publicado, gdf_completo, prefijo in [
+        (gdf_deslizamientos, gdf_deslizamientos_completa, "DESLIZAMIENTO"),
+        (gdf_quimico, gdf_quimico_completa, "QUIMICO"),
+    ]:
+        gdf_inversion = gdf_inversion.merge(
+            calcular_exposicion_informativa(gdf_agebs, gdf_publicado, gdf_completo, prefijo),
+            on="CVEGEO", how="left",
+        )
     exportar_capa_indice_inversion(gdf_inversion)
 
     print("\nDownloading backup flood layer (ANRI - CONAGUA)...")
