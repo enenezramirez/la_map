@@ -60,10 +60,10 @@ AlphaEarth is CC BY 4.0 with a fixed attribution string (§3.6).
 (`assets/vendor/leaflet-1.9.4/LICENSE`). Inter and IBM Plex Mono are SIL Open Font License 1.1
 (`assets/fonts/OFL-*.txt`). Both licenses allow redistribution and require keeping their notices.
 
-**What this means for the repository's license.** A license on the repo can only cover
-Traza's own code and text. The files in `data/` stay under the terms of the sources they
-derive from, so a `LICENSE` should say that explicitly rather than appear to relicense
-INEGI, IMPLAN or Tesorería data.
+**The repository's license, decided 2026-11-14.** Traza's own code is MIT (`LICENSE`) and its
+documentation is CC BY 4.0. Neither covers `data/`: those files stay under the terms of the
+sources they derive from, as this table records, and the README's *License* section says so
+explicitly rather than appear to relicense INEGI, IMPLAN or Tesorería data.
 
 **Not verified.** The text of art. 14 fr. VIII was read in a third-party consolidation; the
 official PDF on diputados.gob.mx (last reform DOF 2026-05-14) was downloaded but could not be
