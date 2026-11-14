@@ -221,7 +221,8 @@ colonia name of each one.
   (SCIAN 61), healthcare (SCIAN 62) and supermarkets (by business-name matching, since they
   have no SCIAN sector of their own), measured as the distance from the AGEB centroid to
   the nearest establishment of each category.
-* **Also evaluated** as a source for nearness to employment (§3.10). Not published.
+* **Also published as context:** its 247 establishments in the top size band, "251 y más
+  personas", as `data/empleadores_denue.geojson` (§3.10). No index reads it.
 
 ### 2.4 IMPLAN Saltillo — Riesgo por inundaciones pluviales urbanas (Atlas de Riesgos 2024)
 
@@ -1523,7 +1524,7 @@ adds no request. What it does with the traps in the table:
   under 0.001% of its sector. The counts were checked against an independent Python count over
   the published file, alone and combined with the flood criterion (102 sectors).
 
-### 3.10 Nearness to employment from the DENUE — evaluated 2026-11-14, not published
+### 3.10 Nearness to employment from the DENUE — evaluated 2026-11-14; criterion not published, context layer published
 
 The backlog asked whether the DENUE already in use (§2.3) could support a criterion for
 nearness to industrial parks and large employers. Measured with `scripts/denue/medir_empleo.py`
@@ -1562,9 +1563,12 @@ them 34.5 km away in the sierra. Within 5 km, the median sector has 41 such esta
    chemical-technological exposure the Atlas maps (§2.6). Turning it into a criterion or an index
    term would build in a thesis about which one matters.
 
-**Left open, as a product decision:** showing the 247 largest establishments as a *context*
-layer, the way §2.9 shows stream courses: points with their sector and size band, no score. The
-DENUE is under INEGI's free-use terms (§1.1), and 247 points would weigh a few tens of KB.
+**Published instead, 2026-11-14, by the user's decision: a context layer.** The 247
+establishments are drawn as points, the way §2.9 draws stream courses, with no score:
+`data/empleadores_denue.geojson`, ~95 KB, from `exportar_grandes_empleadores()`. Each point carries
+the name, activity, SCIAN code, size band, municipality and settlement the DENUE publishes, and
+nothing else; phone, e-mail and legal name are left out. The legend and the card both say the size
+is a band and that the layer rates no sector. The DENUE is under INEGI's free-use terms (§1.1).
 
 ---
 
@@ -1581,6 +1585,7 @@ For each file served to the browser, its origin:
 | `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN chemical-technological (§2.6) |
 | `calles.json` | ~459 KB | AGEB block fronts, `fm` layer (§2.1) |
 | `valor_catastral.json` | ~19 KB | Cadastral tables (§2.8), keyed by AGEB |
+| `empleadores_denue.geojson` | ~95 KB | DENUE (§2.3), the 247 establishments with 251+ people, context only (§3.10) |
 | `cauces_inegi.geojson` | ~39 KB | INEGI Red Hidrográfica 1:50 000 (§2.9), order ≥ 5, context only |
 
 `calles.json` is not a map layer: it carries no geometry, it is fetched **lazily on the first
@@ -1696,6 +1701,5 @@ dates in §2.5, and the cadastral PDF is 13,956,955 bytes, as in §2.8.
     out of `data/` on 2026-11-14.
   * ~~The panel footer does not cite every source or say the indices are Traza's own.~~
     Done 2026-11-14.
-* **Large employers as a context layer (§3.10).** Measured 2026-11-14: as a criterion, distance
-  to the DENUE's largest establishments barely discriminates and has no clear sign. Showing the
-  247 establishments with 251+ people as points, with no score, is an open product decision.
+* **~~Large employers as a context layer (§3.10).~~** Published 2026-11-14, by the user's
+  decision.

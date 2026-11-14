@@ -431,6 +431,14 @@ body {
 .legend-swatch.legend-line-fina { height: 5px; }
 .legend-swatch.legend-line-gruesa { height: 6.5px; }
 
+/* A point layer gets a round swatch, cased like the point on the map. */
+.legend-swatch.legend-punto {
+    width: 11px;
+    height: 11px;
+    border: 2px solid #0b0c0e;
+    border-radius: 50%;
+}
+
 /* Data source and cutoff date (traceability), in the same monospaced voice as
    the figures. */
 .legend-source {

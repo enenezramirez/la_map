@@ -43,7 +43,7 @@
     <!-- The ?v= is a cache buster: bump it whenever a stylesheet change is one the
          markup depends on. The dev server sends no validators, so browsers do
          not revalidate. -->
-    <link rel="stylesheet" href="styles.css?v=11">
+    <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 
@@ -267,6 +267,15 @@
                     </label>
                     <p class="layer-desc">Arroyos principales como los trazó INEGI entre 1998 y 2008, antes de buena parte del crecimiento urbano (Red Hidrográfica 1:50 000).</p>
                 </div>
+
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-employers">
+                        <span class="slider"></span>
+                        <span class="layer-name">Grandes Empleadores</span>
+                    </label>
+                    <p class="layer-desc">Establecimientos con 251 personas o más según el DENUE del INEGI (05_2026). Muestra dónde está el empleo grande; no califica la zona.</p>
+                </div>
             </div>
         </section>
 
@@ -336,6 +345,6 @@
     <!-- App logic, in its own file so the CSP can withhold 'unsafe-inline'.
          Classic script, not type="module": it runs after Leaflet and after the
          markup above. The ?v= is a cache buster, like the one on styles.css. -->
-    <script src="app.js?v=19"></script>
+    <script src="app.js?v=20"></script>
 </body>
 </html>
