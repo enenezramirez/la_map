@@ -60,7 +60,8 @@ with no new dependencies.
 
 Backup: CONAGUA's ANRI flood layer is kept (georeferenced PNG raster,
 `descargar_raster_inundacion`) as an alternative source; IMPLAN is the primary
-source for being local, vector and from 2024.
+source for being local, vector and from 2024. It is saved under raw_data/,
+not data/, so it is not published.
 """
 
 import json
@@ -195,8 +196,11 @@ ANRI_MARGEN_GRADOS = 0.03
 # extent to keep pixels ~square and the file lightweight.
 ANRI_ALTO_PX = 1500
 
-RIESGO_INUNDACION_PNG = DATA_DIR / "riesgo_inundacion.png"
-RIESGO_INUNDACION_META = DATA_DIR / "riesgo_inundacion_meta.json"
+# Not in DATA_DIR: no license is on record for it (DATOS.md §1.1) and the site
+# does not read it, so it stays a local backup.
+ANRI_DIR = RAW_DATA / "conagua_anri"
+RIESGO_INUNDACION_PNG = ANRI_DIR / "riesgo_inundacion.png"
+RIESGO_INUNDACION_META = ANRI_DIR / "riesgo_inundacion_meta.json"
 
 # --- IMPLAN risk layers (CARTO SALTILLO - 2024 Risk Atlas) ------------------
 # Primary source (vector, local, 2024). Shapefiles in EPSG:6372.
@@ -1483,7 +1487,7 @@ def descargar_raster_inundacion(bounds_4326: tuple[float, float, float, float]) 
         print("  Skipping the flood layer; the rest of the pipeline continues.")
         return False
 
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    ANRI_DIR.mkdir(parents=True, exist_ok=True)
     RIESGO_INUNDACION_PNG.write_bytes(contenido)
 
     # Bounds in the order Leaflet expects: [[south, west], [north, east]].

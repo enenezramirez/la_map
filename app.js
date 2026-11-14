@@ -2262,9 +2262,9 @@ cargarCapaCatastro(document.getElementById('layer-cadastral'));
 // Stream courses (INEGI, 1:50 000). Context only: no index reads it.
 cargarCapaCauces(document.getElementById('layer-streams'));
 
-// Backup (ANRI - CONAGUA): the flood layer by Tr=100 severity is kept
-// as a raster in data/riesgo_inundacion.png (+_meta.json). To reactivate
-// it as an imageOverlay, load meta.bounds and use L.imageOverlay(...).
+// Backup (ANRI - CONAGUA): the pipeline keeps the Tr=100 severity raster in
+// raw_data/conagua_anri/, unpublished (DATOS.md §1.1). Reactivating it as an
+// L.imageOverlay(...) over meta.bounds would first need its license settled.
 // IMPLAN is the primary source (local, vector).
 
 console.log("Leaflet initialized successfully.");
