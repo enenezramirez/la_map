@@ -522,7 +522,12 @@ def main() -> int:
         "servicios_basicos.geojson", "indice_inversion.geojson", "cauces_inegi.geojson",
         *CAPAS_RIESGO,
     ]
-    archivos = geojson + ["valor_catastral.json", "calles.json", "riesgo_inundacion_meta.json"]
+    archivos = geojson + ["valor_catastral.json", "calles.json"]
+    # A file nobody listed here has no entry in DATOS.md §1.1 saying it may be published.
+    inf.revisar(
+        "data/ holds only the files listed here",
+        sorted(r.name for r in data.iterdir() if r.is_file() and r.name not in archivos),
+    )
     contenido, ilegibles = {}, []
     for archivo in archivos:
         try:
