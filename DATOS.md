@@ -221,6 +221,8 @@ colonia name of each one.
   (SCIAN 61), healthcare (SCIAN 62) and supermarkets (by business-name matching, since they
   have no SCIAN sector of their own), measured as the distance from the AGEB centroid to
   the nearest establishment of each category.
+* **Also published as context:** its 247 establishments in the top size band, "251 y más
+  personas", as `data/empleadores_denue.geojson` (§3.10). No index reads it.
 
 ### 2.4 IMPLAN Saltillo — Riesgo por inundaciones pluviales urbanas (Atlas de Riesgos 2024)
 
@@ -1522,6 +1524,52 @@ adds no request. What it does with the traps in the table:
   under 0.001% of its sector. The counts were checked against an independent Python count over
   the published file, alone and combined with the flood criterion (102 sectors).
 
+### 3.10 Nearness to employment from the DENUE — evaluated 2026-11-14; criterion not published, context layer published
+
+The backlog asked whether the DENUE already in use (§2.3) could support a criterion for
+nearness to industrial parks and large employers. Measured with `scripts/denue/medir_empleo.py`
+(archived, not pipeline) over the 39,056 establishments of the three municipalities.
+
+**What the DENUE can say about employment:**
+* **Size is a stratum, not a headcount.** `per_ocu` has seven bands. The top one,
+  "251 y más personas", holds 247 establishments: 126 in Saltillo, 95 in Ramos Arizpe and 26 in
+  Arteaga. 168 of them are manufacturing (SCIAN 31–33). A plant with 5,000 workers and one with
+  260 count the same, so the DENUE can count large employers but not jobs.
+* **"Industrial park" is a self-declared tag.** `tipoCenCom` reads "PARQUE INDUSTRIAL" on 214
+  establishments under 49 distinct names, and the names are inconsistent: "SANTA MARIA" and
+  "PARQUE INDUSTRIAL SANTA MARIA" are both there. 138 of the 247 largest establishments declare
+  no park or industrial zone at all, so the tag cannot delimit the parks.
+
+**What a distance criterion would show.** From each sector's centroid, in a straight line:
+
+| Nearest… | Median | Sectors within 1 km | Within 2 km | Within 3 km |
+|---|---|---|---|---|
+| Establishment with 251+ people | 0.90 km | 238 | 375 | 420 |
+| Establishment with 101+ people | 0.60 km | 311 | 405 | 426 |
+| Manufacturing with 101+ people | 1.20 km | 174 | 338 | 404 |
+| Establishment tagged as industrial park | 1.76 km | 100 | 247 | 345 |
+
+Out of 431 sectors. The only ones beyond 5 km of a 251+ establishment are in Arteaga, two of
+them 34.5 km away in the sierra. Within 5 km, the median sector has 41 such establishments
+(10th percentile 19, 90th percentile 64).
+
+**Verdict: not published, for two reasons.**
+1. **It barely discriminates.** The metropolitan area is compact and large employers are spread
+   through it: 87% of sectors are within 2 km of one. A "within 1 km" filter would split the city
+   roughly in half, but only because 1 km is short, not because it separates places a buyer would
+   tell apart.
+2. **Its sign is ambiguous, like cadastral value (§2.8).** Being next to a large plant means jobs
+   nearby, but also truck traffic, noise and, along the industrial corridor, the
+   chemical-technological exposure the Atlas maps (§2.6). Turning it into a criterion or an index
+   term would build in a thesis about which one matters.
+
+**Published instead, 2026-11-14, by the user's decision: a context layer.** The 247
+establishments are drawn as points, the way §2.9 draws stream courses, with no score:
+`data/empleadores_denue.geojson`, ~95 KB, from `exportar_grandes_empleadores()`. Each point carries
+the name, activity, SCIAN code, size band, municipality and settlement the DENUE publishes, and
+nothing else; phone, e-mail and legal name are left out. The legend and the card both say the size
+is a band and that the layer rates no sector. The DENUE is under INEGI's free-use terms (§1.1).
+
 ---
 
 ## 4. Traceability of the published layers
@@ -1537,6 +1585,7 @@ For each file served to the browser, its origin:
 | `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN chemical-technological (§2.6) |
 | `calles.json` | ~459 KB | AGEB block fronts, `fm` layer (§2.1) |
 | `valor_catastral.json` | ~19 KB | Cadastral tables (§2.8), keyed by AGEB |
+| `empleadores_denue.geojson` | ~95 KB | DENUE (§2.3), the 247 establishments with 251+ people, context only (§3.10) |
 | `cauces_inegi.geojson` | ~39 KB | INEGI Red Hidrográfica 1:50 000 (§2.9), order ≥ 5, context only |
 
 `calles.json` is not a map layer: it carries no geometry, it is fetched **lazily on the first
@@ -1652,3 +1701,5 @@ dates in §2.5, and the cadastral PDF is 13,956,955 bytes, as in §2.8.
     out of `data/` on 2026-11-14.
   * ~~The panel footer does not cite every source or say the indices are Traza's own.~~
     Done 2026-11-14.
+* **~~Large employers as a context layer (§3.10).~~** Published 2026-11-14, by the user's
+  decision.
