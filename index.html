@@ -125,6 +125,21 @@
                         </div>
 
                         <div class="criteria-field">
+                            <label for="crit-deslizamientos">Deslizamientos <span class="criteria-src">IMPLAN · Atlas 2024</span></label>
+                            <select id="crit-deslizamientos" name="deslizamientos" aria-describedby="crit-riesgo-nota">
+                                <option value="">Cualquiera</option>
+                            </select>
+                        </div>
+
+                        <div class="criteria-field">
+                            <label for="crit-quimico">Riesgo químico <span class="criteria-src">IMPLAN · Atlas 2024</span></label>
+                            <select id="crit-quimico" name="quimico" aria-describedby="crit-riesgo-nota">
+                                <option value="">Cualquiera</option>
+                            </select>
+                            <p class="criteria-note" id="crit-riesgo-nota">La clasificación del IMPLAN tal cual, solo en Saltillo. No entran al Índice de Inversión. En riesgo químico, el nivel Bajo cubre casi todo el municipio y no se marca.</p>
+                        </div>
+
+                        <div class="criteria-field">
                             <label for="crit-escuela">Escuela más cercana <span class="criteria-src">DENUE 05_2026</span></label>
                             <select id="crit-escuela" name="escuela" aria-describedby="crit-cercania-nota">
                                 <option value="">Cualquier distancia</option>
@@ -321,6 +336,6 @@
     <!-- App logic, in its own file so the CSP can withhold 'unsafe-inline'.
          Classic script, not type="module": it runs after Leaflet and after the
          markup above. The ?v= is a cache buster, like the one on styles.css. -->
-    <script src="app.js?v=18"></script>
+    <script src="app.js?v=19"></script>
 </body>
 </html>

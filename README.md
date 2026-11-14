@@ -19,7 +19,7 @@ Covers **431 AGEBs across three municipalities**: Saltillo, Ramos Arizpe and Art
 
 Click any colonia or risk zone on the map to see its detail card, with the source and cutoff date of the data you are viewing.
 
-**Find zones by criteria.** A panel filters the sectors by service coverage, pluvial flood exposure, straight-line distance to the nearest school, healthcare service and supermarket, and cadastral land value, then lists the matches and says why each one matched and where every value comes from. A sector with no figure for a criterion never matches: it is counted apart, because having no data is not meeting the criterion. It filters on the place only, never on who lives there, and it is deterministic — no AI and no requests beyond the files the map already loads.
+**Find zones by criteria.** A panel filters the sectors by service coverage, pluvial flood exposure, landslide and chemical-technological risk zones, straight-line distance to the nearest school, healthcare service and supermarket, and cadastral land value, then lists the matches and says why each one matched and where every value comes from. A sector with no figure for a criterion never matches: it is counted apart, because having no data is not meeting the criterion. It filters on the place only, never on who lives there, and it is deterministic — no AI and no requests beyond the files the map already loads.
 
 ### How to read the colors
 

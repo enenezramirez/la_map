@@ -1928,6 +1928,22 @@ const cercania = (id, campo, etiqueta) => ({
     falta: 'sin dato de cercanía'
 });
 
+// Landslide and chemical risk: the highest published level touching the
+// sector, as IMPLAN classed it. Search only; neither enters any index.
+const formatoPorcion = pct => (pct < 1 ? 'menos del 1%' : `${Math.round(pct)}%`);
+
+const zonaInformativa = (id, prefijo, etiqueta, publicados, alto) => ({
+    id, etiqueta, fuente: 'IMPLAN · Atlas de Riesgos 2024',
+    opciones: [['sin-zona', `Ninguna zona marcada (${publicados})`], ['sin-alto', `Sin zona de nivel ${alto}`]],
+    leer: s => s.props[`${prefijo}_NIVEL`] ?? null,
+    cumple: (nivel, modo) => (modo === 'sin-zona' ? nivel === 'Ninguno' : nivel !== alto),
+    pide: modo => (modo === 'sin-zona' ? `ninguna zona marcada (${publicados})` : `ninguna zona de nivel ${alto}`),
+    describir: (nivel, s) => (nivel === 'Ninguno'
+        ? 'ninguna zona marcada'
+        : `nivel ${nivel.toLowerCase()} como máximo, en ${formatoPorcion(s.props[`${prefijo}_PCT`])} del sector`),
+    falta: 'fuera del Atlas de Riesgos'
+});
+
 const CRITERIOS = [
     {
         id: 'servicios', etiqueta: 'Servicios básicos', fuente: 'INEGI · Censo 2020',
@@ -1949,6 +1965,8 @@ const CRITERIOS = [
         describir: v => (v === 0 ? 'ninguna zona marcada' : `exposición ${formatoIndice(v)} de 100`),
         falta: 'fuera del Atlas de Riesgos'
     },
+    zonaInformativa('deslizamientos', 'DESLIZAMIENTO', 'Deslizamientos', 'Bajo o Medio', 'Medio'),
+    zonaInformativa('quimico', 'QUIMICO', 'Riesgo químico', 'Medio o Alto', 'Alto'),
     cercania('escuela', 'SCORE_ESCUELA', 'Escuela más cercana'),
     cercania('salud', 'SCORE_SALUD', 'Salud más cercana'),
     cercania('supermercado', 'SCORE_SUPERMERCADO', 'Supermercado más cercano'),
@@ -2056,8 +2074,9 @@ function mostrarResultadosCriterios(r, enfocar = null) {
     const n = r.coincidencias.length;
     const pedidos = r.activos.map(c =>
         `<li><span>${esc(c.etiqueta)}</span> ${esc(c.pide(r.filtros[c.id]))}</li>`).join('');
-    const faltan = r.activos.filter(c => r.faltantes.get(c.id) > 0)
-        .map(c => `${esc(c.falta)} (${r.faltantes.get(c.id).toLocaleString('es-MX')})`);
+    // The three Atlas criteria share one reason and one coverage: say it once.
+    const faltan = [...new Set(r.activos.filter(c => r.faltantes.get(c.id) > 0)
+        .map(c => `${esc(c.falta)} (${r.faltantes.get(c.id).toLocaleString('es-MX')})`))];
     const notaFaltantes = r.posibles
         ? `<p class="detail-note">Otros <strong>${r.posibles.toLocaleString('es-MX')}</strong>
                ${r.posibles === 1 ? 'sector cumple' : 'sectores cumplen'} todo lo que sí se sabe de
@@ -2114,7 +2133,9 @@ function mostrarPorQueCoincide(s, r, indice) {
     const notas = [
         usaCercania ? 'Las distancias son en línea recta desde el centro del sector hasta el establecimiento más cercano del DENUE, no por calle.' : '',
         r.filtros.catastro !== null ? 'El valor catastral es la base del predial, asignado a toda la colonia: no es precio de mercado ni avalúo del predio.' : '',
-        r.filtros.inundacion !== null ? 'La inundación es solo pluvial: no incluye el desbordamiento de arroyos.' : ''
+        r.filtros.inundacion !== null ? 'La inundación es solo pluvial: no incluye el desbordamiento de arroyos.' : '',
+        (r.filtros.deslizamientos !== null || r.filtros.quimico !== null)
+            ? 'Deslizamientos y riesgo químico muestran la clasificación del IMPLAN tal cual; no entran al Índice de Inversión.' : ''
     ].filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('');
 
     document.getElementById('sector-title').textContent = s.props.COLONIA;
