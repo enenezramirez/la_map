@@ -115,7 +115,8 @@ data/
   calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
   valor_catastral.json           Cadastral land value per AGEB (informational, not in the index)
   cauces_inegi.geojson           Main stream courses, INEGI 1:50 000 (context, not a risk layer)
-DATOS.md             Data log: provenance of each dataset
+DATOS.md             Data log: provenance and terms of use of each dataset
+LICENSE              MIT license for the code (see License below)
 ```
 
 The raw data (`raw_data/`) is not included in the repository because of its size; [DATOS.md](DATOS.md) documents where each dataset comes from and `scripts/process_data.py` how they are processed.
@@ -141,3 +142,17 @@ The forest-fire risk layer is still deferred. In the best source found, CONAFOR'
 The risk data are urban-scale intensity models: they help compare zones, they do not replace a site study.
 
 The repository is named `la_map` for historical reasons; `Traza` is the product name.
+
+## License
+
+Different parts of this repository are under different terms:
+
+| What | License |
+|---|---|
+| The code: `app.js`, `index.html`, `styles.css`, `scripts/` and `.github/` | [MIT](LICENSE) |
+| The documentation: `README.md` and `DATOS.md` | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| The published data in `data/` | The terms of each source it derives from, recorded in [DATOS.md](DATOS.md) §1.1. These licenses do not relicense INEGI, IMPLAN or Tesorería data. |
+| Leaflet, under `assets/vendor/` | BSD 2-Clause, in its own `LICENSE` file |
+| The Inter and IBM Plex Mono fonts, under `assets/fonts/` | SIL Open Font License 1.1, in the `OFL-*.txt` files |
+
+The name *Traza* and its logo (`assets/logo-traza.svg`) are not covered by these licenses.
