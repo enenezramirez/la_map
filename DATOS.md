@@ -38,6 +38,8 @@ instead of estimating it.
 | 17 | Mapa de Áreas Prioritarias de Protección Contra Incendios Forestales, Coahuila (Áreas Elegibles ROP 2025) | CONAFOR | 2025 | 2026-11-07 and 2026-11-08 (WFS extracts, not kept) | Evaluated, not published (§3.3) |
 | 18 | Concentrado Nacional de Polígonos de Incendios Forestales 2021–2024 | CONAFOR | 2021–2024, annual | 2026-11-07 (WFS extract, not kept) | Evaluated, not published (§3.3) |
 | 19 | Rutas, paraderos and rutas alimentadoras of the *Aquí Vamos* system (3 layers) | IMMUS Saltillo, served by the IMPLAN portal | 2026 (files dated 2026-03-24 and 2026-05-21) | 2026-11-19 | Evaluated, not published (§3.11) |
+| 20 | Censo de Población y Vivienda 2010 (Principales resultados por AGEB y manzana urbana, Coahuila) | INEGI | 2010 (file of 2012-01-25) | 2026-11-19 | In use (§2.10) |
+| 21 | Marco Geoestadístico 2010, versión 5.0 (urban AGEB polygons) | INEGI | 2010 (most AGEBs updated 12/2007) | 2026-11-19 | In use (§2.10) |
 
 ### 1.1 Terms of use by source
 
@@ -47,7 +49,7 @@ says so rather than inferring a permission.
 
 | Source | Used in | Terms that apply | Commercial use | Adapt and redistribute | Attribution it asks for | What Traza does today |
 |---|---|---|---|---|---|---|
-| **INEGI** | §2.1, §2.2, §2.3, §2.9 | *Términos de Libre Uso de la Información del INEGI* (<https://www.inegi.org.mx/inegi/terminos.html>). Undated; INEGI may change them at any time. | Allowed | Allowed: adapt, reorder, extract. Copies must keep their metadata. | "Fuente: INEGI, *product name*", plus the update date where applicable. The end user must be told about any analysis or transformation, and the use must not look like an official INEGI position. | The panel footer cites the four INEGI products by name, and the in-app help explains how each index is computed. Since 2026-11-14 the footer also states that the indices and the search are Traza's calculations, not official figures or a position of INEGI, IMPLAN or the Tesorería. |
+| **INEGI** | §2.1, §2.2, §2.3, §2.9, §2.10 | *Términos de Libre Uso de la Información del INEGI* (<https://www.inegi.org.mx/inegi/terminos.html>). Undated; INEGI may change them at any time. | Allowed | Allowed: adapt, reorder, extract. Copies must keep their metadata. | "Fuente: INEGI, *product name*", plus the update date where applicable. The end user must be told about any analysis or transformation, and the use must not look like an official INEGI position. | The panel footer cites the four INEGI products by name, and the in-app help explains how each index is computed. Since 2026-11-14 the footer also states that the indices and the search are Traza's calculations, not official figures or a position of INEGI, IMPLAN or the Tesorería. |
 | **IMPLAN Saltillo** | §2.4, §2.5, §2.6 | **No license.** On the download page (<https://implansaltillo.mx/perfil/>), under "Uso del Portal": "fines exclusivamente informativos y de apoyo a la planeación territorial". IMPLAN disclaims liability for misuse or out-of-context interpretation, and an "Aceptar y continuar" button asks for responsible use. The page footer reads "©2026 IMPLAN Saltillo - Todos los Derechos Reservados". No separate terms page is linked. | Not addressed | Not addressed | None asked | Every risk feature carries `FUENTE` and `FECHA`, the card shows them, and the panel says the levels are "Clasificación del IMPLAN, sin recalcular". **Open:** three published layers, and the flood penalty inside the Investment Index, are derived from IMPLAN data that is redistributed with no written permission. Only IMPLAN can settle this (the written consultation in the backlog). |
 | **Tesorería Municipal de Saltillo** | §2.8 | **No license** on saltillo.gob.mx: the footer reads "Copyright © 2026 - Gobierno Municipal de Saltillo", and the transparency portal links only a privacy notice. The tables are approved by the state Congress (§2.8). Under Ley Federal del Derecho de Autor art. 14 fr. VIII, legislative, regulatory and administrative texts are not protected by copyright, and a publication of one must follow the official text. | No restriction, if art. 14 fr. VIII applies | Same | None asked | The card names the Tesorería, the 2026 edition and the warning that a cadastral value is a tax base, not a market price. Values are copied as published; only class labels are normalised (§2.8). The panel footer lists the source and edition. |
 | **CONAGUA — ANRI** | §2.7 | **No license found.** The ArcGIS service returned HTTP 500 on 2026-11-13, and gob.mx/conagua shows no terms for the ANRI. The general gob.mx terms restrict material on gob.mx to personal, non-commercial use, but the raster is not served from gob.mx, so whether they apply is not established. | Unknown | Unknown | Unknown | Not published. Since 2026-11-14 the pipeline saves it under `raw_data/conagua_anri/`, and `validar_data.py` fails if `data/` holds a file it does not list. It stays in the git history of earlier commits. |
@@ -454,6 +456,57 @@ two thirds of the city's AGEBs touch a channel of some order.
 * **Not done, deliberately:** stream **names**. INEGI ships them as 554 toponym *points*
   (`RH24Be_to.shp`), not as a line attribute, so naming a line means a nearest-point join — and
   a confidently wrong arroyo name is worse than none. Left for a separate, measured step.
+
+### 2.10 INEGI — Censo de Población y Vivienda 2010 and Marco Geoestadístico 2010 *(housing growth)*
+
+Published **2026-11-19** as an informational layer, by the user's decision. It answers the
+backlog's "hacia dónde crece la ciudad" by comparing the dwellings each sector had in the 2010
+and 2020 Censuses. **No index reads it.** It counts dwellings, which describe the place, not who
+lives there.
+
+* **Official sources:**
+  * INEGI, *Censo de Población y Vivienda 2010. Principales resultados por AGEB y manzana urbana*,
+    Coahuila, `resageburb_05dbf10.zip` from SCITEL
+    (<https://www.inegi.org.mx/contenidos/programas/ccpv/iter/zip/resageburb/resageburb_05dbf10.zip>).
+    `Last-Modified` 2012-01-25. 54,834 rows, one per state, municipality, locality, AGEB and block.
+  * INEGI, *Marco Geoestadístico 2010, versión 5.0* (upc 702825292812, 95.7 MB), which holds the
+    2010 urban AGEB polygons (`mgau2010v5_0/AGEB_urb_2010_5.shp`, national, 56,195 polygons).
+    Of the 396 in the three municipalities, 389 carry `FECHAACT` 12/2007, 4 06/2009 and 3 08/2010.
+* **Terms:** INEGI's free-use terms (§1.1).
+* **Local path:** `raw_data/inegi_censo2010/` (gitignored). **Download date:** 2026-11-19.
+* **How comparable the two Censuses are, measured** with `scripts/censo2010/medir_crecimiento.py`
+  (archived, not pipeline):
+  * Every one of the 396 AGEB keys of 2010 still exists in 2020; 35 keys are new.
+  * For the 396 shared keys, the 2010 and 2020 polygons overlap with a median intersection over
+    union of 1.000; 348 are at 0.95 or more. Part of the remaining gap is the different
+    cartography (2007 against 2023), not a real change of limits.
+  * Joining the 2010 and 2020 AGEBs that share territory (an overlap under 2% of the smaller
+    polygon is treated as a digitising sliver) gives **345 sectors that compare one to one, 59 in
+    27 groups** where INEGI split or redrew AGEBs, and **27 sectors with no 2010 urban AGEB**
+    under them. 30 of the 35 new keys lie almost entirely (over 90% of their area) outside the
+    2010 urban AGEBs.
+  * Of the one-to-one sectors, 17 have the same key but an overlap under 0.95; their change
+    includes territory the AGEB gained.
+* **What it shows:** over the urban AGEBs of the three municipalities, `VIVTOT` went from 245,515
+  to 307,254, and uninhabited private dwellings (`VIVPAR_DES`) from 34,668 to 24,928. Among the
+  one-to-one sectors the median change is +7%, but 28 more than doubled and 57 lost dwellings.
+* **What is published:** `data/crecimiento_vivienda.json` (~62 KB), a lookup keyed by AGEB, from
+  `calcular_crecimiento_vivienda()` and `exportar_crecimiento_vivienda()`. Each record carries
+  `comparacion` (`directa`, `grupo` or `nueva`), `viv_2010`, `viv_2020`, `cambio`, `cambio_ha`,
+  `des_2010`, `des_2020` and `ha`; a group record also carries `sectores_grupo` and
+  `agebs_2010`, and every sector of the group carries the same record. The map colors
+  `cambio_ha`, the change divided by the group's 2020 area, so a group total is never shown as
+  if it belonged to one sector and a large peripheral sector does not rank high for its size
+  alone. Breaks are quantiles over the sectors that did not lose dwellings; losses are one
+  absolute class.
+* **Missing is not zero:** a sector with no 2010 urban AGEB has `viv_2010`, `cambio` and
+  `cambio_ha` null, and is drawn with a dashed border, not as growth from zero (its 2010
+  dwellings, if any, were counted in a rural locality, not by AGEB). Two sectors of one group
+  (`0503000010093` and `0503000015056`, Lomas Verdes) have no change because 0093 has no row in
+  the 2020 Census. Masked `VIVPAR_DES` values ("*", 8 in 2010 and 15 in 2020) leave that group's
+  figure null.
+* **Not verified:** that INEGI defines uninhabited dwellings identically in 2010 and 2020. The
+  card shows both figures side by side but the map does not color them.
 
 ---
 
@@ -1637,6 +1690,7 @@ For each file served to the browser, its origin:
 | `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN chemical-technological (§2.6) |
 | `calles.json` | ~459 KB | AGEB block fronts, `fm` layer (§2.1) |
 | `valor_catastral.json` | ~19 KB | Cadastral tables (§2.8), keyed by AGEB |
+| `crecimiento_vivienda.json` | ~62 KB | Census 2010 and 2020 dwellings (§2.2, §2.10), keyed by AGEB, informational |
 | `empleadores_denue.geojson` | ~95 KB | DENUE (§2.3), the 247 establishments with 251+ people, context only (§3.10) |
 | `cauces_inegi.geojson` | ~39 KB | INEGI Red Hidrográfica 1:50 000 (§2.9), order ≥ 5, context only |
 
@@ -1758,3 +1812,6 @@ dates in §2.5, and the cadastral PDF is 13,956,955 bytes, as in §2.8.
 * **Public transport (§3.11):** the IMMUS layers cover only the free trunk system and two
   feeders, 6 of the 23 routes reported in May 2026. Evaluated 2026-11-19 and not published.
   Revisit if every route is published with its stops, or after the December 2026 tender.
+* **Housing growth (§2.10):** published 2026-11-19 as an informational layer. Open: whether
+  `VIVPAR_DES` is defined the same way in both Censuses, and whether to add a criterion to the
+  search once the layer has been read by people.

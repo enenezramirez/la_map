@@ -66,8 +66,12 @@ VIAS_CATASTRO = {"exacto", "palabras", "espacios"}
 CAMPOS_CATASTRO = {"clase", "valor", "via"}
 CAMPOS_CATASTRO_OPCIONALES = {"nombre_catastro"}
 
+COMPARACIONES_CRECIMIENTO = {"directa", "grupo", "nueva"}
+CAMPOS_CRECIMIENTO = {"comparacion", "viv_2010", "viv_2020", "cambio", "cambio_ha", "des_2010", "des_2020", "ha"}
+CAMPOS_CRECIMIENTO_GRUPO = {"sectores_grupo", "agebs_2010"}
+
 # Properties app.js attaches to a feature at run time; no file carries them.
-AGREGADOS_EN_NAVEGADOR = {"CATASTRO"}
+AGREGADOS_EN_NAVEGADOR = {"CATASTRO", "CRECIMIENTO"}
 
 CONSTANTES_PIPELINE = (
     "PESO_SERVICIOS", "PESO_COMERCIOS", "PESO_RIESGO", "RADIO_MAX_KM",
@@ -420,6 +424,75 @@ def validar_catastro(inf: Informe, catastro: dict, por_clave: dict) -> None:
     )
 
 
+def validar_crecimiento(inf: Informe, crecimiento: dict, por_clave: dict) -> None:
+    inf.revisar(
+        "dwelling change: the file states its source, edition and note",
+        [campo for campo in ("fuente", "edicion", "nota") if not es_texto(str(crecimiento.get(campo) or ""))],
+    )
+    sectores = crecimiento.get("sectores")
+    if not isinstance(sectores, dict):
+        inf.revisar("dwelling change: `sectores` is an object keyed by CVEGEO", [type(sectores).__name__])
+        return
+    inf.revisar(
+        "dwelling change: one record for every published sector, and no other key",
+        sorted(set(sectores) ^ set(por_clave)),
+    )
+
+    def campos_validos(d) -> bool:
+        if not isinstance(d, dict) or d.get("comparacion") not in COMPARACIONES_CRECIMIENTO:
+            return False
+        esperados = CAMPOS_CRECIMIENTO | (CAMPOS_CRECIMIENTO_GRUPO if d["comparacion"] == "grupo" else set())
+        return set(d) == esperados
+
+    inf.revisar(
+        "dwelling change: every record has the fields its comparison declares",
+        [k for k, d in sectores.items() if not campos_validos(d)],
+    )
+    registros = {k: d for k, d in sectores.items() if campos_validos(d)}
+    conteo = lambda v: v is None or (isinstance(v, int) and not isinstance(v, bool) and v >= 0)
+    inf.revisar(
+        "dwelling change: counts are null or non-negative integers, and the area is positive",
+        [
+            k for k, d in registros.items()
+            if not all(conteo(d[c]) for c in ("viv_2010", "viv_2020", "des_2010", "des_2020"))
+            or not (es_numero(d["ha"]) and d["ha"] > 0)
+        ],
+    )
+    inf.revisar(
+        "dwelling change: a sector urbanised after 2010 has no 2010 figure and no change",
+        [
+            k for k, d in registros.items()
+            if d["comparacion"] == "nueva"
+            and any(d[c] is not None for c in ("viv_2010", "des_2010", "cambio", "cambio_ha"))
+        ],
+    )
+
+    def cambio_coherente(d) -> bool:
+        if d["viv_2010"] is None or d["viv_2020"] is None:
+            return d["cambio"] is None and d["cambio_ha"] is None
+        if d["cambio"] != d["viv_2020"] - d["viv_2010"] or not es_numero(d["cambio_ha"]):
+            return False
+        # `ha` is rounded to 0.1 on export, so the division is checked loosely.
+        return abs(d["cambio"] / d["ha"] - d["cambio_ha"]) <= 0.01 + 0.06 * abs(d["cambio"]) / d["ha"] ** 2
+
+    inf.revisar(
+        "dwelling change: cambio is 2020 minus 2010 and cambio_ha is it over the area",
+        [k for k, d in registros.items() if not cambio_coherente(d)],
+    )
+    grupos: dict = {}
+    for k, d in registros.items():
+        if d["comparacion"] == "grupo":
+            grupos.setdefault(json.dumps(d, sort_keys=True), []).append(k)
+    inf.revisar(
+        "dwelling change: every group record is shared by exactly the sectors it counts",
+        [
+            claves[0] for texto, claves in grupos.items()
+            if len(claves) != json.loads(texto)["sectores_grupo"]
+            or len(claves) + json.loads(texto)["agebs_2010"] <= 2
+        ],
+    )
+
+
 def validar_calles(inf: Informe, calles: dict, por_clave: dict, c: dict, formato_js) -> None:
     inf.revisar(
         "streets: `formato` matches FORMATO_INDICE_CALLES in the pipeline and in app.js",
@@ -585,7 +658,7 @@ def main() -> int:
         "servicios_basicos.geojson", "indice_inversion.geojson", "cauces_inegi.geojson",
         "empleadores_denue.geojson", *CAPAS_RIESGO,
     ]
-    archivos = geojson + ["valor_catastral.json", "calles.json"]
+    archivos = geojson + ["valor_catastral.json", "crecimiento_vivienda.json", "calles.json"]
     # A file nobody listed here has no entry in DATOS.md §1.1 saying it may be published.
     inf.revisar(
         "data/ holds only the files listed here",
@@ -619,6 +692,7 @@ def main() -> int:
         constantes["ESTRATO_GRAN_EMPLEADOR"],
     )
     validar_catastro(inf, contenido["valor_catastral.json"], por_clave)
+    validar_crecimiento(inf, contenido["crecimiento_vivienda.json"], por_clave)
     validar_calles(
         inf,
         contenido["calles.json"],
