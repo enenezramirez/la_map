@@ -548,6 +548,11 @@ body {
     text-align: center;
 }
 
+.panel-footer-nota {
+    margin-top: 8px;
+    font-family: var(--tz-sans);
+}
+
 /* Right detail sidebar */
 #details-sidebar {
     position: fixed;

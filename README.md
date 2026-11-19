@@ -64,6 +64,7 @@ It checks the files in `data/` against the rules the site relies on, and exits w
 - Coordinates fall inside the metropolitan area and keep the precision `exportar_geojson` writes.
 - The constants shared between `scripts/process_data.py` and `app.js` agree.
 - The layers stay within the 5 MB budget, and no text carries markup.
+- `data/` holds only the files the site serves, each with its terms of use recorded in [DATOS.md](DATOS.md) §1.1.
 
 Run it after regenerating `data/` and before committing the result.
 
@@ -111,7 +112,6 @@ data/
   riesgo_inundacion.geojson      Pluvial flood-risk layer (IMPLAN)
   riesgo_deslizamientos.geojson  Landslide-risk layer (IMPLAN)
   riesgo_quimico.geojson         Chemical-technological risk layer (IMPLAN)
-  riesgo_inundacion.png          ANRI severity raster (backup) + its _meta.json
   calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
   valor_catastral.json           Cadastral land value per AGEB (informational, not in the index)
   cauces_inegi.geojson           Main stream courses, INEGI 1:50 000 (context, not a risk layer)
@@ -128,7 +128,8 @@ All are official, publicly accessible sources. The complete provenance —publis
 - [INEGI — Censo de Población y Vivienda 2020](https://www.inegi.org.mx/programas/ccpv/2020/) (basic services per AGEB)
 - [INEGI — DENUE 05_2026](https://www.inegi.org.mx/app/mapa/denue/default.aspx) (schools, healthcare, supermarkets)
 - [IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024](https://implansaltillo.mx/perfil/) (pluvial flood, translational landslide and chemical-technological risk)
-- [CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI)](https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer) (severity raster, Tr = 100 years; kept as an IMPLAN backup)
+- Tesorería Municipal de Saltillo — Tablas de Valores de Suelo y Construcción 2026 (cadastral land value per colonia, informational)
+- [CONAGUA — Atlas Nacional de Riesgo por Inundación (ANRI)](https://rmgir.proyectomesoamerica.org/server/rest/services/ANRI/RegionNoreste_ANRI/MapServer) (severity raster, Tr = 100 years; an IMPLAN backup kept in `raw_data/`, not published)
 - [INEGI — Red Hidrográfica escala 1:50 000, edición 2.0](https://www.inegi.org.mx/temas/hidrografia/) (main stream courses, as context only)
 
 ## Project status
