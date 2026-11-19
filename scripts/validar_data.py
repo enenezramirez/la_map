@@ -40,6 +40,12 @@ CAMPOS_INVERSION = {
     "CVEGEO", "NOM_MUN", "COLONIA", "SERVICIOS_INDEX", "SCORE_ESCUELA",
     "SCORE_SALUD", "SCORE_SUPERMERCADO", "COMERCIOS_INDEX", "RIESGO_INDEX",
     "RIESGO_EVALUADO", "INVERSION_INDEX", "MOTIVO_SIN_DATO",
+    "DESLIZAMIENTO_NIVEL", "DESLIZAMIENTO_PCT", "QUIMICO_NIVEL", "QUIMICO_PCT",
+}
+# Field prefix -> the pipeline constant that lists the levels its layer publishes.
+EXPOSICION_INFORMATIVA = {
+    "DESLIZAMIENTO": "NIVELES_ELEVADOS",
+    "QUIMICO": "NIVELES_ELEVADOS_QUIMICO",
 }
 CAMPOS_RIESGO = {"INTENSIDAD", "PUNTAJE", "TITULO", "FENOMENO", "FUENTE", "FECHA"}
 CAMPOS_CAUCES = {"ORDEN", "CONDICION", "ANIO_CAPTURA", "FUENTE", "FECHA"}
@@ -257,6 +263,29 @@ def validar_agebs(inf: Informe, servicios: list, inversion: list, c: dict) -> di
             if p.get("NOM_MUN") != MUNICIPIO_CON_ATLAS and p.get("RIESGO_EVALUADO") is not False
         ],
     )
+
+    for prefijo, constante in EXPOSICION_INFORMATIVA.items():
+        nivel, pct = f"{prefijo}_NIVEL", f"{prefijo}_PCT"
+        validos = {"Ninguno", *c[constante]}
+        inf.revisar(
+            f"investment: {nivel} is null when not assessed, else Ninguno or a published level",
+            [
+                p["CVEGEO"]
+                for p in inversion
+                if (p.get(nivel) is None) != (p.get("RIESGO_EVALUADO") is not True)
+                or (p.get(nivel) is not None and p.get(nivel) not in validos)
+            ],
+        )
+        inf.revisar(
+            f"investment: {pct} is null when not assessed, else 0-100, and 0 exactly at Ninguno",
+            [
+                p["CVEGEO"]
+                for p in inversion
+                if (p.get(pct) is None) != (p.get(nivel) is None)
+                or (p.get(pct) is not None and not es_porcentaje(p.get(pct)))
+                or (es_numero(p.get(pct)) and (p[pct] == 0) != (p.get(nivel) == "Ninguno"))
+            ],
+        )
 
     def indice_esperado(p):
         if p.get("SERVICIOS_INDEX") is None or p.get("RIESGO_EVALUADO") is not True:

@@ -309,7 +309,8 @@ would say nothing anywhere.
 * **Format:** shapefile, 12,679 records, EPSG:6372.
 * **Fields:** `Titulo`, `Intensid_1`, `Detalle`, `Fenome`.
 * **Shapefile internal title:** `R05030_RIESGO_PRM_DESLIZAMIENTOS_TRASLACIONALES_TR2_MZ`.
-* **Use in the project:** layer `data/riesgo_deslizamientos.geojson`.
+* **Use in the project:** layer `data/riesgo_deslizamientos.geojson`, and the criteria-search
+  fields `DESLIZAMIENTO_NIVEL` / `DESLIZAMIENTO_PCT` (§3.9). It does not enter any index.
 
 > **On the dates of the two IMPLAN layers.** The files internally declare modification
 > 2025-02-27 and creation 2025-04-01/02, later than the portal's "2024" label. These are
@@ -333,7 +334,8 @@ industrial corridor (GM, Stellantis, GIS).
 * **Fields:** `Titulo` ("Riesgo Químico-Tecnológico"), `Intensid_1` (Muy Bajo→Alto; no
   "Muy alto"), `Detalle` ("Riesgo por almacenamiento de sustancias químicas peligrosas"),
   `Fenome` ("Químico-Tecnológico").
-* **Use in the project:** layer `data/riesgo_quimico.geojson`. **Informational only** (it
+* **Use in the project:** layer `data/riesgo_quimico.geojson`, and the criteria-search fields
+  `QUIMICO_NIVEL` / `QUIMICO_PCT` (§3.9). **Informational only** (it
   does not penalize the Investment Index; like landslides, only flooding penalizes).
 * **Its own threshold (Medium+High).** Unlike the other layers — which only drop "Muy
   bajo" — this one also drops **"Bajo"**: there that level covers 9,644 of 12,679 cells
@@ -1475,7 +1477,7 @@ network, no key. It filters on fields already published per AGEB:
 | Flood exposure | `RIESGO_INDEX`, `RIESGO_EVALUADO` | **90 sectors are not evaluated** (61 Ramos Arizpe, 28 Arteaga, 1 Saltillo) and carry `null`, not 0. A "no flood risk" filter that lets them through says something the data never said |
 | Schools / health / supermarket | `SCORE_ESCUELA`, `SCORE_SALUD`, `SCORE_SUPERMERCADO` | DENUE 05_2026; nearness, not quality |
 | Budget, as a proxy | `valor_catastral.json` | Fiscal reference value, not price, for 246 sectors — label it as that |
-| Landslide / chemical risk | none per AGEB today | Needs a pipeline step like `RIESGO_INDEX`, or stays out of the first version |
+| Landslide / chemical risk | none per AGEB today | Needs a pipeline step like `RIESGO_INDEX`, or stays out of the first version. Added 2026-11-14 (below). |
 
 The result would highlight and list the matching sectors, each with **why** it matched and the
 source and date of every value used, in native form controls (WCAG 2.2 AA).
@@ -1509,7 +1511,16 @@ adds no request. What it does with the traps in the table:
 * **Land value** is offered as "up to" each published figure, labelled a tax base.
 * **Not ranked.** Results are alphabetical; ordering them would read as a score this panel does
   not compute.
-* **Left out of the first version:** landslide and chemical risk, which have no per-AGEB field.
+* **Landslide and chemical risk, added 2026-11-14.** The pipeline now carries, per AGEB, the
+  highest published level that touches it (`DESLIZAMIENTO_NIVEL`, `QUIMICO_NIVEL`: `Ninguno` or a
+  level) and the share of the AGEB under any published zone (`…_PCT`). Both are null outside the
+  Atlas, like `RIESGO_INDEX`, and no index reads them. Each criterion offers "no marked zone" and
+  "no zone at the top published level". Of the 341 assessed sectors, 307 touch no landslide zone
+  and 331 no "Medio" one; 167 touch no chemical zone and 298 no "Alto" one. "Ninguno" means no
+  *published* zone: chemical "Bajo", 93% of the grid, is not published (§2.6). Any overlap counts,
+  as on the flood criterion, so a sliver also marks a sector: the smallest landslide overlap is
+  under 0.001% of its sector. The counts were checked against an independent Python count over
+  the published file, alone and combined with the flood criterion (102 sectors).
 
 ---
 
@@ -1520,7 +1531,7 @@ For each file served to the browser, its origin:
 | Layer in `data/` | Size | Derived from |
 |---|---|---|
 | `servicios_basicos.geojson` | ~627 KB | AGEB (§2.1) + Census 2020 (§2.2) |
-| `indice_inversion.geojson` | ~649 KB | §2.1 + §2.2 + DENUE (§2.3) + flood risk (§2.4) |
+| `indice_inversion.geojson` | ~541 KB | §2.1 + §2.2 + DENUE (§2.3) + flood risk (§2.4); landslide and chemical levels for the search only (§2.5, §2.6) |
 | `riesgo_inundacion.geojson` | ~1.0 MB | IMPLAN flooding (§2.4) |
 | `riesgo_deslizamientos.geojson` | ~164 KB | IMPLAN landslides (§2.5) |
 | `riesgo_quimico.geojson` | ~1.28 MB | IMPLAN chemical-technological (§2.6) |
