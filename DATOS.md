@@ -11,7 +11,7 @@ shapefiles' `*.shp.xml`), not from memory. Download dates come from the timestam
 folders under `raw_data/`. When a value could not be verified, that is stated explicitly
 instead of estimating it.
 
-**Last updated:** 2026-11-14
+**Last updated:** 2026-11-19
 
 ---
 
@@ -37,6 +37,7 @@ instead of estimating it.
 | 16 | Red Hidrográfica escala 1:50 000, ed. 2.0 (subbasin RH24Be) | INEGI | 2010 (lines captured 1998–2008) | 2026-08-17 | In use, as context (§2.9) |
 | 17 | Mapa de Áreas Prioritarias de Protección Contra Incendios Forestales, Coahuila (Áreas Elegibles ROP 2025) | CONAFOR | 2025 | 2026-11-07 and 2026-11-08 (WFS extracts, not kept) | Evaluated, not published (§3.3) |
 | 18 | Concentrado Nacional de Polígonos de Incendios Forestales 2021–2024 | CONAFOR | 2021–2024, annual | 2026-11-07 (WFS extract, not kept) | Evaluated, not published (§3.3) |
+| 19 | Rutas, paraderos and rutas alimentadoras of the *Aquí Vamos* system (3 layers) | IMMUS Saltillo, served by the IMPLAN portal | 2026 (files dated 2026-03-24 and 2026-05-21) | 2026-11-19 | Evaluated, not published (§3.11) |
 
 ### 1.1 Terms of use by source
 
@@ -54,6 +55,7 @@ says so rather than inferring a permission.
 | **OpenStreetMap** (inside the CARTO tiles) | Basemap tiles | ODbL (<https://www.openstreetmap.org/copyright>) and the OSMF attribution guidelines | Allowed | Allowed, under ODbL share-alike for derived databases. Traza derives none: it only displays the tiles. | Credit to "OpenStreetMap" ("© OpenStreetMap contributors" is acceptable) and a way to reach the license, usually a link to `/copyright`. On an interactive map it goes in a corner, legible and visible without interaction. | Satisfied by the same attribution control, bottom-right and always shown. It is 12 px `#333` on 80% white, which gives at least 7.9:1 even over a black tile (computed, SC 1.4.3). |
 
 **Sources evaluated but not published.** CONAFOR's two fire layers state no license (§3.3).
+The IMMUS transit layers are served from the same IMPLAN page, under the same lack of a license (§3.11).
 AlphaEarth is CC BY 4.0 with a fixed attribution string (§3.6).
 
 **Software shipped with the site.** Leaflet 1.9.4 is BSD 2-Clause
@@ -1570,6 +1572,56 @@ the name, activity, SCIAN code, size band, municipality and settlement the DENUE
 nothing else; phone, e-mail and legal name are left out. The legend and the card both say the size
 is a band and that the layer rates no sector. The DENUE is under INEGI's free-use terms (§1.1).
 
+### 3.11 Public transport from the IMMUS — evaluated 2026-11-19; not published
+
+The backlog asked whether the IMMUS 2026 layers on the IMPLAN portal
+(<https://implansaltillo.mx/perfil/>, rows "Rutas aquí vamos gratis", "Paraderos aquí vamos
+gratis" and "Rutas de transporte público alimentadoras") could support a context layer and a
+criterion for nearness to a stop. Measured with `scripts/immus/medir_transporte.py` (archived,
+not pipeline). The three zips (`ZIP/RUTAS AQUI VAMOS.zip`, `ZIP/PARADAS AQUI VAMOS.zip`,
+`ZIP/ALIMENTADORAS.zip`) were downloaded on 2026-11-19; the server's `Last-Modified` is
+2026-05-27 for all three, and the files inside are dated 2026-03-24 (routes, stops) and
+2026-05-21 (feeders). All are EPSG:4326 shapefiles with no metadata beyond an empty QGIS `.qmd`.
+
+**What the layers hold:**
+* **Trunk routes:** 4 lines of 16–22 km. They are the two corridors of the free *Aquí Vamos
+  Gratis* system, Norte–Sur and Oriente–Poniente, one line per direction.
+* **Stops:** 149 records, but 4 of them are not stops: each trunk has one record that carries
+  only its name and a no-data point (-1.8e308). That leaves 145 stops at 140 distinct
+  positions, because 5 downtown stops are shared by two trunks. All 145 fall inside
+  Saltillo's sectors, in 75 of them.
+* **Feeders:** RS-714 and RS-716, one line per direction, with endpoints and timetables but
+  **no stops**. The route code sits in `CODIGO` on three lines and in `Código` on the fourth.
+
+**What a distance criterion would show.** From each sector's centroid to the nearest stop, in a
+straight line, the way §2.3 measures amenities. Population shares use `POBTOT` (§2.2).
+
+| Municipality | Sectors | Median | Within 0.5 km | Within 1 km | Within 2 km | Population within 1 km |
+|---|---|---|---|---|---|---|
+| Saltillo | 342 | 1.40 km | 72 | 134 | 226 | 44% |
+| Ramos Arizpe | 61 | 5.70 km | 0 | 0 | 1 | 0% |
+| Arteaga | 28 | 5.32 km | 0 | 0 | 1 | 0% |
+
+To the nearest trunk *or feeder line* instead of a stop, 230 of Saltillo's sectors are within
+1 km (median 0.66 km), and 150 sectors are crossed by a line.
+
+**Verdict: not published, by the user's decision, for three reasons.**
+1. **It is not the transit network.** According to a press report (Vanguardia, 2026-05-11),
+   23 routes operate in Saltillo, counting the two feeders and the free trunks. The portal
+   publishes 6 of them. The other 17 have no open layer, so a nearness criterion would mark
+   sectors served by an ordinary bus as unserved, and a context layer would look like the whole
+   network to anyone who did not read its legend.
+2. **It may change soon.** The same report says the *Aquí Vamos Gratis* service contract ends
+   in December 2026 and will be tendered again, and a new route was planned.
+3. **Feeders cannot be measured to where people board.** They have no stops, so only the
+   distance to the line is available.
+
+The IMMUS layers state no license, like every other layer on that portal (§1.1). Ramos Arizpe
+and Arteaga have no stop or route in these layers at all.
+
+**Worth revisiting** if the IMMUS or the municipality publishes every route with its stops (for
+example as GTFS), or after the December 2026 tender settles the network.
+
 ---
 
 ## 4. Traceability of the published layers
@@ -1703,3 +1755,6 @@ dates in §2.5, and the cadastral PDF is 13,956,955 bytes, as in §2.8.
     Done 2026-11-14.
 * **~~Large employers as a context layer (§3.10).~~** Published 2026-11-14, by the user's
   decision.
+* **Public transport (§3.11):** the IMMUS layers cover only the free trunk system and two
+  feeders, 6 of the 23 routes reported in May 2026. Evaluated 2026-11-19 and not published.
+  Revisit if every route is published with its stops, or after the December 2026 tender.
