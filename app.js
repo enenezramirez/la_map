@@ -316,7 +316,8 @@ const NOMBRE_CORTO_CAPA = {
     inversion: 'Inversión',
     inundacion: 'Inundación',
     deslizamientos: 'Deslizamientos',
-    quimico: 'Riesgo Químico'
+    quimico: 'Riesgo Químico',
+    crecimiento: 'Viviendas 2010–2020'
 };
 
 // What each risk layer measures and which levels it leaves out. Only
@@ -692,6 +693,8 @@ const LEYENDAS = {
     // Replaced by cargarCapaCatastro once the lookup arrives, since its class
     // counts are only known then.
     catastro: () => '<p class="empty-legend">Cargando…</p>',
+    // Same: replaced by cargarCapaCrecimiento once its breaks are computed.
+    crecimiento: () => '<p class="empty-legend">Cargando…</p>',
     // Same: replaced by cargarCapaCauces with the orders and years it found.
     cauces: () => '<p class="empty-legend">Cargando…</p>',
     empleadores: () => '<p class="empty-legend">Cargando…</p>'
@@ -1264,6 +1267,205 @@ function cargarCapaCatastro(checkbox) {
         } else {
             map.removeLayer(capa);
             marcarCapaInactiva('catastro');
+        }
+    });
+}
+
+// --- Dwelling change between Censuses (INEGI 2010 and 2020) ----------
+// Computed by Traza from two INEGI Censuses and outside every index. Like the
+// cadastral layer it is a lookup keyed by AGEB, drawn on the services polygons.
+// Where AGEB limits changed between Censuses the figures belong to the group of
+// sectors that share territory, so the map colors the change PER HECTARE: every
+// sector of a group can carry it without the group total counting twice.
+
+// Blue = CHANGE OVER TIME, a family of its own. Measured at fillOpacity 0.65: the
+// white border is 3.27:1 over the lightest step on the dark basemap and #1a1a1a is
+// 4.69:1 over the darkest on the light one (SC 1.4.11). Luminance falls step by step
+// (0.66 to 0.07), so it reads in grayscale and with deuteranopia.
+const RAMPA_CRECIMIENTO = ['#c5d6f0', '#8bafe4', '#5a8ed6', '#3a6bb8', '#284a80'];
+// A sector with no 2010 urban AGEB has no figure to compare: not a zero, not a class.
+// It gets a faint fill and a dashed border; the swatch shows that fill over the panel.
+const ESTILO_URBANIZADA = { fill: '#5a8ed6', opacidad: 0.2, muestra: '#1b2636', guiones: '5 4' };
+let ESCALONES_CRECIMIENTO = [];
+let crecimientoMeta = null;
+const colorCrecimiento = crearFuncionColor(() => ESCALONES_CRECIMIENTO);
+
+const conSigno = n => (n > 0 ? '+' : '') + formatoEntero(n);
+
+// Losses are an absolute class, decided by `cambio` itself: a quantile would mix them
+// with sectors that grew, and a loss of one dwelling over a large sector rounds to 0.00/ha.
+function escalonesCrecimiento(registros) {
+    const escalones = escalonesPorCuantiles(
+        registros.filter(d => d.cambio >= 0).map(d => d.cambio_ha), RAMPA_CRECIMIENTO.slice(1));
+    escalones.push({
+        minimo: -Infinity, absoluto: true, color: RAMPA_CRECIMIENTO[0],
+        conteo: registros.filter(d => d.cambio < 0).length, etiqueta: 'Perdió viviendas'
+    });
+    return escalones;
+}
+
+function htmlLeyendaCrecimiento(urbanizadas, sinDato) {
+    if (ESCALONES_CRECIMIENTO.length === 0) return '<p class="empty-legend">Cargando…</p>';
+    const filas = ESCALONES_CRECIMIENTO.map(e => `
+        <div class="legend-row">
+            <span class="legend-swatch" data-swatch="${e.color}"></span>
+            <span>${esc(e.etiqueta)}</span>
+        </div>
+    `).join('');
+    const filaUrbanizada = urbanizadas > 0 ? `
+        <div class="legend-row">
+            <span class="legend-swatch legend-discontinua" data-swatch="${ESTILO_URBANIZADA.muestra}"></span>
+            <span>Urbanizado después de 2010 (${urbanizadas})</span>
+        </div>
+    ` : '';
+    const filaSinDato = sinDato > 0 ? `
+        <div class="legend-row">
+            <span class="legend-swatch" data-swatch="${COLOR_SIN_DATO}"></span>
+            <span>Sin datos (${sinDato})</span>
+        </div>
+    ` : '';
+    const fuente = crecimientoMeta
+        ? `<p class="legend-source">Cortes por cuantiles, salvo «Perdió viviendas». Fuente: ${esc(crecimientoMeta.fuente)}.
+           Cálculo de Traza; no entra en ningún índice.</p>`
+        : '';
+    return `<p class="legend-title">Viviendas nuevas por hectárea, 2010–2020</p>${filas}${filaUrbanizada}${filaSinDato}${fuente}
+        <details class="legend-help">
+            <summary>¿Qué significa el color de ${esc(NOMBRE_CORTO_CAPA.crecimiento)}?</summary>
+            <div class="legend-help-body">
+                <p><strong>Qué mide:</strong> cuántas viviendas ganó o perdió el sector entre el Censo 2010 y
+                   el 2020, dividido entre su superficie. Cuenta todas las viviendas, habitadas o no.</p>
+                <p><strong>Por qué por hectárea:</strong> así un sector grande de la periferia no sale arriba
+                   solo por su tamaño. La ficha muestra también las cifras absolutas.</p>
+                <p><strong>Donde cambiaron los límites:</strong> el INEGI dividió o redibujó algunas AGEB entre
+                   un censo y otro. Esos sectores se comparan junto con los vecinos con los que comparten
+                   territorio, y la ficha lo dice.</p>
+                <p><strong>Borde discontinuo:</strong> sectores que en 2010 no eran AGEB urbana. Su cifra
+                   de 2010 no existe en el censo urbano, así que no se toma como cero.</p>
+                <p><strong>El color es relativo:</strong> los cortes son cuantiles entre los sectores que
+                   no perdieron viviendas. Más viviendas no es mejor ni peor; describe cómo cambió el lugar.</p>
+                ${sinDato > 0 ? `<p><strong>Gris:</strong> ${sinDato} ${sinDato === 1 ? 'sector' : 'sectores'} sin
+                   registro en uno de los dos censos. No es un cero.</p>` : ''}
+            </div>
+        </details>`;
+}
+
+function mostrarDetalleCrecimiento(props) {
+    const d = props.CRECIMIENTO;
+    document.getElementById('sector-title').textContent = props.COLONIA || 'Sector sin colonia';
+
+    let cuerpo;
+    if (!d) {
+        cuerpo = '<p class="detail-note">Este sector no tiene cifras de vivienda publicadas.</p>';
+    } else {
+        const pct = d.cambio !== null && d.viv_2010 > 0
+            ? ` (${d.cambio > 0 ? '+' : ''}${Math.round(100 * d.cambio / d.viv_2010)}%)` : '';
+        const cambio = d.cambio === null ? SIN_VALOR : conSigno(d.cambio) + pct;
+        const porHa = d.cambio_ha === null ? SIN_VALOR
+            : `${d.cambio_ha > 0 ? '+' : ''}${d.cambio_ha.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+        let nota = '';
+        if (d.comparacion === 'nueva') {
+            nota = `<p class="detail-note"><strong>Urbanizado después de 2010.</strong> En el Censo 2010 este
+                    sector no era AGEB urbana, así que no hay una cifra de 2010 con qué compararlo.</p>`;
+        } else if (d.comparacion === 'grupo') {
+            nota = `<p class="detail-note"><strong>Cifras de un grupo.</strong> El INEGI cambió los límites de
+                    esta zona entre censos: ${d.agebs_2010} AGEB de 2010
+                    ${d.agebs_2010 === 1 ? 'corresponde' : 'corresponden'} a ${d.sectores_grupo} sectores de 2020.
+                    Las cifras son del grupo completo (${formatoEntero(d.ha)} ha), no de este sector solo.</p>`;
+        }
+        if (d.cambio === null && d.comparacion !== 'nueva') {
+            nota += `<p class="detail-note">Falta el registro de un sector en uno de los dos censos, así que
+                     el cambio no se calcula. No es un cero.</p>`;
+        }
+        cuerpo = `
+            <div class="detail-row"><span>Viviendas 2010</span><strong>${esc(formatoEntero(d.viv_2010))}</strong></div>
+            <div class="detail-row"><span>Viviendas 2020</span><strong>${esc(formatoEntero(d.viv_2020))}</strong></div>
+            <div class="detail-row"><span>Cambio</span><strong>${esc(cambio)}</strong></div>
+            <div class="detail-row"><span>Cambio por hectárea</span><strong>${esc(porHa)}</strong></div>
+            <div class="detail-row"><span>Deshabitadas 2010 / 2020</span><strong>${esc(formatoEntero(d.des_2010))} / ${esc(formatoEntero(d.des_2020))}</strong></div>
+            ${nota}
+            <p class="detail-note">Viviendas totales, habitadas o no. Describe cómo cambió el lugar; no entra en
+               ningún índice.</p>
+        `;
+    }
+    document.getElementById('sector-info').innerHTML = `
+        ${cuerpo}
+        <p class="detail-source">Fuente: ${esc(crecimientoMeta ? crecimientoMeta.fuente : 'INEGI')}
+           · Cálculo de Traza.</p>
+    `;
+    abrirFicha();
+}
+
+function estiloCrecimiento(feature) {
+    const d = feature.properties.CRECIMIENTO;
+    if (d && d.comparacion === 'nueva') {
+        return {
+            fillColor: ESTILO_URBANIZADA.fill, fillOpacity: ESTILO_URBANIZADA.opacidad,
+            color: colorBorde(), opacity: 1, dashArray: ESTILO_URBANIZADA.guiones,
+            // The dashes need a line to show on, even at the zooms where sectors lose theirs.
+            weight: Math.max(pesoBorde(), 1.5)
+        };
+    }
+    const valor = d ? d.cambio_ha : null;
+    const perdio = d && d.cambio !== null && d.cambio < 0;
+    return {
+        fillColor: perdio ? RAMPA_CRECIMIENTO[0] : colorCrecimiento(valor), weight: pesoBorde(), color: colorBorde(), opacity: 1,
+        dashArray: null, fillOpacity: sinDato(valor) ? 0.35 : 0.65
+    };
+}
+
+function cargarCapaCrecimiento(checkbox) {
+    let capa = null;
+    registrarClaveDeCapa('crecimiento', checkbox);
+
+    Promise.all([
+        fetch('data/crecimiento_vivienda.json', { cache: 'no-cache' }).then(r => r.json()),
+        agebsListos
+    ]).then(([crecimiento, geojson]) => {
+        crecimientoMeta = { fuente: crecimiento.fuente, edicion: crecimiento.edicion };
+
+        let urbanizadas = 0;
+        let nSinDato = 0;
+        const features = geojson.features.map(f => {
+            const d = Object.hasOwn(crecimiento.sectores, f.properties.CVEGEO)
+                ? crecimiento.sectores[f.properties.CVEGEO] : null;
+            if (d && d.comparacion === 'nueva') urbanizadas++;
+            else if (!d || sinDato(d.cambio_ha)) nSinDato++;
+            return { ...f, properties: { ...f.properties, CRECIMIENTO: d } };
+        });
+        ESCALONES_CRECIMIENTO = escalonesCrecimiento(
+            features.map(f => f.properties.CRECIMIENTO).filter(d => d && d.cambio !== null));
+        LEYENDAS.crecimiento = () => htmlLeyendaCrecimiento(urbanizadas, nSinDato);
+
+        capa = L.geoJSON({ type: 'FeatureCollection', features }, {
+            style: estiloCrecimiento,
+            onEachFeature: (feature, layer) => {
+                layer.on({
+                    mouseover: e => e.target.setStyle({ weight: 2, color: colorBorde(), fillOpacity: 0.8 }),
+                    mouseout: e => capa.resetStyle(e.target),
+                    click: e => {
+                        resaltarGeometrias([e.target.feature.geometry]);
+                        mostrarDetalleCrecimiento(e.target.feature.properties);
+                    }
+                });
+            }
+        });
+
+        if (checkbox.checked) {
+            capa.addTo(map);
+            marcarCapaActiva('crecimiento');
+        }
+        registrarCapaEnVista(checkbox, capa);
+    }).catch(error => console.error('Error loading dwelling change:', error));
+
+    checkbox.addEventListener('change', () => {
+        if (!capa) return;
+        if (checkbox.checked) {
+            capa.addTo(map);
+            capa.bringToFront();
+            marcarCapaActiva('crecimiento');
+        } else {
+            map.removeLayer(capa);
+            marcarCapaInactiva('crecimiento');
         }
     });
 }
@@ -2385,6 +2587,9 @@ cargarCapaRiesgo({
 // it does not enter the Investment Index. Borrows the AGEB polygons from the
 // services layer, so it declares no file of its own.
 cargarCapaCatastro(document.getElementById('layer-cadastral'));
+
+// Dwelling change 2010-2020: computed by Traza, outside every index.
+cargarCapaCrecimiento(document.getElementById('layer-housing-growth'));
 
 // Stream courses (INEGI, 1:50 000). Context only: no index reads it.
 cargarCapaCauces(document.getElementById('layer-streams'));

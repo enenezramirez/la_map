@@ -16,6 +16,7 @@ Covers **431 AGEBs across three municipalities**: Saltillo, Ramos Arizpe and Art
 - **Chemical-Technological Risk** — zones exposed to the storage of hazardous chemical substances, relevant along the Saltillo–Ramos Arizpe industrial corridor (2024 Risk Atlas, IMPLAN Saltillo).
 - **Real-Estate Investment Index** — combines service coverage with proximity to urban amenities (schools, healthcare, supermarkets from DENUE) and penalizes flood exposure.
 - **Mapped Stream Courses** — the main arroyos (Strahler order 5 and up) as INEGI captured them in 1998–2008, before much of the current urban growth. Context only: not a risk classification and not part of any index.
+- **Housing Growth** — dwellings gained or lost per hectare between the 2010 and 2020 Censuses (INEGI). Where AGEB limits changed between Censuses, sectors are compared together with the ones they share territory with; sectors that were not urban AGEBs in 2010 are marked apart. Computed by Traza; no index reads it.
 - **Large Employers** — the 247 establishments the DENUE (INEGI, 05_2026) places in its top size band, 251 people or more, as points. Context only: the size is a band, not a headcount, and no index reads it.
 
 Click any colonia or risk zone on the map to see its detail card, with the source and cutoff date of the data you are viewing.
@@ -126,6 +127,7 @@ data/
   riesgo_quimico.geojson         Chemical-technological risk layer (IMPLAN)
   calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
   valor_catastral.json           Cadastral land value per AGEB (informational, not in the index)
+  crecimiento_vivienda.json      Dwellings 2010 and 2020 per AGEB (informational, not in any index)
   cauces_inegi.geojson           Main stream courses, INEGI 1:50 000 (context, not a risk layer)
   empleadores_denue.geojson      Establishments with 251+ people, DENUE (context, not in any index)
 DATOS.md             Data log: provenance and terms of use of each dataset
@@ -140,6 +142,7 @@ All are official, publicly accessible sources. The complete provenance —publis
 
 - [INEGI — Información vectorial de localidades amanzanadas y números exteriores 2023](https://www.inegi.org.mx/app/mapas/) (AGEB polygons and colonia name)
 - [INEGI — Censo de Población y Vivienda 2020](https://www.inegi.org.mx/programas/ccpv/2020/) (basic services per AGEB)
+- [INEGI — Censo de Población y Vivienda 2010](https://www.inegi.org.mx/programas/ccpv/2010/) and [Marco Geoestadístico 2010 v5.0](https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825292812) (dwellings per AGEB in 2010, to measure housing growth)
 - [INEGI — DENUE 05_2026](https://www.inegi.org.mx/app/mapa/denue/default.aspx) (schools, healthcare, supermarkets)
 - [IMPLAN Saltillo — CARTO SALTILLO, Atlas de Riesgos 2024](https://implansaltillo.mx/perfil/) (pluvial flood, translational landslide and chemical-technological risk)
 - Tesorería Municipal de Saltillo — Tablas de Valores de Suelo y Construcción 2026 (cadastral land value per colonia, informational)

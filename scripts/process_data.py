@@ -115,6 +115,25 @@ def denue_csv(entidad: str) -> Path:
     """The DENUE CSV for one state, by its two-digit INEGI code."""
     return RAW_DATA / f"denue_{entidad}_csv" / "conjunto_de_datos" / f"denue_inegi_{entidad}_.csv"
 
+
+# Dwelling change between the 2010 and 2020 Censuses (DATOS.md §2.10). The 2010
+# AGEB polygons are national (Marco Geoestadístico 2010 v5.0); the table is per state.
+CENSO_2010_DIR = RAW_DATA / "inegi_censo2010"
+AGEB_2010_SHP = CENSO_2010_DIR / "mgau2010v5_0" / "AGEB_urb_2010_5.shp"
+
+
+def censo_2010_dbf(entidad: str) -> Path:
+    """The 2010 Census urban-AGEB table (Principales resultados) for one state."""
+    return CENSO_2010_DIR / "resageburb" / f"RESAGEBURB_{entidad}DBF10.dbf"
+
+
+CRECIMIENTO_JSON = DATA_DIR / "crecimiento_vivienda.json"
+CRECIMIENTO_FUENTE = "INEGI — Censos de Población y Vivienda 2010 y 2020"
+CRECIMIENTO_EDICION = "2010–2020"
+# An overlap smaller than this share of the smaller polygon is a digitising sliver
+# between the 2007 and 2023 cartography, not one AGEB taking part of another.
+TOLERANCIA_TRASLAPE_CENSOS = 0.02
+
 # Urban amenity categories for the "Comercios" component of the Investment
 # Index. "escuela" and "salud" are identified by their SCIAN
 # sector (the first two digits of codigo_act); "supermercado" has no sector of
@@ -1048,6 +1067,157 @@ def integrar_censo_a_ageb(
     return gdf_unido
 
 
+def viviendas_por_ageb(df: pd.DataFrame, claves_mun: set[str]) -> pd.DataFrame:
+    """
+    AGEB-level dwelling counts from a Census table (2010 DBF or 2020 CSV, same
+    layout). A masked value ("*", 1-2 dwellings) stays null: missing is not zero.
+    """
+    df = df[(df["MZA"] == "000") & (df["AGEB"] != "0000")].copy()
+    df["CVEGEO"] = df["ENTIDAD"] + df["MUN"] + df["LOC"] + df["AGEB"]
+    df = df[(df["ENTIDAD"] + df["MUN"]).isin(claves_mun)]
+    salida = pd.DataFrame(index=df["CVEGEO"].values)
+    for col in ["VIVTOT", "VIVPAR_DES"]:
+        salida[col] = pd.to_numeric(df[col].values, errors="coerce")
+    return salida
+
+
+def agrupar_agebs_entre_censos(a10: gpd.GeoDataFrame, a20: gpd.GeoDataFrame) -> pd.DataFrame:
+    """
+    Join the 2010 and 2020 AGEBs that share territory into connected groups.
+    A group with one AGEB from each Census compares directly; a split or a merge
+    makes a larger group, compared only as a whole; a 2020 AGEB that overlaps no
+    2010 urban AGEB was urbanised after 2010. Both frames must be in CRS_METRICO.
+    """
+    cruce = gpd.overlay(
+        a10[["CVEGEO", "geometry"]].rename(columns={"CVEGEO": "C10"}),
+        a20[["CVEGEO", "geometry"]].rename(columns={"CVEGEO": "C20"}),
+        how="intersection", keep_geom_type=True,
+    )
+    area10 = a10.set_index("CVEGEO").area
+    area20 = a20.set_index("CVEGEO").area
+    menor = np.minimum(cruce["C10"].map(area10).values, cruce["C20"].map(area20).values)
+    cruce = cruce[cruce.area.values / menor >= TOLERANCIA_TRASLAPE_CENSOS]
+
+    padre = {("10", c): ("10", c) for c in a10["CVEGEO"]}
+    padre.update({("20", c): ("20", c) for c in a20["CVEGEO"]})
+
+    def raiz(nodo):
+        while padre[nodo] != nodo:
+            padre[nodo] = padre[padre[nodo]]
+            nodo = padre[nodo]
+        return nodo
+
+    for c10, c20 in zip(cruce["C10"], cruce["C20"]):
+        padre[raiz(("10", c10))] = raiz(("20", c20))
+
+    numero: dict = {}
+    filas = [
+        {"grupo": numero.setdefault(raiz(nodo), len(numero)), "censo": nodo[0], "CVEGEO": nodo[1]}
+        for nodo in sorted(padre)
+    ]
+    return pd.DataFrame(filas)
+
+
+def calcular_crecimiento_vivienda(gdf_agebs: gpd.GeoDataFrame) -> dict:
+    """
+    Dwellings in 2010 and 2020 for each published sector, compared over groups
+    of AGEBs that share territory between the two Censuses (DATOS.md §2.10).
+    `cambio_ha` divides the change by the group's 2020 area, so every sector of
+    a group can carry it without the group total being counted more than once.
+    A sector urbanised after 2010 has no 2010 urban figure: it stays null.
+    """
+    if not AGEB_2010_SHP.exists():
+        print(f"  {AGEB_2010_SHP} not found, skipping the 2010-2020 comparison.")
+        return {}
+
+    por_entidad = municipios_por_entidad()
+    claves_mun = {ent + mun for ent, muns in por_entidad.items() for mun in muns}
+
+    a20 = gdf_agebs[["CVEGEO", "geometry"]].to_crs(CRS_METRICO)
+    a10 = gpd.read_file(AGEB_2010_SHP)
+    a10 = a10[a10["CVEGEO"].str[:5].isin(claves_mun)][["CVEGEO", "geometry"]].to_crs(CRS_METRICO)
+    a10["geometry"] = a10.geometry.make_valid()
+    a20["geometry"] = a20.geometry.make_valid()
+
+    v10 = pd.concat([
+        viviendas_por_ageb(gpd.read_file(censo_2010_dbf(ent), ignore_geometry=True).astype(str), claves_mun)
+        for ent in sorted(por_entidad)
+    ])
+    v20 = pd.concat([
+        viviendas_por_ageb(pd.read_csv(censo_csv(ent), dtype=str, low_memory=False), claves_mun)
+        for ent in sorted(por_entidad)
+    ])
+
+    grupos = agrupar_agebs_entre_censos(a10, a20)
+    hectareas20 = a20.set_index("CVEGEO").area / 10_000
+
+    def suma(valores: pd.Series) -> int | None:
+        return None if valores.isna().any() else int(valores.sum())
+
+    sectores = {}
+    for _, miembros in grupos.groupby("grupo"):
+        c10 = miembros.loc[miembros["censo"] == "10", "CVEGEO"].tolist()
+        c20 = miembros.loc[miembros["censo"] == "20", "CVEGEO"].tolist()
+        if not c20:
+            continue
+        if not c10:
+            comparacion = "nueva"
+        elif len(c10) == 1 and len(c20) == 1:
+            comparacion = "directa"
+        else:
+            comparacion = "grupo"
+        hectareas = float(hectareas20.loc[c20].sum())
+        viv20 = suma(v20["VIVTOT"].reindex(c20))
+        viv10 = suma(v10["VIVTOT"].reindex(c10)) if c10 else None
+        cambio = viv20 - viv10 if viv10 is not None and viv20 is not None else None
+        registro = {
+            "comparacion": comparacion,
+            "viv_2010": viv10,
+            "viv_2020": viv20,
+            "cambio": cambio,
+            "cambio_ha": round(cambio / hectareas, 2) if cambio is not None else None,
+            "des_2010": suma(v10["VIVPAR_DES"].reindex(c10)) if c10 else None,
+            "des_2020": suma(v20["VIVPAR_DES"].reindex(c20)),
+            "ha": round(hectareas, 1),
+        }
+        if comparacion == "grupo":
+            registro["sectores_grupo"] = len(c20)
+            registro["agebs_2010"] = len(c10)
+        for clave in c20:
+            sectores[clave] = registro
+
+    conteo = pd.Series([r["comparacion"] for r in sectores.values()]).value_counts().to_dict()
+    print(f"  Sectors by comparison: {conteo}")
+    return sectores
+
+
+def exportar_crecimiento_vivienda(sectores: dict) -> None:
+    """Write the 2010-2020 lookup to data/, keyed by AGEB, one sector per line (like the cadastral one)."""
+    if not sectores:
+        print("  No 2010-2020 comparison to export.")
+        return
+    compacto = {"ensure_ascii": False, "separators": (",", ":")}
+    cabecera = {
+        "fuente": CRECIMIENTO_FUENTE,
+        "edicion": CRECIMIENTO_EDICION,
+        "nota": ("Viviendas totales (VIVTOT) por AGEB urbana. Donde los límites cambiaron "
+                 "entre censos, las cifras son del grupo de sectores que comparten territorio."),
+    }
+    texto = (
+        json.dumps(cabecera, **compacto)[:-1]
+        + ',"sectores":{\n'
+        + ",\n".join(f"{json.dumps(clave, **compacto)}:{json.dumps(valor, **compacto)}"
+                     for clave, valor in sorted(sectores.items()))
+        + "\n}}"
+    )
+    if json.loads(texto)["sectores"] != sectores:
+        raise ValueError("The serialized 2010-2020 lookup does not match the source data.")
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CRECIMIENTO_JSON.write_text(texto, encoding="utf-8")
+    print(f"  Dwelling change exported: {CRECIMIENTO_JSON} "
+          f"({CRECIMIENTO_JSON.stat().st_size / 1024:.1f} KB, {len(sectores)} sectors)")
+
+
 def leer_denue() -> pd.DataFrame:
     """
     DENUE rows for the configured municipalities, one file per state, filtered
@@ -1656,6 +1826,9 @@ if __name__ == "__main__":
     catastro_valores, catastro_colonias = extraer_tablas_catastrales()
     exportar_valor_catastral(asignar_valor_catastral(
         gdf_ageb_servicios, catastro_valores, catastro_colonias))
+
+    print("\nComparing dwellings between the 2010 and 2020 Censuses...")
+    exportar_crecimiento_vivienda(calcular_crecimiento_vivienda(gdf_agebs))
 
     print("\nProcessing IMPLAN risk layers (CARTO SALTILLO, 2024 Atlas)...")
     # Kept unfiltered as well: the published layer drops "Muy bajo", but a cell

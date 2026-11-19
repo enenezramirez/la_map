@@ -43,7 +43,7 @@
     <!-- The ?v= is a cache buster: bump it whenever a stylesheet change is one the
          markup depends on. The dev server sends no validators, so browsers do
          not revalidate. -->
-    <link rel="stylesheet" href="styles.css?v=12">
+    <link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 
@@ -255,6 +255,20 @@
                 </div>
             </div>
 
+            <div class="layer-group" id="group-cambio" role="group" aria-labelledby="group-cambio-title">
+                <h3 class="layer-group-title" id="group-cambio-title">Cambio en el tiempo</h3>
+                <p class="layer-group-desc">Comparación entre censos del INEGI, calculada por este proyecto.</p>
+
+                <div class="layer-control">
+                    <label class="switch-container">
+                        <input type="checkbox" id="layer-housing-growth">
+                        <span class="slider"></span>
+                        <span class="layer-name">Crecimiento de Vivienda</span>
+                    </label>
+                    <p class="layer-desc">Viviendas ganadas o perdidas por hectárea entre el Censo 2010 y el 2020. No entra en ningún índice.</p>
+                </div>
+            </div>
+
             <div class="layer-group" id="group-contexto" role="group" aria-labelledby="group-contexto-title">
                 <h3 class="layer-group-title" id="group-contexto-title">Contexto</h3>
                 <p class="layer-group-desc">Dibujado tal cual; no clasifica riesgo.</p>
@@ -317,7 +331,8 @@
         <footer class="panel-footer">
             <p>FUENTES<br>
                INEGI · LOCALIDADES AMANZANADAS Y NÚMEROS EXTERIORES 2023<br>
-               INEGI · CENSO 2020 · DENUE 05_2026<br>
+               INEGI · CENSOS 2010 Y 2020 · DENUE 05_2026<br>
+               INEGI · MARCO GEOESTADÍSTICO 2010<br>
                INEGI · RED HIDROGRÁFICA 1:50 000<br>
                IMPLAN · ATLAS DE RIESGOS 2024<br>
                TESORERÍA MUNICIPAL DE SALTILLO · TABLAS DE VALORES 2026</p>
@@ -345,6 +360,6 @@
     <!-- App logic, in its own file so the CSP can withhold 'unsafe-inline'.
          Classic script, not type="module": it runs after Leaflet and after the
          markup above. The ?v= is a cache buster, like the one on styles.css. -->
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=21"></script>
 </body>
 </html>

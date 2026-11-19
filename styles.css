@@ -431,6 +431,11 @@ body {
 .legend-swatch.legend-line-fina { height: 5px; }
 .legend-swatch.legend-line-gruesa { height: 6.5px; }
 
+/* A sector urbanised after 2010 is drawn with a dashed border, and so is its swatch. */
+.legend-swatch.legend-discontinua {
+    border: 1.5px dashed #ffffff;
+}
+
 /* A point layer gets a round swatch, cased like the point on the map. */
 .legend-swatch.legend-punto {
     width: 11px;
