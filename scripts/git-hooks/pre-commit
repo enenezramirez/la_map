@@ -12,6 +12,10 @@
 set -u
 fail=0
 
+# Git hands hooks the committer's environment, and a GUI client or a non-login
+# shell on macOS often lacks Homebrew's bin, which would skip the scan below.
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+
 # Scratch files go in a fresh directory rather than fixed /tmp paths. With
 # fixed names, anyone else on the machine could pre-create /tmp/gr.out as a
 # symlink and have this hook overwrite whatever it points at — and gitleaks

@@ -1231,7 +1231,14 @@ def exportar_cauces(gdf_agebs: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         FUENTE=INEGI_CAUCES_FUENTE,
         FECHA=INEGI_CAUCES_EDICION,
     )[["ORDEN", "CONDICION", "ANIO_CAPTURA", "FUENTE", "FECHA", "geometry"]]
-    gdf = gdf.sort_values("ORDEN").reset_index(drop=True)
+    # A full sort key, so the file comes out in the same order on every platform:
+    # by ORDEN alone, ties kept whatever order the clip produced.
+    gdf = (
+        gdf.assign(_clave=gdf.geometry.to_wkt())
+        .sort_values(["ORDEN", "ANIO_CAPTURA", "_clave"], kind="stable")
+        .drop(columns="_clave")
+        .reset_index(drop=True)
+    )
 
     exportar_geojson(gdf, CAUCES_GEOJSON)
     km = gdf.to_crs(CRS_METRICO).length.sum() / 1000
