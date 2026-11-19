@@ -11,7 +11,7 @@ shapefiles' `*.shp.xml`), not from memory. Download dates come from the timestam
 folders under `raw_data/`. When a value could not be verified, that is stated explicitly
 instead of estimating it.
 
-**Last updated:** 2026-09-16
+**Last updated:** 2026-11-13
 
 ---
 
@@ -37,6 +37,40 @@ instead of estimating it.
 | 16 | Red Hidrográfica escala 1:50 000, ed. 2.0 (subbasin RH24Be) | INEGI | 2010 (lines captured 1998–2008) | 2026-08-17 | In use, as context (§2.9) |
 | 17 | Mapa de Áreas Prioritarias de Protección Contra Incendios Forestales, Coahuila (Áreas Elegibles ROP 2025) | CONAFOR | 2025 | 2026-11-07 and 2026-11-08 (WFS extracts, not kept) | Evaluated, not published (§3.3) |
 | 18 | Concentrado Nacional de Polígonos de Incendios Forestales 2021–2024 | CONAFOR | 2021–2024, annual | 2026-11-07 (WFS extract, not kept) | Evaluated, not published (§3.3) |
+
+### 1.1 Terms of use by source
+
+What each source published on 2026-11-13 lets this project do with what it serves. This is
+a reading of the published terms, not legal advice. Where a source states nothing, the table
+says so rather than inferring a permission.
+
+| Source | Used in | Terms that apply | Commercial use | Adapt and redistribute | Attribution it asks for | What Traza does today |
+|---|---|---|---|---|---|---|
+| **INEGI** | §2.1, §2.2, §2.3, §2.9 | *Términos de Libre Uso de la Información del INEGI* (<https://www.inegi.org.mx/inegi/terminos.html>). Undated; INEGI may change them at any time. | Allowed | Allowed: adapt, reorder, extract. Copies must keep their metadata. | "Fuente: INEGI, *product name*", plus the update date where applicable. The end user must be told about any analysis or transformation, and the use must not look like an official INEGI position. | The panel footer cites Censo 2020, DENUE 05_2026 and Red Hidrográfica 1:50 000, and the in-app help explains how each index is computed. **Gaps:** the footer omits *Información vectorial de localidades amanzanadas 2023* (the AGEB polygons, colonia names and street index), and nothing states that the indices are Traza's and not INEGI's. The footer heading, "FUENTES OFICIALES", could suggest the opposite. |
+| **IMPLAN Saltillo** | §2.4, §2.5, §2.6 | **No license.** On the download page (<https://implansaltillo.mx/perfil/>), under "Uso del Portal": "fines exclusivamente informativos y de apoyo a la planeación territorial". IMPLAN disclaims liability for misuse or out-of-context interpretation, and an "Aceptar y continuar" button asks for responsible use. The page footer reads "©2026 IMPLAN Saltillo - Todos los Derechos Reservados". No separate terms page is linked. | Not addressed | Not addressed | None asked | Every risk feature carries `FUENTE` and `FECHA`, the card shows them, and the panel says the levels are "Clasificación del IMPLAN, sin recalcular". **Open:** three published layers, and the flood penalty inside the Investment Index, are derived from IMPLAN data that is redistributed with no written permission. Only IMPLAN can settle this (the written consultation in the backlog). |
+| **Tesorería Municipal de Saltillo** | §2.8 | **No license** on saltillo.gob.mx: the footer reads "Copyright © 2026 - Gobierno Municipal de Saltillo", and the transparency portal links only a privacy notice. The tables are approved by the state Congress (§2.8). Under Ley Federal del Derecho de Autor art. 14 fr. VIII, legislative, regulatory and administrative texts are not protected by copyright, and a publication of one must follow the official text. | No restriction, if art. 14 fr. VIII applies | Same | None asked | The card names the Tesorería, the 2026 edition and the warning that a cadastral value is a tax base, not a market price. Values are copied as published; only class labels are normalised (§2.8). **Gap:** the panel footer does not list this source. |
+| **CONAGUA — ANRI** | §2.7 | **No license found.** The ArcGIS service returned HTTP 500 on 2026-11-13, and gob.mx/conagua shows no terms for the ANRI. The general gob.mx terms restrict material on gob.mx to personal, non-commercial use, but the raster is not served from gob.mx, so whether they apply is not established. | Unknown | Unknown | Unknown | The app does not display it, but `data/riesgo_inundacion.png` and its `_meta.json` are published with the site. Since nothing reads them, dropping them from `data/` would end the question. |
+| **CARTO** (basemap, §4) | Basemap tiles | <https://carto.com/basemaps/> and `/basemaps/apikey`: a key is required. A free key covers up to 5M requests a month for non-commercial use, or up to 1M a month for a business. Paid plans start at 500 USD a month for up to 10M. Keys registered before 2026-09-23 keep working as they are until 2026-11-30. Requesting a key accepts the *CARTO Basemaps Terms* (version of 2026-09-29), which define commercial use; that document was not read. The styles' design is CC BY 4.0 and their code BSD 3-Clause. **Contradiction:** the `LICENSE.md` of `CartoDB/basemap-styles` (copyright 2018) restricts hosted tiles to enterprise customers and non-profit grants. The carto.com pages are newer, but this should be confirmed with CARTO before any commercial launch. | Free up to 1M requests a month, paid above | The styles only | "© OpenStreetMap contributors, © CARTO", both linked, visible on the map, not hidden, faded or behind a click | The Leaflet attribution control shows both, linked to <https://www.openstreetmap.org/copyright> and <https://carto.com/attributions>. No key ships with the site: a visitor who pastes one uses their own quota under CARTO's terms. |
+| **OpenStreetMap** (inside the CARTO tiles) | Basemap tiles | ODbL (<https://www.openstreetmap.org/copyright>) and the OSMF attribution guidelines | Allowed | Allowed, under ODbL share-alike for derived databases. Traza derives none: it only displays the tiles. | Credit to "OpenStreetMap" ("© OpenStreetMap contributors" is acceptable) and a way to reach the license, usually a link to `/copyright`. On an interactive map it goes in a corner, legible and visible without interaction. | Satisfied by the same attribution control, bottom-right and always shown. It is 12 px `#333` on 80% white, which gives at least 7.9:1 even over a black tile (computed, SC 1.4.3). |
+
+**Sources evaluated but not published.** CONAFOR's two fire layers state no license (§3.3).
+AlphaEarth is CC BY 4.0 with a fixed attribution string (§3.6).
+
+**Software shipped with the site.** Leaflet 1.9.4 is BSD 2-Clause
+(`assets/vendor/leaflet-1.9.4/LICENSE`). Inter and IBM Plex Mono are SIL Open Font License 1.1
+(`assets/fonts/OFL-*.txt`). Both licenses allow redistribution and require keeping their notices.
+
+**What this means for the repository's license.** A license on the repo can only cover
+Traza's own code and text. The files in `data/` stay under the terms of the sources they
+derive from, so a `LICENSE` should say that explicitly rather than appear to relicense
+INEGI, IMPLAN or Tesorería data.
+
+**Not verified.** The text of art. 14 fr. VIII was read in a third-party consolidation; the
+official PDF on diputados.gob.mx (last reform DOF 2026-05-14) was downloaded but could not be
+parsed here. Whether the 2026 tables appeared in the *Periódico Oficial del Estado* was not
+confirmed. INEGI's terms page links two PDFs (`terminos_sitio.pdf`, `terminos_info.pdf`) that
+were not read; the HTML page was. IMPLAN's `/sigem/` cartographic portal was not checked for
+terms of its own.
 
 ---
 
@@ -201,8 +235,10 @@ colonia name of each one.
 * **Format:** shapefile, 12,679 records, EPSG:6372 (MEXICO_ITRF_2008_LCC).
 * **Fields:** `Titulo`, `Intensid_1` (intensity level), `Detall`, `Fenom`.
 * **Shapefile internal title:** `R050300001_R_INUNDACION_PLUVIAL`.
-* **License / conditions:** the portal offers public access to the information and
-  disclaims IMPLAN from liability for misuse of the data.
+* **License / conditions:** no license. The portal states the information is for
+  informational and planning-support purposes only, disclaims IMPLAN from liability for
+  misuse of the data, and reserves all rights in its footer. The same applies to §2.5 and
+  §2.6; see §1.1.
 * **Use in the project:** layer `data/riesgo_inundacion.geojson` and the risk penalty of
   the Investment Index (`RIESGO_INDEX`, via an AGEB↔risk overlay in EPSG:6372).
 * **Method behind it (established 2026-08-03):** the Atlas was produced with UNAM's Instituto
@@ -327,6 +363,8 @@ more recent. This dataset is raster and of coarser granularity.
 * **Generated by:** `descargar_raster_inundacion()` in `scripts/process_data.py`.
 * **Official note:** an approximation from hydraulic modeling; it does not replace a site
   study.
+* **License / conditions:** none found (§1.1). The app does not display this raster, but
+  the files are published with the site.
 
 ### 2.8 Tesorería Municipal de Saltillo — Tablas de Valores de Suelo y Construcción 2026
 
@@ -339,6 +377,9 @@ end for why that is a decision and not an omission.
   Construcción*, approved by the Congreso del Estado de Coahuila de Zaragoza.
 * **Portal:** Saltillo transparency, Article 28 §XIII (cuotas y tarifas).
 * **Edition / fiscal year:** 2026. **Download date:** 2026-08-03 (13.96 MB PDF).
+* **License / conditions:** none stated by the municipality. Because the state Congress
+  approves them, they would count as a legislative text, which Ley Federal del Derecho de
+  Autor art. 14 fr. VIII leaves outside copyright protection (§1.1).
 * **Local path:** `raw_data/catastro/TABLAS_VALORES_SUELO_CONSTRUCCION_2026.pdf` (gitignored,
   like all `raw_data/`).
 * **Structure:** two tables. Colonia → *tipo de terreno*, and *tipo de terreno* → pesos per m².
@@ -1562,3 +1603,10 @@ either way; splitting only repeats the properties on each feature.
   as context is an open decision, pending a license and a size budget.
 * **Confirm with IMPLAN** the exact edition date of the risk layers if month-level precision
   ever matters (see the note in §2.5).
+* **Terms of use (§1.1), read 2026-11-13.** Three things are left open:
+  * IMPLAN states no license for the risk layers that the site redistributes. Only a
+    written answer from IMPLAN can settle that.
+  * The ANRI raster in `data/` has no license on record and nothing reads it.
+  * The panel footer does not cite INEGI's *Información vectorial de localidades
+    amanzanadas 2023* or the Tesorería tables, and does not say that the indices are
+    Traza's own and not an official position of INEGI.
