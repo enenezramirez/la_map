@@ -125,6 +125,12 @@ CATEGORIAS_DENUE = {
     "supermercado": lambda df: df["nombre_act"].str.contains("supermercado", case=False, na=False),
 }
 
+# Context layer of large employers (DATOS.md §3.10): INEGI's top size band.
+ESTRATO_GRAN_EMPLEADOR = "251 y más personas"
+EMPLEADORES_GEOJSON = DATA_DIR / "empleadores_denue.geojson"
+DENUE_FUENTE = "INEGI — DENUE"
+DENUE_EDICION = "05_2026"
+
 # Investment Index weights.
 PESO_SERVICIOS = 0.4
 PESO_COMERCIOS = 0.3
@@ -1042,13 +1048,11 @@ def integrar_censo_a_ageb(
     return gdf_unido
 
 
-def cargar_denue() -> gpd.GeoDataFrame:
+def leer_denue() -> pd.DataFrame:
     """
-    Load DENUE one file per configured state, filter it to the configured
-    municipalities by code, and classify each establishment into an urban
-    amenity category (escuela, salud, supermercado) per CATEGORIAS_DENUE.
-
-    A state whose file is missing is skipped with a message, as in the census.
+    DENUE rows for the configured municipalities, one file per state, filtered
+    by municipality code. A state whose file is missing is skipped with a
+    message, as in the census.
     """
     partes = []
     for entidad, municipios in sorted(municipios_por_entidad().items()):
@@ -1063,8 +1067,15 @@ def cargar_denue() -> gpd.GeoDataFrame:
         raise RuntimeError(
             "No se cargo ningun DENUE. Revisa las rutas que arma denue_csv()."
         )
-    df = pd.concat(partes, ignore_index=True).copy()
+    return pd.concat(partes, ignore_index=True).copy()
 
+
+def cargar_denue(df: pd.DataFrame) -> gpd.GeoDataFrame:
+    """
+    Classify each DENUE establishment into an urban amenity category
+    (escuela, salud, supermercado) per CATEGORIAS_DENUE.
+    """
+    df = df.copy()
     categorias = pd.Series(pd.NA, index=df.index, dtype="object")
     for nombre_categoria, condicion in CATEGORIAS_DENUE.items():
         categorias = categorias.where(~condicion(df), nombre_categoria)
@@ -1077,6 +1088,44 @@ def cargar_denue() -> gpd.GeoDataFrame:
         crs="EPSG:4326",
     )
     print(f"  DENUE: {len(gdf)} relevant establishments ({gdf['CATEGORIA'].value_counts().to_dict()}).")
+    return gdf
+
+
+def exportar_grandes_empleadores(df: pd.DataFrame) -> gpd.GeoDataFrame:
+    """
+    Export the DENUE's largest establishments as a context layer: points with
+    what INEGI publishes about them, no score, and outside every index
+    (DATOS.md §3.10). The size is INEGI's band, not a headcount.
+    """
+    df = df[df["per_ocu"].str.strip() == ESTRATO_GRAN_EMPLEADOR].dropna(subset=["latitud", "longitud"])
+    texto = lambda col: df[col].fillna("").str.strip()
+    gdf = gpd.GeoDataFrame(
+        {
+            "NOMBRE": texto("nom_estab"),
+            "ACTIVIDAD": texto("nombre_act"),
+            "SCIAN": texto("codigo_act"),
+            "ESTRATO": texto("per_ocu"),
+            "MUNICIPIO": texto("municipio"),
+            "ASENTAMIENTO": texto("nomb_asent"),
+            "FUENTE": DENUE_FUENTE,
+            "FECHA": DENUE_EDICION,
+        },
+        geometry=gpd.points_from_xy(df["longitud"].astype(float), df["latitud"].astype(float)),
+        crs="EPSG:4326",
+    )
+    gdf = (
+        gdf.assign(_clave=gdf.geometry.to_wkt())
+        .sort_values(["MUNICIPIO", "NOMBRE", "_clave"], kind="stable")
+        .drop(columns="_clave")
+        .reset_index(drop=True)
+    )
+    exportar_geojson(gdf, EMPLEADORES_GEOJSON)
+    manufactura = int(gdf["SCIAN"].str[:2].isin(["31", "32", "33"]).sum())
+    tamano_kb = EMPLEADORES_GEOJSON.stat().st_size / 1024
+    print(
+        f"  Large employers exported: {EMPLEADORES_GEOJSON} ({len(gdf)} establishments, "
+        f"{manufactura} manufacturing, {tamano_kb:.1f} KB)"
+    )
     return gdf
 
 
@@ -1644,7 +1693,8 @@ if __name__ == "__main__":
     )
 
     print("\nComputing Real-Estate Investment Index...")
-    gdf_denue = cargar_denue()
+    df_denue = leer_denue()
+    gdf_denue = cargar_denue(df_denue)
     df_comercios = calcular_indice_comercios(gdf_agebs, gdf_denue)
     gdf_inversion = calcular_indice_inversion(gdf_ageb_servicios, df_comercios, df_riesgo)
 
@@ -1658,6 +1708,9 @@ if __name__ == "__main__":
             on="CVEGEO", how="left",
         )
     exportar_capa_indice_inversion(gdf_inversion)
+
+    print("\nExporting large employers (context layer, not in any index)...")
+    exportar_grandes_empleadores(df_denue)
 
     print("\nDownloading backup flood layer (ANRI - CONAGUA)...")
     minx, miny, maxx, maxy = gdf_agebs.total_bounds

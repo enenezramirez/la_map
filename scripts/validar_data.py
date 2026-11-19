@@ -49,6 +49,9 @@ EXPOSICION_INFORMATIVA = {
 }
 CAMPOS_RIESGO = {"INTENSIDAD", "PUNTAJE", "TITULO", "FENOMENO", "FUENTE", "FECHA"}
 CAMPOS_CAUCES = {"ORDEN", "CONDICION", "ANIO_CAPTURA", "FUENTE", "FECHA"}
+CAMPOS_EMPLEADORES = {
+    "NOMBRE", "ACTIVIDAD", "SCIAN", "ESTRATO", "MUNICIPIO", "ASENTAMIENTO", "FUENTE", "FECHA",
+}
 CAMPOS_COMPARTIDOS = ("NOM_MUN", "COLONIA", "SERVICIOS_INDEX", "MOTIVO_SIN_DATO")
 PUNTAJES = ("SCORE_ESCUELA", "SCORE_SALUD", "SCORE_SUPERMERCADO")
 
@@ -69,7 +72,7 @@ AGREGADOS_EN_NAVEGADOR = {"CATASTRO"}
 CONSTANTES_PIPELINE = (
     "PESO_SERVICIOS", "PESO_COMERCIOS", "PESO_RIESGO", "RADIO_MAX_KM",
     "FORMATO_INDICE_CALLES", "DECIMALES_COORDENADA", "CAUCES_ORDEN_MINIMO",
-    "NIVELES_ELEVADOS", "NIVELES_ELEVADOS_QUIMICO",
+    "NIVELES_ELEVADOS", "NIVELES_ELEVADOS_QUIMICO", "ESTRATO_GRAN_EMPLEADOR",
 )
 
 # State, municipality, locality and AGEB. INEGI's AGEB check character is a
@@ -502,13 +505,44 @@ def validar_geometria(inf: Informe, archivo: str, ruta: Path, decimales: int) ->
     )
 
 
+def validar_empleadores(inf: Informe, capa: list, geojson: dict, estrato: str) -> None:
+    inf.revisar(
+        "employers: every establishment carries exactly the declared fields",
+        [i for i, p in enumerate(capa) if set(p) != CAMPOS_EMPLEADORES],
+    )
+    inf.revisar("employers: the layer is not empty", [] if capa else ["0 establishments"])
+    inf.revisar(
+        f"employers: every establishment is in the {estrato!r} band",
+        [i for i, p in enumerate(capa) if p.get("ESTRATO") != estrato],
+    )
+    inf.revisar(
+        "employers: every establishment is a point in one of the declared municipalities",
+        [
+            i
+            for i, f in enumerate(geojson["features"])
+            if f["geometry"]["type"] != "Point" or f["properties"].get("MUNICIPIO") not in MUNICIPIOS
+        ],
+    )
+    inf.revisar(
+        "employers: name, activity, SCIAN code, source and date are stated on every point",
+        [
+            i
+            for i, p in enumerate(capa)
+            if not all(es_texto(p.get(k)) for k in ("NOMBRE", "ACTIVIDAD", "FUENTE", "FECHA"))
+            or not re.fullmatch(r"\d{6}", str(p.get("SCIAN")))
+        ],
+    )
+
+
 def validar_contrato(inf: Informe, app_js: str, c: dict) -> None:
     radio_js = leer_constante_js(app_js, "RADIO_CERCANIA_KM")
     inf.revisar(
         "contract: RADIO_MAX_KM (pipeline) equals RADIO_CERCANIA_KM (app.js)",
         [] if radio_js == c["RADIO_MAX_KM"] else [(c["RADIO_MAX_KM"], radio_js)],
     )
-    publicados = CAMPOS_SERVICIOS | CAMPOS_INVERSION | CAMPOS_RIESGO | CAMPOS_CAUCES
+    publicados = (
+        CAMPOS_SERVICIOS | CAMPOS_INVERSION | CAMPOS_RIESGO | CAMPOS_CAUCES | CAMPOS_EMPLEADORES
+    )
     leidos = {a or b for a, b in PROPIEDAD_LEIDA.findall(app_js)}
     inf.revisar(
         "contract: every property app.js reads is one a published layer carries",
@@ -549,7 +583,7 @@ def main() -> int:
 
     geojson = [
         "servicios_basicos.geojson", "indice_inversion.geojson", "cauces_inegi.geojson",
-        *CAPAS_RIESGO,
+        "empleadores_denue.geojson", *CAPAS_RIESGO,
     ]
     archivos = geojson + ["valor_catastral.json", "calles.json"]
     # A file nobody listed here has no entry in DATOS.md §1.1 saying it may be published.
@@ -577,6 +611,12 @@ def main() -> int:
         validar_riesgo(inf, archivo, propiedades(contenido[archivo]), constantes[constante])
     validar_cauces(
         inf, propiedades(contenido["cauces_inegi.geojson"]), constantes["CAUCES_ORDEN_MINIMO"]
+    )
+    validar_empleadores(
+        inf,
+        propiedades(contenido["empleadores_denue.geojson"]),
+        contenido["empleadores_denue.geojson"],
+        constantes["ESTRATO_GRAN_EMPLEADOR"],
     )
     validar_catastro(inf, contenido["valor_catastral.json"], por_clave)
     validar_calles(

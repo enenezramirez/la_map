@@ -16,6 +16,7 @@ Covers **431 AGEBs across three municipalities**: Saltillo, Ramos Arizpe and Art
 - **Chemical-Technological Risk** — zones exposed to the storage of hazardous chemical substances, relevant along the Saltillo–Ramos Arizpe industrial corridor (2024 Risk Atlas, IMPLAN Saltillo).
 - **Real-Estate Investment Index** — combines service coverage with proximity to urban amenities (schools, healthcare, supermarkets from DENUE) and penalizes flood exposure.
 - **Mapped Stream Courses** — the main arroyos (Strahler order 5 and up) as INEGI captured them in 1998–2008, before much of the current urban growth. Context only: not a risk classification and not part of any index.
+- **Large Employers** — the 247 establishments the DENUE (INEGI, 05_2026) places in its top size band, 251 people or more, as points. Context only: the size is a band, not a headcount, and no index reads it.
 
 Click any colonia or risk zone on the map to see its detail card, with the source and cutoff date of the data you are viewing.
 
@@ -126,6 +127,7 @@ data/
   calles.json                    Street index (street -> settlement -> AGEB), fetched on first search
   valor_catastral.json           Cadastral land value per AGEB (informational, not in the index)
   cauces_inegi.geojson           Main stream courses, INEGI 1:50 000 (context, not a risk layer)
+  empleadores_denue.geojson      Establishments with 251+ people, DENUE (context, not in any index)
 DATOS.md             Data log: provenance and terms of use of each dataset
 LICENSE              MIT license for the code (see License below)
 ```
